@@ -67,7 +67,9 @@ pub fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
 #[derive(Debug)]
 pub enum Modifiers {
     Flat5,
+    Sharp5,
     Tention(u8),
+    Omit(u8),
 }
 
 impl Chord {
@@ -116,9 +118,25 @@ impl Chord {
             Modifiers::Flat5 => {
                 self.2[1] -= 1;
             }
+            Modifiers::Sharp5 => {
+                self.2[1] += 1;
+            }
             Modifiers::Tention(d) => {
                 let i = d - self.2.iter().sum::<u8>();
                 self.2.push(i);
+            }
+            Modifiers::Omit(d) => {
+                let s = self
+                    .2
+                    .iter()
+                    .scan(0, |state, &x| {
+                        *state = *state + x;
+                        Some(*state)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some(at) = s.iter().position(|i| i == d) {
+                    self.2.remove(at);
+                }
             }
         }
     }

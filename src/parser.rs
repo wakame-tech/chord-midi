@@ -118,25 +118,40 @@ fn flat5_parser(s: &str) -> IResult<Modifiers> {
     Ok((s, Modifiers::Flat5))
 }
 
+fn sharp5_parser(s: &str) -> IResult<Modifiers> {
+    let pat = Regex::new(r"^(#5|\+5)").unwrap();
+    let (s, _p) = re_find(pat)(s)?;
+    Ok((s, Modifiers::Sharp5))
+}
+
 fn add_parser(s: &str) -> IResult<Modifiers> {
     map(tuple((tag("add"), tention_parser)), |(_, t)| {
         Modifiers::Tention(t)
     })(s)
 }
 
+fn omit_parser(s: &str) -> IResult<Modifiers> {
+    map(
+        tuple((alt((tag("omit"), tag("no"))), tention_parser)),
+        |(_, t)| Modifiers::Omit(t),
+    )(s)
+}
+
 fn modifiers_parser(s: &str) -> IResult<Modifiers> {
     alt((
+        flat5_parser,
+        sharp5_parser,
+        add_parser,
+        omit_parser,
         map(tention_parser, |t| Modifiers::Tention(t)),
         map(delimited(tag("("), tention_parser, tag(")")), |t| {
             Modifiers::Tention(t)
         }),
-        flat5_parser,
-        add_parser,
     ))(s)
 }
 
 pub fn chord_parser(s: &str) -> IResult<Chord> {
-    print!("{} ", s);
+    // print!("{} ", s);
     let (s, (pitch, quality, number, modifiers, on_chord)) = tuple((
         pitch_parser,
         opt(quality_parser),
@@ -144,7 +159,7 @@ pub fn chord_parser(s: &str) -> IResult<Chord> {
         many0(modifiers_parser),
         opt(on_chord_parser),
     ))(s)?;
-    println!("{} {:?} {:?} {:?}", pitch, quality, number, modifiers);
+    // println!("{} {:?} {:?} {:?}", pitch, quality, number, modifiers);
     let semitones =
         semitones(quality.unwrap_or(Quality::None), number.unwrap_or(5)).map_err(|e| {
             nom::Err::Failure(DebugError {
@@ -177,4 +192,20 @@ pub fn measure_parser(s: &str) -> IResult<Vec<ScoreSymbol>> {
         map(tag("N.C."), |_| vec![ScoreSymbol::Rest]),
         many1(opt_chord_parser),
     ))(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chord_parser;
+    use anyhow::Result;
+
+    #[test]
+    fn test_chord_parser() -> Result<()> {
+        let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C"];
+        for chord in chords.iter() {
+            let (s, _chord) = chord_parser(chord)?;
+            assert!(s.is_empty());
+        }
+        Ok(())
+    }
 }

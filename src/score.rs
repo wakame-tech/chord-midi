@@ -38,12 +38,12 @@ impl Score {
             for symbol in measure.into_iter() {
                 // println!("{:?} sus={} rest={}", symbol, sustain, rest);
                 if symbol != ScoreSymbol::Sustain && sustain != 0 {
-                    println!("push {:?} sus={}", pre, sustain);
+                    // println!("push {:?} sus={}", pre, sustain);
                     chords.push((pre.clone(), sustain + dur));
                     sustain = 0;
                 }
                 if symbol != ScoreSymbol::Rest && rest != 0 {
-                    println!("push None sus={}", rest);
+                    // println!("push None sus={}", rest);
                     chords.push((None, rest));
                     rest = 0;
                 }
@@ -64,14 +64,14 @@ impl Score {
                 }
             }
         }
-        println!(
-            "{}",
-            chords
-                .iter()
-                .map(|(c, d)| format!("{:?} {}", c, d))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        // println!(
+        //     "{}",
+        //     chords
+        //         .iter()
+        //         .map(|(c, d)| format!("{:?} {}", c, d))
+        //         .collect::<Vec<_>>()
+        //         .join("\n")
+        // );
         Ok(chords)
     }
 
@@ -88,8 +88,14 @@ impl Score {
             .iter()
             .map(|m| {
                 measure_parser(m)
-                    .map(|t| t.1)
                     .map_err(|e| anyhow::anyhow!("{}", e))
+                    .and_then(|t| {
+                        if !vec![1, 2, 4, 8, 16].contains(&t.1.len()) {
+                            Err(anyhow::anyhow!("{} is invalid length", m))
+                        } else {
+                            Ok(t.1)
+                        }
+                    })
             })
             .collect::<Result<Vec<_>>>()?;
         let chords = Self::to_chords(symbols)?;
