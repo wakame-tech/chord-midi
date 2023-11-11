@@ -1,9 +1,10 @@
 use crate::chord::{semitones, Chord, Modifiers, Quality};
+use crate::score::ScoreSymbol;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{map, opt};
 use nom::error::{ContextError, ErrorKind, ParseError};
-use nom::multi::{many0, many1, separated_list1};
+use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
 use nom_regex::str::{re_capture, re_find};
 use regex::Regex;
@@ -36,7 +37,7 @@ impl ParseError<&str> for DebugError {
     }
 
     fn or(self, other: Self) -> Self {
-        let message = format!("{}\tOR\n{}\n", self.message, other.message);
+        let message = format!("1: {}\n2: {}", self.message, other.message);
         // println!("{}", message);
         DebugError { message }
     }
@@ -62,6 +63,8 @@ fn tention_parser(s: &str) -> IResult<u8> {
     let pat = Regex::new(r"^([b#]?)(\d+)").unwrap();
     let (s, p) = re_capture(pat)(s)?;
     let mut semitone = match p[2] {
+        "5" => 7,
+        "7" => 11,
         "9" => 14,
         "11" => 17,
         "13" => 21,
@@ -101,7 +104,7 @@ fn number_parser(s: &str) -> IResult<u8> {
     alt((
         map(tag("6"), |_| 6),
         map(tag("7"), |_| 7),
-        map(tag("9"), |_| 13),
+        map(tag("9"), |_| 9),
     ))(s)
 }
 
@@ -121,17 +124,19 @@ fn add_parser(s: &str) -> IResult<Modifiers> {
     })(s)
 }
 
-fn tentions_parser(s: &str) -> IResult<Modifiers> {
-    map(delimited(tag("("), tention_parser, tag(")")), |t| {
-        Modifiers::Tention(t)
-    })(s)
-}
-
 fn modifiers_parser(s: &str) -> IResult<Modifiers> {
-    alt((tentions_parser, flat5_parser, add_parser))(s)
+    alt((
+        map(tention_parser, |t| Modifiers::Tention(t)),
+        map(delimited(tag("("), tention_parser, tag(")")), |t| {
+            Modifiers::Tention(t)
+        }),
+        flat5_parser,
+        add_parser,
+    ))(s)
 }
 
 pub fn chord_parser(s: &str) -> IResult<Chord> {
+    print!("{} ", s);
     let (s, (pitch, quality, number, modifiers, on_chord)) = tuple((
         pitch_parser,
         opt(quality_parser),
@@ -139,7 +144,7 @@ pub fn chord_parser(s: &str) -> IResult<Chord> {
         many0(modifiers_parser),
         opt(on_chord_parser),
     ))(s)?;
-    dbg!(&pitch, &quality, &number, &modifiers);
+    println!("{} {:?} {:?} {:?}", pitch, quality, number, modifiers);
     let semitones =
         semitones(quality.unwrap_or(Quality::None), number.unwrap_or(5)).map_err(|e| {
             nom::Err::Failure(DebugError {
@@ -158,18 +163,18 @@ pub fn chord_parser(s: &str) -> IResult<Chord> {
     Ok((s, chord))
 }
 
-pub fn opt_chord_parser(s: &str) -> IResult<Option<Chord>> {
+pub fn opt_chord_parser(s: &str) -> IResult<ScoreSymbol> {
     alt((
-        map(tag("="), |_| None),
-        map(tag("_"), |_| None),
-        map(chord_parser, |chord| Some(chord)),
+        map(tag("="), |_| ScoreSymbol::Sustain),
+        map(tag("_"), |_| ScoreSymbol::Rest),
+        map(tag("%"), |_| ScoreSymbol::Repeat),
+        map(chord_parser, |chord| ScoreSymbol::Chord(chord)),
     ))(s)
 }
 
-fn measure_parser(s: &str) -> IResult<Vec<Option<Chord>>> {
-    alt((map(tag("N.C."), |_| vec![None]), many1(opt_chord_parser)))(s)
-}
-
-pub fn score_parser(s: &str) -> IResult<Vec<Vec<Option<Chord>>>> {
-    separated_list1(alt((tag("|"), tag("\n"))), measure_parser)(s)
+pub fn measure_parser(s: &str) -> IResult<Vec<ScoreSymbol>> {
+    alt((
+        map(tag("N.C."), |_| vec![ScoreSymbol::Rest]),
+        many1(opt_chord_parser),
+    ))(s)
 }

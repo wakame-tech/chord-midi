@@ -147,6 +147,9 @@ mod tests {
 
         let chord = chord_parser("CM7(9)")?.1;
         assert_eq!(chord, Chord(4, PitchClass::C, vec![4, 3, 4, 3]));
+
+        let chord = chord_parser("D9")?.1;
+        assert_eq!(chord.1, PitchClass::D);
         Ok(())
     }
 
