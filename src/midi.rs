@@ -31,14 +31,14 @@ pub fn write_to_midi(f: &mut impl Write, score: &Score) -> Result<()> {
         let notes = chord
             .notes()
             .iter()
-            .map(|n| note_to_pitch(n))
+            .map(note_to_pitch)
             .collect::<Vec<_>>();
         for (i, n) in notes.iter().enumerate() {
             track
                 .push_note_on(
                     if i == 0 { skip } else { 0 },
                     ch,
-                    n.clone(),
+                    *n,
                     Velocity::default(),
                 )
                 .unwrap();
@@ -49,7 +49,7 @@ pub fn write_to_midi(f: &mut impl Write, score: &Score) -> Result<()> {
                 .push_note_off(
                     if i == 0 { dur } else { 0 },
                     ch,
-                    n.clone(),
+                    *n,
                     Velocity::default(),
                 )
                 .unwrap();

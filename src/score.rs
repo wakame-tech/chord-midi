@@ -78,9 +78,8 @@ impl Score {
     pub fn parse(code: &str) -> Result<Self> {
         let symbols = code
             .split("\r\n")
-            .filter(|line| !line.trim().is_empty() && !line.starts_with("#"))
-            .map(|line| line.split("|").collect::<Vec<_>>())
-            .flatten()
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+            .flat_map(|line| line.split('|').collect::<Vec<_>>())
             .filter(|s| !s.trim().is_empty())
             .collect::<Vec<_>>();
         // dbg!(&symbols);

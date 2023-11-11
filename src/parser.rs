@@ -142,7 +142,7 @@ fn modifiers_parser(s: &str) -> IResult<Modifiers> {
         map(alt((tag("aug"), tag("+"))), |_| Modifiers::Aug),
         add_parser,
         omit_parser,
-        map(tention_parser, |t| Modifiers::Tention(t)),
+        map(tention_parser, Modifiers::Tention),
         map(delimited(tag("("), tention_parser, tag(")")), |t| {
             Modifiers::Tention(t)
         }),
@@ -182,7 +182,7 @@ pub fn opt_chord_parser(s: &str) -> IResult<ScoreSymbol> {
         map(tag("="), |_| ScoreSymbol::Sustain),
         map(tag("_"), |_| ScoreSymbol::Rest),
         map(tag("%"), |_| ScoreSymbol::Repeat),
-        map(chord_parser, |chord| ScoreSymbol::Chord(chord)),
+        map(chord_parser, ScoreSymbol::Chord),
     ))(s)
 }
 

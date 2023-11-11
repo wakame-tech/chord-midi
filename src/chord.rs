@@ -67,7 +67,7 @@ impl Chord {
             .2
             .iter()
             .scan(0, |state, &x| {
-                *state = *state + x;
+                *state += x;
                 Some(*state)
             })
             .collect::<Vec<_>>();
@@ -133,7 +133,7 @@ impl Chord {
                     .2
                     .iter()
                     .scan(0, |state, &x| {
-                        *state = *state + x;
+                        *state += x;
                         Some(*state)
                     })
                     .collect::<Vec<_>>();
