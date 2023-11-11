@@ -157,7 +157,7 @@ impl Chord {
             s = s.trim_start_matches("b5");
         }
         if s.contains("add9") {
-            semitones.push(14 - semitones.last().unwrap());
+            semitones.push(14 - semitones.iter().sum::<u8>());
             s = s.trim_start_matches("add9");
         }
 
@@ -170,7 +170,7 @@ impl Chord {
                 "13" => 21,
                 _ => return Err(anyhow::anyhow!("unsupport {}", b)),
             };
-            let mut i = d - semitones.last().unwrap();
+            let mut i = d - semitones.iter().sum::<u8>();
             match a {
                 "b" => i -= 1,
                 "#" => i += 1,
