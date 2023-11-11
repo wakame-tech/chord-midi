@@ -7,7 +7,9 @@ use std::{
     io::Read,
 };
 
+mod chord;
 mod midi;
+mod parser;
 mod score;
 
 fn main() -> Result<()> {
