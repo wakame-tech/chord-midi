@@ -93,10 +93,6 @@ fn quality_parser(s: &str) -> IResult<Quality> {
         map(tag("M"), |_| Quality::Major),
         map(tag("m"), |_| Quality::Minor),
         map(tag("dim"), |_| Quality::Dim),
-        map(tag("aug"), |_| Quality::Aug),
-        map(tag("+"), |_| Quality::Aug),
-        map(tag("sus2"), |_| Quality::Sus2),
-        map(tag("sus4"), |_| Quality::Sus4),
     ))(s)
 }
 
@@ -141,6 +137,9 @@ fn modifiers_parser(s: &str) -> IResult<Modifiers> {
     alt((
         flat5_parser,
         sharp5_parser,
+        map(tag("sus2"), |_| Modifiers::Sus2),
+        map(tag("sus4"), |_| Modifiers::Sus4),
+        map(alt((tag("aug"), tag("+"))), |_| Modifiers::Aug),
         add_parser,
         omit_parser,
         map(tention_parser, |t| Modifiers::Tention(t)),
@@ -204,7 +203,7 @@ mod tests {
         let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C"];
         for chord in chords.iter() {
             let (s, _chord) = chord_parser(chord)?;
-            assert!(s.is_empty());
+            assert_eq!(s, "");
         }
         Ok(())
     }

@@ -99,6 +99,6 @@ impl Score {
             })
             .collect::<Result<Vec<_>>>()?;
         let chords = Self::to_chords(symbols)?;
-        Ok(Self { bpm: 175, chords })
+        Ok(Self { bpm: 180, chords })
     }
 }

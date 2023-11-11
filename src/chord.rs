@@ -10,10 +10,6 @@ pub enum Quality {
     Major,
     Minor,
     MinorM7,
-    Sus2,
-    Sus4,
-    Aug,
-    AugM7,
     Dim,
 }
 
@@ -42,20 +38,6 @@ pub fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
             7 => Ok(vec![3, 4, 4]),
             _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
         },
-        Quality::Sus2 => match number {
-            5 => Ok(vec![2, 5]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::Sus4 => match number {
-            5 => Ok(vec![5, 2]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::Aug => match number {
-            5 => Ok(vec![4, 4]),
-            7 => Ok(vec![4, 4, 2]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::AugM7 => Ok(vec![4, 4, 3]),
         Quality::Dim => match number {
             5 => Ok(vec![3, 3]),
             7 => Ok(vec![3, 3, 3]),
@@ -70,6 +52,9 @@ pub enum Modifiers {
     Sharp5,
     Tention(u8),
     Omit(u8),
+    Sus2,
+    Sus4,
+    Aug,
 }
 
 impl Chord {
@@ -117,9 +102,27 @@ impl Chord {
         match m {
             Modifiers::Flat5 => {
                 self.2[1] -= 1;
+                if let Some(n) = self.2.get_mut(2) {
+                    *n += 1;
+                }
             }
-            Modifiers::Sharp5 => {
+            Modifiers::Aug | Modifiers::Sharp5 => {
                 self.2[1] += 1;
+                if let Some(n) = self.2.get_mut(2) {
+                    *n -= 1;
+                }
+            }
+            Modifiers::Sus2 => {
+                self.2[0] -= 1;
+                if let Some(n) = self.2.get_mut(1) {
+                    *n += 1;
+                }
+            }
+            Modifiers::Sus4 => {
+                self.2[0] += 1;
+                if let Some(n) = self.2.get_mut(1) {
+                    *n -= 1;
+                }
             }
             Modifiers::Tention(d) => {
                 let i = d - self.2.iter().sum::<u8>();
