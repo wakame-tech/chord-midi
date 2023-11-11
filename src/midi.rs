@@ -13,8 +13,7 @@ fn note_to_pitch(note: &Note) -> NoteNumber {
 pub fn write_to_midi(f: &mut impl Write, score: &Score) -> Result<()> {
     let mut mfile = MidiFile::new();
     let mut track = Track::default();
-    // track.set_name("Singer").unwrap();
-    // track.set_instrument_name("Alto")?;
+
     let ch = Channel::new(0);
     track.set_general_midi(ch, GeneralMidi::SynthVoice).unwrap();
     track.push_time_signature(0, 6, DurationName::Eighth, Clocks::DottedQuarter)?;
@@ -28,10 +27,12 @@ pub fn write_to_midi(f: &mut impl Write, score: &Score) -> Result<()> {
             1 => QUARTER * 4,
             2 => QUARTER * 2,
             4 => QUARTER,
-            _ => panic!(),
+            8 => QUARTER / 2,
+            _ => {
+                return Err(anyhow::anyhow!("invalid measure length: {:?}", measure));
+            }
         };
         for chord in measure {
-            println!("{:?} skip={}", measure, skip);
             let Some(chord) = chord else {
                 skip += dur;
                 continue;

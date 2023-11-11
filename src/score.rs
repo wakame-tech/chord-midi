@@ -1,7 +1,5 @@
-use core::num;
-
 use anyhow::Result;
-use regex::{Match, Regex};
+use regex::Regex;
 use rust_music_theory::{
     interval::Interval,
     note::{Note, PitchClass},
@@ -20,7 +18,7 @@ pub enum Quality {
     Dim,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Chord(u8, PitchClass, Vec<u8>);
 
 impl Chord {
@@ -68,7 +66,19 @@ impl Chord {
         }
     }
 
-    fn parse_quality(s: &str) -> (Quality, Option<Match>) {
+    fn parse_pitch(s: &str) -> Result<(PitchClass, &str)> {
+        let pat = Regex::new(r"^([CDEFGAB])([#b]?)").unwrap();
+        if let Some(cap) = pat.captures(s) {
+            let (d, m) = (cap.get(1).unwrap().as_str(), cap.get(2).unwrap().as_str());
+            return Ok((
+                PitchClass::from_regex(format!("{}{}", d, m).as_str())?.0,
+                s.trim_start_matches(cap.get(0).unwrap().as_str()),
+            ));
+        }
+        Err(anyhow::anyhow!("cannot parse \"{}\"", s))
+    }
+
+    fn parse_quality(s: &str) -> Result<(Quality, &str)> {
         let pats = vec![
             (Regex::new(r"^mM").unwrap(), Quality::MinorM7),
             (Regex::new(r"^M").unwrap(), Quality::Major),
@@ -80,13 +90,13 @@ impl Chord {
         ];
         for (pat, q) in pats.iter() {
             if let Some(m) = pat.find(s) {
-                return (q.clone(), Some(m));
+                return Ok((q.clone(), &s[m.end()..]));
             }
         }
-        return (Quality::None, None);
+        Ok((Quality::None, s))
     }
 
-    fn parse_number(s: &str) -> (u8, Option<Match>) {
+    fn parse_number(s: &str) -> Result<(u8, &str)> {
         let pats = vec![
             (Regex::new(r"^6").unwrap(), 6),
             (Regex::new(r"^7").unwrap(), 7),
@@ -94,10 +104,59 @@ impl Chord {
         ];
         for (pat, n) in pats.iter() {
             if let Some(m) = pat.find(s) {
-                return (n.clone(), Some(m));
+                return Ok((n.clone(), &s[m.end()..]));
             }
         }
-        return (5, None);
+        return Ok((5, s));
+    }
+
+    fn parse_flat5(s: &str) -> Result<(bool, &str)> {
+        if let Some(m) = Regex::new(r"^(b5|-5)").unwrap().find(s) {
+            Ok((true, &s[m.end()..]))
+        } else {
+            Ok((false, s))
+        }
+    }
+
+    fn parse_add9(s: &str) -> Result<(bool, &str)> {
+        if let Some(m) = Regex::new(r"^add9").unwrap().find(s) {
+            Ok((true, &s[m.end()..]))
+        } else {
+            Ok((false, s))
+        }
+    }
+
+    fn parse_tentions(s: &str) -> Result<(Option<u8>, &str)> {
+        let r = Regex::new(r"^\(([b#]?)(\d+)\)").unwrap();
+        if let Some(cap) = r.captures(s) {
+            let (a, b) = (cap.get(1).unwrap().as_str(), cap.get(2).unwrap().as_str());
+            let mut semitone = match b {
+                "9" => 14,
+                "11" => 17,
+                "13" => 21,
+                _ => return Err(anyhow::anyhow!("unsupport {}", b)),
+            };
+            match a {
+                "b" => semitone -= 1,
+                "#" => semitone += 1,
+                "" => {}
+                _ => return Err(anyhow::anyhow!("unknown {}", a)),
+            }
+            return Ok((
+                Some(semitone),
+                s.trim_start_matches(cap.get(0).unwrap().as_str()),
+            ));
+        }
+        Ok((None, s))
+    }
+
+    fn parse_on_chord(s: &str) -> Result<(Option<PitchClass>, &str)> {
+        if let Some(cap) = Regex::new(r"^/(.+)").unwrap().captures(s) {
+            let on = cap.get(1).unwrap().as_str();
+            let on = PitchClass::from_str(on).ok_or(anyhow::anyhow!("invalid on chord"))?;
+            return Ok((Some(on), &s[cap.get(0).unwrap().end()..]));
+        }
+        Ok((None, s))
     }
 
     pub fn new(root: PitchClass, semitones: Vec<u8>) -> Self {
@@ -141,58 +200,37 @@ impl Chord {
     }
 
     pub fn parse(s: &str) -> Result<Option<Self>> {
-        if s == "N.C." || s == "_" {
+        if s == "N.C." || s == "_" || s == "=" {
             return Ok(None);
         }
-        let (root, m) = PitchClass::from_regex(s)?;
-        let s = &s[m.end()..];
-        let (quality, m) = Self::parse_quality(s);
-        let s = m.map_or(s, |m| &s[m.end()..]);
-        let (number, m) = Self::parse_number(s);
-        let mut s = m.map_or(s, |m| &s[m.end()..]);
+        let (root, s) = Self::parse_pitch(s)?;
+        let (quality, s) = Self::parse_quality(s)?;
+        let (number, s) = Self::parse_number(s)?;
         let mut semitones = Self::semitones(quality.clone(), number.clone())?;
 
-        if s.contains("b5") {
+        let (has_flat5, s) = Self::parse_flat5(s)?;
+        if has_flat5 {
             semitones[1] -= 1;
-            s = s.trim_start_matches("b5");
         }
-        if s.contains("add9") {
+        let (has_add9, s) = Self::parse_add9(s)?;
+        if has_add9 {
             semitones.push(14 - semitones.iter().sum::<u8>());
-            s = s.trim_start_matches("add9");
         }
-
-        let r = Regex::new(r"^\(([b#]?)(\d+)\)").unwrap();
-        if let Some(cap) = r.captures(s) {
-            let (a, b) = (cap.get(1).unwrap().as_str(), cap.get(2).unwrap().as_str());
-            let d = match b {
-                "9" => 14,
-                "11" => 17,
-                "13" => 21,
-                _ => return Err(anyhow::anyhow!("unsupport {}", b)),
-            };
-            let mut i = d - semitones.iter().sum::<u8>();
-            match a {
-                "b" => i -= 1,
-                "#" => i += 1,
-                "" => {}
-                _ => return Err(anyhow::anyhow!("unknown {}", a)),
-            }
+        let (tention, s) = Self::parse_tentions(s)?;
+        if let Some(tention) = tention {
+            let i = tention - semitones.iter().sum::<u8>();
             semitones.push(i);
-            s = s.trim_start_matches(cap.get(0).unwrap().as_str());
         }
         let mut chord = Chord::new(root, semitones);
-        // on chord
-        if s.starts_with("/") {
-            let on = s.trim_start_matches("/");
-            let on = PitchClass::from_str(on).ok_or(anyhow::anyhow!("invalid on chord"))?;
-            // inversion
+
+        let (on, s) = Self::parse_on_chord(s)?;
+        if let Some(on) = on {
             if chord.invert(on).is_err() {
                 chord.change_root(on);
             }
-            s = "";
         }
         if !s.is_empty() {
-            return Err(anyhow::anyhow!("cannot parse :{}", s));
+            return Err(anyhow::anyhow!("cannot parse: \"{}\"", s));
         }
         println!(
             "{} {:?} {} s={}, semitones={:?}",
@@ -221,6 +259,7 @@ impl Score {
     pub fn parse(code: &str) -> Result<Self> {
         let chords = code
             .split(|c| c == '|' || c == '\n')
+            .filter(|line| !line.trim().is_empty() && !line.starts_with("#"))
             .map(|s| {
                 s.trim()
                     .split(" ")
@@ -235,7 +274,15 @@ impl Score {
 #[cfg(test)]
 mod tests {
     use super::Chord;
+    use anyhow::Result;
     use rust_music_theory::note::PitchClass;
+
+    #[test]
+    fn test_parse_chord() -> Result<()> {
+        let chord = Chord::parse("Dsus4")?;
+        assert_eq!(chord, Some(Chord(4, PitchClass::D, vec![5, 2])));
+        Ok(())
+    }
 
     #[test]
     fn test_on_chord() {
