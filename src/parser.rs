@@ -92,6 +92,7 @@ fn degree_parser(s: Span) -> IResult<(u8, i8)> {
 #[tracable_parser]
 fn modifiers_parser(s: Span) -> IResult<Modifier> {
     alt((
+        map(tag("(b5)"), |_| Modifier::Mod(5, -1)),
         map(degree_parser, |(d, diff)| Modifier::Mod(d, diff)),
         map(tag("sus2"), |_| Modifier::Mod(3, -1)),
         map(tag("sus4"), |_| Modifier::Mod(3, 1)),
@@ -161,8 +162,7 @@ mod tests {
     fn test_chord_parser() -> Result<()> {
         let info = TracableInfo::new();
 
-        // let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C", "AbM7G7"];
-        let chords = vec!["AbM7G7"];
+        let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C", "AbM7"];
         for chord in chords.iter() {
             let (s, _chord) = chord_parser(LocatedSpan::new_extra(chord, info))?;
             assert_eq!(*s, "");

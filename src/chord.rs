@@ -208,9 +208,6 @@ impl Chord {
             Modifier::Add(d, diff) => {
                 let i = (to_semitone(*d)? as i8 + diff) as u8;
                 log::debug!("{} {:?} i={} cumsum={:?}", self, m, i, cumsum);
-                if cumsum.iter().any(|s| s == &i) {
-                    return Ok(());
-                }
                 let s = i - cumsum.last().unwrap();
                 self.2.push(s);
             }
@@ -271,7 +268,7 @@ mod tests {
         assert_eq!(chord.1, PitchClass::D);
 
         let chord = Chord::from_str("Dm7(b5)")?;
-        assert_eq!(chord.2, vec![3, 3, 5]);
+        assert_eq!(chord.2, vec![3, 3, 4]);
         Ok(())
     }
 
