@@ -12,9 +12,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use rust_music_theory::note::PitchClass;
 
-const PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
+static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
-const MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"([b#+-]?)(\d+)").unwrap());
+static MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"([b#+-]?)(\d+)").unwrap());
 
 type IResult<'a, T> = nom::IResult<&'a str, T, DebugError>;
 

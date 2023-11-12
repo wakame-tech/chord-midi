@@ -1,4 +1,4 @@
-use crate::{parser::chord_parser, score::ChordNode};
+use crate::score::ChordNode;
 use anyhow::Result;
 use rust_music_theory::{
     interval::Interval,
@@ -18,7 +18,7 @@ pub enum Quality {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chord(u8, PitchClass, Vec<u8>);
 
-pub fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
+fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
     match quality {
         // domiant 7th
         Quality::None if number == 7 => Ok(vec![4, 3, 3]),
@@ -66,6 +66,19 @@ pub fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
     }
 }
 
+fn to_semitone(d: u8) -> Result<u8> {
+    // TODO: hontou?
+    match d {
+        3 => Ok(4),
+        5 => Ok(7),
+        7 => Ok(11),
+        9 => Ok(14),
+        11 => Ok(17),
+        13 => Ok(21),
+        _ => Err(anyhow::anyhow!("unknown degree {}", d)),
+    }
+}
+
 // (degree, diff)
 #[derive(Debug, PartialEq)]
 pub enum Modifier {
@@ -85,7 +98,10 @@ pub enum Modifier {
 }
 
 impl Chord {
+    #[cfg(test)]
     pub fn from_str(s: &str) -> Result<Self> {
+        use crate::parser::chord_parser;
+
         let (rest, node) =
             chord_parser(s).map_err(|e| anyhow::anyhow!("Failed to parse: {}", e))?;
         if !rest.is_empty() {
@@ -163,19 +179,6 @@ impl Chord {
     }
 
     pub fn apply(&mut self, m: &Modifier) -> Result<()> {
-        // degree to semitone
-        fn to_semitone(d: u8) -> Result<u8> {
-            match d {
-                3 => Ok(4),
-                5 => Ok(7),
-                7 => Ok(11),
-                9 => Ok(14),
-                11 => Ok(17),
-                13 => Ok(21),
-                _ => Err(anyhow::anyhow!("unknown degree {}", d)),
-            }
-        }
-
         let cumsum = self
             .2
             .iter()
@@ -194,7 +197,7 @@ impl Chord {
             }
             Modifier::Add(d, diff) => {
                 let i = (to_semitone(*d)? as i8 + diff) as u8;
-                if let Some(_) = cumsum.iter().position(|s| s == &i) {
+                if cumsum.iter().any(|s| s == &i) {
                     return Ok(());
                 }
                 let s = i - cumsum.last().unwrap();
