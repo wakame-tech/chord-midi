@@ -1,36 +1,66 @@
 use crate::chord::{Modifier, Quality};
-use crate::error::DebugError;
 use crate::score::{ChordNode, ScoreNode};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::one_of;
 use nom::combinator::{map, opt};
+use nom::error::ErrorKind;
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
-use nom_regex::str::re_capture;
+use nom::Slice;
+use nom_locate::LocatedSpan;
+use nom_regex::lib::nom::Err;
+use nom_tracable::{tracable_parser, TracableInfo};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use rust_music_theory::note::PitchClass;
 
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
-static MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"([b#+-]?)(\d+)").unwrap());
+static MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([b#+-]?)(\d+)").unwrap());
 
-type IResult<'a, T> = nom::IResult<&'a str, T, DebugError>;
+type Span<'a> = LocatedSpan<&'a str, TracableInfo>;
+type IResult<'a, T> = nom::IResult<Span<'a>, T>;
 
-fn decimal(s: &str) -> IResult<u8> {
+fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
+    move |s| {
+        if let Some(c) = re.captures(*s) {
+            let v: Vec<_> = c
+                .iter()
+                .filter(|el| el.is_some())
+                .map(|el| el.unwrap())
+                .map(|m| s.slice(m.start()..m.end()))
+                .collect();
+            let offset = {
+                let end = v.last().unwrap();
+                end.as_ptr() as usize + end.len() - s.as_ptr() as usize
+            };
+            Ok((s.slice(offset..), v))
+        } else {
+            Err(Err::Error(nom::error::Error::new(
+                s,
+                ErrorKind::RegexpCapture,
+            )))
+        }
+    }
+}
+
+#[tracable_parser]
+fn decimal(s: Span) -> IResult<u8> {
     map(many1(one_of("0123456789")), |v| {
         v.iter().collect::<String>().parse::<u8>().unwrap()
     })(s)
 }
 
-fn pitch_parser(s: &str) -> IResult<PitchClass> {
-    map(re_capture(PITCH_REGEX.to_owned()), |cap| {
-        PitchClass::from_str(cap[1]).unwrap()
+#[tracable_parser]
+fn pitch_parser(s: Span) -> IResult<PitchClass> {
+    map(capture(PITCH_REGEX.to_owned()), |cap| {
+        PitchClass::from_str(&cap[1]).unwrap()
     })(s)
 }
 
-fn quality_parser(s: &str) -> IResult<Quality> {
+#[tracable_parser]
+fn quality_parser(s: Span) -> IResult<Quality> {
     alt((
         map(tag("mM"), |_| Quality::MinorM7),
         map(tag("M"), |_| Quality::Major),
@@ -40,13 +70,16 @@ fn quality_parser(s: &str) -> IResult<Quality> {
     ))(s)
 }
 
-fn on_chord_parser(s: &str) -> IResult<PitchClass> {
+#[tracable_parser]
+fn on_chord_parser(s: Span) -> IResult<PitchClass> {
     map(tuple((tag("/"), pitch_parser)), |(_, p)| p)(s)
 }
 
-fn degree_parser(s: &str) -> IResult<(u8, i8)> {
-    map(re_capture(MOD_REGEX.to_owned()), |cap| {
-        let diff = match cap[1] {
+#[tracable_parser]
+fn degree_parser(s: Span) -> IResult<(u8, i8)> {
+    map(capture(MOD_REGEX.to_owned()), |cap| {
+        dbg!(&cap);
+        let diff = match *cap[1] {
             "#" | "+" => 1,
             "b" | "-" => -1,
             "" => 0,
@@ -56,7 +89,8 @@ fn degree_parser(s: &str) -> IResult<(u8, i8)> {
     })(s)
 }
 
-fn modifiers_parser(s: &str) -> IResult<Modifier> {
+#[tracable_parser]
+fn modifiers_parser(s: Span) -> IResult<Modifier> {
     alt((
         map(degree_parser, |(d, diff)| Modifier::Mod(d, diff)),
         map(tag("sus2"), |_| Modifier::Mod(3, -1)),
@@ -78,7 +112,8 @@ fn modifiers_parser(s: &str) -> IResult<Modifier> {
     ))(s)
 }
 
-pub fn chord_parser(s: &str) -> IResult<ChordNode> {
+#[tracable_parser]
+pub fn chord_parser(s: Span) -> IResult<ChordNode> {
     map(
         tuple((
             pitch_parser,
@@ -97,7 +132,8 @@ pub fn chord_parser(s: &str) -> IResult<ChordNode> {
     )(s)
 }
 
-pub fn score_node_parser(s: &str) -> IResult<ScoreNode> {
+#[tracable_parser]
+pub fn score_node_parser(s: Span) -> IResult<ScoreNode> {
     alt((
         map(tag("="), |_| ScoreNode::Sustain),
         map(tag("_"), |_| ScoreNode::Rest),
@@ -106,7 +142,8 @@ pub fn score_node_parser(s: &str) -> IResult<ScoreNode> {
     ))(s)
 }
 
-pub fn measure_parser(s: &str) -> IResult<Vec<ScoreNode>> {
+#[tracable_parser]
+pub fn measure_parser(s: Span) -> IResult<Vec<ScoreNode>> {
     alt((
         map(tag("N.C."), |_| vec![ScoreNode::Rest]),
         many1(score_node_parser),
@@ -117,13 +154,18 @@ pub fn measure_parser(s: &str) -> IResult<Vec<ScoreNode>> {
 mod tests {
     use super::chord_parser;
     use anyhow::Result;
+    use nom_locate::LocatedSpan;
+    use nom_tracable::TracableInfo;
 
     #[test]
     fn test_chord_parser() -> Result<()> {
-        let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C"];
+        let info = TracableInfo::new();
+
+        // let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C", "AbM7G7"];
+        let chords = vec!["AbM7G7"];
         for chord in chords.iter() {
-            let (s, _chord) = chord_parser(chord)?;
-            assert_eq!(s, "");
+            let (s, _chord) = chord_parser(LocatedSpan::new_extra(chord, info))?;
+            assert_eq!(*s, "");
         }
         Ok(())
     }

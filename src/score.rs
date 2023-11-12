@@ -3,6 +3,8 @@ use crate::{
     parser::measure_parser,
 };
 use anyhow::Result;
+use nom_locate::LocatedSpan;
+use nom_tracable::TracableInfo;
 use rust_music_theory::note::PitchClass;
 
 #[derive(Debug)]
@@ -31,36 +33,37 @@ pub enum ScoreNode {
 const MEASURE_LENGTH: u32 = 16;
 
 impl Score {
-    fn to_chords(symbols: Vec<Vec<ScoreNode>>) -> Result<Vec<(Option<Chord>, u32)>> {
+    fn to_chords(nodes_list: Vec<Vec<ScoreNode>>) -> Result<Vec<(Option<Chord>, u32)>> {
         let mut chords = vec![];
         let mut sustain = 0;
         let mut rest = 0;
         let mut pre: Option<Chord> = None;
-        for (i, measure) in symbols.into_iter().enumerate() {
-            let dur: u32 = match measure.len() {
-                1 | 2 | 4 | 8 | 16 => MEASURE_LENGTH / measure.len() as u32,
+        for (i, nodes) in nodes_list.into_iter().enumerate() {
+            let dur: u32 = match nodes.len() {
+                1 | 2 | 4 | 8 | 16 => MEASURE_LENGTH / nodes.len() as u32,
                 _ => {
                     return Err(anyhow::anyhow!(
                         "invalid measure length: @{} {} {:?}",
                         i,
-                        measure.len(),
-                        measure
+                        nodes.len(),
+                        nodes
                     ));
                 }
             };
-            for symbol in measure.into_iter() {
-                // println!("{:?} sus={} rest={}", symbol, sustain, rest);
-                if symbol != ScoreNode::Sustain && sustain != 0 {
-                    // println!("push {:?} sus={}", pre, sustain);
-                    chords.push((pre.clone(), sustain + dur));
+            log::trace!("{:?} len={} dur={}", nodes, nodes.len(), dur);
+            for node in nodes.into_iter() {
+                log::trace!("{:?} sus={} rest={}", node, sustain, rest);
+                if node != ScoreNode::Sustain && sustain != 0 {
+                    log::trace!("push {:?} sus={}", pre, sustain);
+                    chords.push((pre.clone(), sustain));
                     sustain = 0;
                 }
-                if symbol != ScoreNode::Rest && rest != 0 {
-                    // println!("push None sus={}", rest);
+                if node != ScoreNode::Rest && rest != 0 {
+                    log::trace!("push None sus={}", rest);
                     chords.push((None, rest));
                     rest = 0;
                 }
-                match symbol {
+                match node {
                     ScoreNode::Chord(node) => {
                         let chord = Chord::from(node)?;
                         pre = Some(chord.clone());
@@ -78,14 +81,14 @@ impl Score {
                 }
             }
         }
-        // println!(
-        //     "{}",
-        //     chords
-        //         .iter()
-        //         .map(|(c, d)| format!("{:?} {}", c, d))
-        //         .collect::<Vec<_>>()
-        //         .join("\n")
-        // );
+        log::trace!(
+            "{}",
+            chords
+                .iter()
+                .map(|(c, d)| format!("{:?} {}", c, d))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
         Ok(chords)
     }
 
@@ -96,19 +99,25 @@ impl Score {
             .flat_map(|line| line.split('|').collect::<Vec<_>>())
             .filter(|s| !s.trim().is_empty())
             .collect::<Vec<_>>();
-        // dbg!(&symbols);
         let symbols = symbols
             .iter()
             .map(|m| {
-                measure_parser(m)
-                    .map_err(|e| anyhow::anyhow!("{}", e))
-                    .and_then(|t| {
-                        if !vec![1, 2, 4, 8, 16].contains(&t.1.len()) {
-                            Err(anyhow::anyhow!("{} is invalid length", m))
-                        } else {
-                            Ok(t.1)
-                        }
-                    })
+                let info = TracableInfo::new().forward(true);
+                let span = LocatedSpan::new_extra(*m, info);
+
+                let (s, nodes) = measure_parser(span).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                if !s.is_empty() {
+                    return Err(anyhow::anyhow!("cannot parse {} rest={}", m, s));
+                }
+                if !vec![1, 2, 4, 8, 16].contains(&nodes.len()) {
+                    return Err(anyhow::anyhow!("{} is invalid length: {}", m, nodes.len()));
+                }
+
+                nom_tracable::histogram();
+                nom_tracable::cumulative_histogram();
+
+                Ok(nodes)
             })
             .collect::<Result<Vec<_>>>()?;
         let chords = Self::to_chords(symbols)?;

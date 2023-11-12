@@ -9,7 +9,6 @@ use std::{
 };
 
 mod chord;
-mod error;
 mod midi;
 mod parser;
 mod score;
@@ -25,11 +24,14 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
+    simplelog::SimpleLogger::init(log::LevelFilter::Debug, Default::default())?;
+
     let args = Cli::try_parse()?;
     let mut f = File::open(&args.input)?;
     let mut code = String::new();
     f.read_to_string(&mut code)?;
     let score = Score::new(args.bpm, code.as_str())?;
+
     let mut f = OpenOptions::new()
         .create(true)
         .write(true)

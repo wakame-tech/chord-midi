@@ -18,6 +18,12 @@ pub enum Quality {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chord(u8, PitchClass, Vec<u8>);
 
+impl std::fmt::Display for Chord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {:?}", self.1, self.2)
+    }
+}
+
 fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
     match quality {
         // domiant 7th
@@ -101,9 +107,13 @@ impl Chord {
     #[cfg(test)]
     pub fn from_str(s: &str) -> Result<Self> {
         use crate::parser::chord_parser;
+        use nom_locate::LocatedSpan;
+        use nom_tracable::TracableInfo;
 
+        let info = TracableInfo::new();
+        let span = LocatedSpan::new_extra(s, info);
         let (rest, node) =
-            chord_parser(s).map_err(|e| anyhow::anyhow!("Failed to parse: {}", e))?;
+            chord_parser(span).map_err(|e| anyhow::anyhow!("Failed to parse: {}", e))?;
         if !rest.is_empty() {
             return Err(anyhow::anyhow!("cannot parse: {} rest={}", s, rest));
         }
@@ -197,6 +207,7 @@ impl Chord {
             }
             Modifier::Add(d, diff) => {
                 let i = (to_semitone(*d)? as i8 + diff) as u8;
+                log::debug!("{} {:?} i={} cumsum={:?}", self, m, i, cumsum);
                 if cumsum.iter().any(|s| s == &i) {
                     return Ok(());
                 }
@@ -225,9 +236,8 @@ impl Chord {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chord::Quality, score::ChordNode};
-
     use super::{Chord, Modifier};
+    use crate::{chord::Quality, score::ChordNode};
     use anyhow::Result;
     use rust_music_theory::note::PitchClass;
 
@@ -259,6 +269,9 @@ mod tests {
             on: None,
         })?;
         assert_eq!(chord.1, PitchClass::D);
+
+        let chord = Chord::from_str("Dm7(b5)")?;
+        assert_eq!(chord.2, vec![3, 3, 5]);
         Ok(())
     }
 
