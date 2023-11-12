@@ -9,6 +9,7 @@ use std::{
 };
 
 mod chord;
+mod error;
 mod midi;
 mod parser;
 mod score;
@@ -19,6 +20,8 @@ struct Cli {
     input: PathBuf,
     #[arg(short, long)]
     output: PathBuf,
+    #[arg(long, default_value_t = 180)]
+    bpm: u8,
 }
 
 fn main() -> Result<()> {
@@ -26,7 +29,7 @@ fn main() -> Result<()> {
     let mut f = File::open(&args.input)?;
     let mut code = String::new();
     f.read_to_string(&mut code)?;
-    let score = Score::parse(code.as_str())?;
+    let score = Score::new(args.bpm, code.as_str())?;
     let mut f = OpenOptions::new()
         .create(true)
         .write(true)

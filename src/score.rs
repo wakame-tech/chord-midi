@@ -1,5 +1,9 @@
-use crate::{chord::Chord, parser::measure_parser};
+use crate::{
+    chord::{Chord, Modifier, Quality},
+    parser::measure_parser,
+};
 use anyhow::Result;
+use rust_music_theory::note::PitchClass;
 
 #[derive(Debug)]
 pub struct Score {
@@ -8,8 +12,17 @@ pub struct Score {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ScoreSymbol {
-    Chord(Chord),
+pub struct ChordNode {
+    pub root: PitchClass,
+    pub quality: Option<Quality>,
+    pub number: Option<u8>,
+    pub modifiers: Vec<Modifier>,
+    pub on: Option<PitchClass>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ScoreNode {
+    Chord(ChordNode),
     Rest,
     Sustain,
     Repeat,
@@ -18,7 +31,7 @@ pub enum ScoreSymbol {
 const MEASURE_LENGTH: u32 = 16;
 
 impl Score {
-    fn to_chords(symbols: Vec<Vec<ScoreSymbol>>) -> Result<Vec<(Option<Chord>, u32)>> {
+    fn to_chords(symbols: Vec<Vec<ScoreNode>>) -> Result<Vec<(Option<Chord>, u32)>> {
         let mut chords = vec![];
         let mut sustain = 0;
         let mut rest = 0;
@@ -37,28 +50,29 @@ impl Score {
             };
             for symbol in measure.into_iter() {
                 // println!("{:?} sus={} rest={}", symbol, sustain, rest);
-                if symbol != ScoreSymbol::Sustain && sustain != 0 {
+                if symbol != ScoreNode::Sustain && sustain != 0 {
                     // println!("push {:?} sus={}", pre, sustain);
                     chords.push((pre.clone(), sustain + dur));
                     sustain = 0;
                 }
-                if symbol != ScoreSymbol::Rest && rest != 0 {
+                if symbol != ScoreNode::Rest && rest != 0 {
                     // println!("push None sus={}", rest);
                     chords.push((None, rest));
                     rest = 0;
                 }
                 match symbol {
-                    ScoreSymbol::Chord(ref chord) => {
+                    ScoreNode::Chord(node) => {
+                        let chord = Chord::from(node)?;
                         pre = Some(chord.clone());
                         sustain = dur;
                     }
-                    ScoreSymbol::Repeat => {
+                    ScoreNode::Repeat => {
                         sustain = dur;
                     }
-                    ScoreSymbol::Sustain => {
+                    ScoreNode::Sustain => {
                         sustain += dur;
                     }
-                    ScoreSymbol::Rest => {
+                    ScoreNode::Rest => {
                         rest += dur;
                     }
                 }
@@ -75,8 +89,8 @@ impl Score {
         Ok(chords)
     }
 
-    pub fn parse(code: &str) -> Result<Self> {
-        let symbols = code
+    pub fn new(bpm: u8, s: &str) -> Result<Self> {
+        let symbols = s
             .split("\r\n")
             .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
             .flat_map(|line| line.split('|').collect::<Vec<_>>())
@@ -98,6 +112,6 @@ impl Score {
             })
             .collect::<Result<Vec<_>>>()?;
         let chords = Self::to_chords(symbols)?;
-        Ok(Self { bpm: 180, chords })
+        Ok(Self { bpm, chords })
     }
 }
