@@ -81,14 +81,9 @@ impl Score {
                 }
             }
         }
-        log::trace!(
-            "{}",
-            chords
-                .iter()
-                .map(|(c, d)| format!("{:?} {}", c, d))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        if sustain != 0 {
+            chords.push((pre, sustain));
+        }
         Ok(chords)
     }
 
