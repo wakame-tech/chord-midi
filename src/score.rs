@@ -109,7 +109,9 @@ impl Score {
                     return Err(anyhow::anyhow!("{} is invalid length: {}", m, nodes.len()));
                 }
 
+                #[cfg(feature = "trace")]
                 nom_tracable::histogram();
+                #[cfg(feature = "trace")]
                 nom_tracable::cumulative_histogram();
 
                 Ok(nodes)

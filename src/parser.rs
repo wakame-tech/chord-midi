@@ -2,7 +2,6 @@ use crate::chord::{Modifier, Quality};
 use crate::score::{ChordNode, ScoreNode};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::one_of;
 use nom::combinator::{map, opt};
 use nom::error::ErrorKind;
 use nom::multi::{many0, many1};
@@ -18,6 +17,8 @@ use rust_music_theory::note::PitchClass;
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
 static MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([b#+-]?)(\d+)").unwrap());
+
+static DEGREE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|11|13)").unwrap());
 
 type Span<'a> = LocatedSpan<&'a str, TracableInfo>;
 type IResult<'a, T> = nom::IResult<Span<'a>, T>;
@@ -47,8 +48,8 @@ fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
 
 #[tracable_parser]
 fn decimal(s: Span) -> IResult<u8> {
-    map(many1(one_of("0123456789")), |v| {
-        v.iter().collect::<String>().parse::<u8>().unwrap()
+    map(capture(DEGREE_REGEX.to_owned()), |cap| {
+        cap[1].parse::<u8>().unwrap()
     })(s)
 }
 
@@ -162,7 +163,15 @@ mod tests {
     fn test_chord_parser() -> Result<()> {
         let info = TracableInfo::new();
 
-        let chords = vec!["Ab6no5", "Dm7b5", "G7#5/B", "AbM7sus2/C", "AbM7"];
+        let chords = vec![
+            "Ab6no5",
+            "Dm7b5",
+            "G7#5/B",
+            "AbM7sus2/C",
+            "AbM7",
+            "C#m911",
+            "AM79",
+        ];
         for chord in chords.iter() {
             let (s, _chord) = chord_parser(LocatedSpan::new_extra(chord, info))?;
             assert_eq!(*s, "");

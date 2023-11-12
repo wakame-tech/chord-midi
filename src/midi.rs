@@ -28,30 +28,16 @@ pub fn write_to_midi(f: &mut impl Write, score: &Score) -> Result<()> {
             skip = dur;
             continue;
         };
-        let notes = chord
-            .notes()
-            .iter()
-            .map(note_to_pitch)
-            .collect::<Vec<_>>();
+        let notes = chord.notes().iter().map(note_to_pitch).collect::<Vec<_>>();
         for (i, n) in notes.iter().enumerate() {
             track
-                .push_note_on(
-                    if i == 0 { skip } else { 0 },
-                    ch,
-                    *n,
-                    Velocity::default(),
-                )
+                .push_note_on(if i == 0 { skip } else { 0 }, ch, *n, Velocity::default())
                 .unwrap();
             skip = 0;
         }
         for (i, n) in notes.iter().enumerate() {
             track
-                .push_note_off(
-                    if i == 0 { dur } else { 0 },
-                    ch,
-                    *n,
-                    Velocity::default(),
-                )
+                .push_note_off(if i == 0 { dur } else { 0 }, ch, *n, Velocity::default())
                 .unwrap();
         }
     }

@@ -30,6 +30,7 @@ fn main() -> Result<()> {
     let mut f = File::open(&args.input)?;
     let mut code = String::new();
     f.read_to_string(&mut code)?;
+    log::debug!("bpm={}", args.bpm);
     let score = Score::new(args.bpm, code.as_str())?;
 
     let mut f = OpenOptions::new()

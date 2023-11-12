@@ -126,7 +126,7 @@ impl Chord {
             node.quality.unwrap_or(Quality::None),
             node.number.unwrap_or(5),
         )?;
-        let mut chord = Chord(4, node.root, semitones);
+        let mut chord = Chord(3, node.root, semitones);
         for m in node.modifiers.iter() {
             chord.apply(m)?;
         }
