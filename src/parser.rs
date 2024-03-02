@@ -1,4 +1,4 @@
-use crate::chord::{Chord, Degree, Modifier};
+use crate::chord::{Chord, Degree, Modifier, Pitch};
 use crate::score::{ChordNode, ScoreNode};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -12,7 +12,7 @@ use nom_regex::lib::nom::Err;
 use nom_tracable::{tracable_parser, TracableInfo};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use rust_music_theory::note::PitchClass;
+use std::str::FromStr;
 
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
@@ -54,14 +54,14 @@ fn degree_parser(s: Span) -> IResult<Degree> {
 }
 
 #[tracable_parser]
-fn pitch_parser(s: Span) -> IResult<PitchClass> {
+fn pitch_parser(s: Span) -> IResult<Pitch> {
     map(capture(PITCH_REGEX.to_owned()), |cap| {
-        PitchClass::from_str(&cap[1]).unwrap()
+        Pitch::from_str(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
-fn on_chord_parser(s: Span) -> IResult<PitchClass> {
+fn on_chord_parser(s: Span) -> IResult<Pitch> {
     map(tuple((tag("/"), pitch_parser)), |(_, p)| p)(s)
 }
 

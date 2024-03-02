@@ -1,11 +1,10 @@
 use crate::{
-    chord::{Chord, Modifier},
+    chord::{Chord, Modifier, Pitch},
     parser::measure_parser,
 };
 use anyhow::Result;
 use nom_locate::LocatedSpan;
 use nom_tracable::TracableInfo;
-use rust_music_theory::note::PitchClass;
 
 #[derive(Debug)]
 pub struct Score {
@@ -15,7 +14,7 @@ pub struct Score {
 
 #[derive(Debug, PartialEq)]
 pub struct ChordNode {
-    pub root: PitchClass,
+    pub root: Pitch,
     pub modifiers: Vec<Modifier>,
 }
 
