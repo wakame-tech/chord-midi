@@ -1,17 +1,17 @@
 use anyhow::Result;
 use clap::Parser;
-use midi::write_to_midi;
-use score::Score;
+use de::score::AST;
+use model::{degree::Pitch, score::into_notes};
+use ser::midi::dump;
 use std::{
     fs::{File, OpenOptions},
     io::Read,
     path::PathBuf,
 };
 
-mod chord;
-mod midi;
-mod parser;
-mod score;
+mod de;
+mod model;
+mod ser;
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
@@ -21,6 +21,8 @@ struct Cli {
     output: PathBuf,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
+    #[arg(long)]
+    key: Pitch,
 }
 
 fn main() -> Result<()> {
@@ -30,8 +32,9 @@ fn main() -> Result<()> {
     let mut f = File::open(&args.input)?;
     let mut code = String::new();
     f.read_to_string(&mut code)?;
-    log::debug!("bpm={}", args.bpm);
-    let score = Score::new(args.bpm, code.as_str())?;
+
+    let ast = AST::parse(code.as_str())?;
+    let notes = into_notes(&ast)?;
 
     let mut f = OpenOptions::new()
         .create(true)
@@ -39,7 +42,6 @@ fn main() -> Result<()> {
         .truncate(true)
         .open(&args.output)
         .unwrap();
-
-    write_to_midi(&mut f, &score)?;
+    dump(&mut f, &notes, args.bpm)?;
     Ok(())
 }
