@@ -19,6 +19,7 @@ impl Note {
 
 #[derive(Debug)]
 pub struct Score {
+    key: Option<Pitch>,
     notes: Vec<Note>,
     sustain: u32,
     rest: u32,
@@ -26,8 +27,9 @@ pub struct Score {
 }
 
 impl Score {
-    fn new() -> Self {
+    fn new(key: Option<Pitch>) -> Self {
         Score {
+            key,
             notes: vec![],
             sustain: 0,
             rest: 0,
@@ -35,7 +37,7 @@ impl Score {
         }
     }
 
-    fn interpret_node(&mut self, node: &Node, dur: u32) {
+    fn interpret_node(&mut self, node: &Node, dur: u32) -> Result<()> {
         log::trace!("{:?} sus={} rest={}", node, self.sustain, self.rest);
         if node != &Node::Sustain && self.sustain != 0 {
             log::trace!("push {:?} sus={}", self.pre, self.sustain);
@@ -55,7 +57,11 @@ impl Score {
                 self.sustain = dur;
             }
             Node::Degree(node) => {
-                let chord = Chord::new(5, Pitch::C, Chord::degrees(&node.modifiers));
+                let Some(key) = self.key else {
+                    return Err(anyhow::anyhow!("key is not set"));
+                };
+                let chord = Chord::new(5, key, Chord::degrees(&node.modifiers));
+                log::debug!("{:?} -> {}", node, chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -69,6 +75,7 @@ impl Score {
                 self.rest += dur;
             }
         }
+        Ok(())
     }
 
     fn measure_unit_size(measure: &Measure) -> Result<u32> {
@@ -86,21 +93,22 @@ impl Score {
         Ok(MEASURE_LENGTH / len)
     }
 
-    fn interpret(&mut self, ast: &AST) {
+    fn interpret(&mut self, ast: &AST) -> Result<()> {
         for measure in &ast.0 {
             let dur = Self::measure_unit_size(&measure).unwrap();
             for node in &measure.0 {
-                self.interpret_node(&node, dur);
+                self.interpret_node(&node, dur)?;
             }
         }
         if self.sustain != 0 {
             self.notes.push(Note::new(self.pre.clone(), self.sustain));
         }
+        Ok(())
     }
 }
 
-pub fn into_notes(ast: &AST) -> Result<Vec<Note>> {
-    let mut score = Score::new();
-    score.interpret(ast);
+pub fn into_notes(ast: &AST, key: Option<Pitch>) -> Result<Vec<Note>> {
+    let mut score = Score::new(key);
+    score.interpret(ast)?;
     Ok(score.notes)
 }

@@ -19,7 +19,7 @@ pub enum Modifier {
     // omit5 = Omit(5)
     Omit(Degree),
     // root, on
-    OnChord(Pitch, Pitch),
+    OnChord(Degree),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,13 +81,11 @@ impl Chord {
                 Modifier::Omit(d) => {
                     degrees.remove(d);
                 }
-                Modifier::OnChord(root, on) => {
-                    let s = Pitch::diff(root, &on);
-                    let (degree, _) = Degree::from_semitone(s);
-                    if let Some(di) = degrees.get_mut(&degree) {
-                        *di -= 12;
+                Modifier::OnChord(d) => {
+                    if let Some(i) = degrees.get_mut(&d) {
+                        *i -= 12;
                     } else {
-                        degrees.insert(degree, -12);
+                        degrees.insert(d.clone(), -12);
                     };
                 }
             }

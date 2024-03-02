@@ -1,5 +1,6 @@
-use super::chord::chord_parser;
+use super::chord::{chord_node_parser, degree_node_parser};
 use super::{IResult, Span};
+use crate::model::degree::Degree;
 use crate::model::{chord::Modifier, degree::Pitch};
 use anyhow::Result;
 use nom::branch::alt;
@@ -17,6 +18,7 @@ pub struct ChordNode {
 
 #[derive(Debug, PartialEq)]
 pub struct DegreeNode {
+    pub root: Degree,
     pub modifiers: Vec<Modifier>,
 }
 
@@ -35,7 +37,8 @@ pub fn node_parser(s: Span) -> IResult<Node> {
         map(tag("="), |_| Node::Sustain),
         map(tag("_"), |_| Node::Rest),
         map(tag("%"), |_| Node::Repeat),
-        map(chord_parser, Node::Chord),
+        map(chord_node_parser, Node::Chord),
+        map(degree_node_parser, Node::Degree),
     ))(s)
 }
 

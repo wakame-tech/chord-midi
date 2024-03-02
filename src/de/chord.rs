@@ -1,4 +1,4 @@
-use super::score::ChordNode;
+use super::score::{ChordNode, DegreeNode};
 use super::{IResult, Span};
 use crate::model::chord::{Chord, Modifier};
 use crate::model::degree::{Degree, Pitch};
@@ -21,7 +21,7 @@ static TENSION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([b#+-]?)(\d+)").
 
 static DEGREE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|11|13)").unwrap());
 
-static DEGREE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(I|II|III|IV|V|VI|VII)").unwrap());
+static DEGREE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)").unwrap());
 
 fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
     move |s| {
@@ -86,6 +86,11 @@ fn on_chord_parser(s: Span) -> IResult<Pitch> {
 }
 
 #[tracable_parser]
+fn on_chord_degree_parser(s: Span) -> IResult<Degree> {
+    map(tuple((tag("/"), degree_parser)), |(_, d)| d)(s)
+}
+
+#[tracable_parser]
 fn tension_parser(s: Span) -> IResult<(Degree, i8)> {
     map(capture(TENSION_REGEX.to_owned()), |cap| {
         let (d, i) = (cap[2].parse().unwrap(), cap[1].into_fragment());
@@ -147,7 +152,7 @@ fn modifiers_parser(s: Span) -> IResult<Vec<Modifier>> {
 }
 
 #[tracable_parser]
-pub fn chord_parser(s: Span) -> IResult<ChordNode> {
+pub fn chord_node_parser(s: Span) -> IResult<ChordNode> {
     map(
         tuple((pitch_parser, many0(modifiers_parser), opt(on_chord_parser))),
         |(root, modifiers, on)| ChordNode {
@@ -155,7 +160,33 @@ pub fn chord_parser(s: Span) -> IResult<ChordNode> {
             modifiers: vec![
                 modifiers.into_iter().flatten().collect(),
                 if let Some(p) = on {
-                    vec![Modifier::OnChord(root, p)]
+                    let s = Pitch::diff(&root, &p);
+                    let (d, _) = Degree::from_semitone(s);
+                    vec![Modifier::OnChord(d)]
+                } else {
+                    vec![]
+                },
+            ]
+            .concat(),
+        },
+    )(s)
+}
+
+#[tracable_parser]
+pub fn degree_node_parser(s: Span) -> IResult<DegreeNode> {
+    map(
+        tuple((
+            degree_parser,
+            many0(modifiers_parser),
+            opt(on_chord_degree_parser),
+            opt(tag(" ")),
+        )),
+        |(root, modifiers, on, _)| DegreeNode {
+            root,
+            modifiers: vec![
+                modifiers.into_iter().flatten().collect(),
+                if let Some(d) = on {
+                    vec![Modifier::OnChord(d)]
                 } else {
                     vec![]
                 },

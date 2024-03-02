@@ -23,6 +23,8 @@ struct Cli {
     bpm: u8,
     #[arg(long)]
     key: Option<Pitch>,
+    #[arg(long)]
+    degree: bool,
 }
 
 fn main() -> Result<()> {
@@ -34,7 +36,7 @@ fn main() -> Result<()> {
     f.read_to_string(&mut code)?;
 
     let ast = AST::parse(code.as_str())?;
-    let notes = into_notes(&ast)?;
+    let notes = into_notes(&ast, args.key)?;
 
     if let Some(output) = &args.output {
         let mut f = OpenOptions::new()
