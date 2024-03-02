@@ -1,4 +1,4 @@
-use super::score::{ChordNode, DegreeNode};
+use super::ast::{ChordNode, DegreeNode};
 use super::{IResult, Span};
 use crate::model::chord::{Chord, Modifier};
 use crate::model::degree::{Degree, Pitch};
@@ -53,23 +53,10 @@ fn degree_number_parser(s: Span) -> IResult<Degree> {
     })(s)
 }
 
-fn parse_roman_number(s: &str) -> Option<u8> {
-    match s {
-        "I" => Some(1),
-        "II" => Some(2),
-        "III" => Some(3),
-        "IV" => Some(4),
-        "V" => Some(5),
-        "VI" => Some(6),
-        "VII" => Some(7),
-        _ => None,
-    }
-}
-
 #[tracable_parser]
 fn degree_parser(s: Span) -> IResult<Degree> {
     map(capture(DEGREE_REGEX.to_owned()), |cap| {
-        Degree(parse_roman_number(&cap[1]).unwrap())
+        Degree::from_str(&cap[1]).unwrap()
     })(s)
 }
 

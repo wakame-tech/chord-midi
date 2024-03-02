@@ -1,6 +1,6 @@
 use super::chord::Chord;
 use crate::{
-    de::score::{Measure, Node, AST},
+    de::ast::{Measure, Node, AST},
     model::degree::Pitch,
 };
 use anyhow::Result;

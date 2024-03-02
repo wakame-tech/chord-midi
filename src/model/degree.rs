@@ -1,8 +1,25 @@
 use anyhow::Result;
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Degree(pub u8);
+
+impl FromStr for Degree {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "I" => Ok(Degree(1)),
+            "II" => Ok(Degree(2)),
+            "III" => Ok(Degree(3)),
+            "IV" => Ok(Degree(4)),
+            "V" => Ok(Degree(5)),
+            "VI" => Ok(Degree(6)),
+            "VII" => Ok(Degree(7)),
+            _ => Err(anyhow::anyhow!("invalid degree: {}", s)),
+        }
+    }
+}
 
 impl Degree {
     pub fn to_semitone(&self) -> Result<u8> {
@@ -37,6 +54,25 @@ impl Degree {
             11 => (Degree(7), 0),
             _ => unreachable!(),
         }
+    }
+}
+
+impl Display for Degree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self.0 {
+            1 => "I",
+            2 => "II",
+            3 => "III",
+            4 => "IV",
+            5 => "V",
+            6 => "VI",
+            7 => "VII",
+            9 => "IX",
+            11 => "XI",
+            13 => "XIII",
+            _ => unreachable!(),
+        };
+        write!(f, "{}", s)
     }
 }
 
