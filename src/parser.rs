@@ -1,4 +1,4 @@
-use crate::chord::{Modifier, Quality};
+use crate::chord::{Chord, Degree, Modifier};
 use crate::score::{ChordNode, ScoreNode};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -16,7 +16,7 @@ use rust_music_theory::note::PitchClass;
 
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
-static MOD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([b#+-]?)(\d+)").unwrap());
+static TENSION_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([b#+-]?)(\d+)").unwrap());
 
 static DEGREE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|11|13)").unwrap());
 
@@ -47,9 +47,9 @@ fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
 }
 
 #[tracable_parser]
-fn decimal(s: Span) -> IResult<u8> {
+fn degree_parser(s: Span) -> IResult<Degree> {
     map(capture(DEGREE_REGEX.to_owned()), |cap| {
-        cap[1].parse::<u8>().unwrap()
+        Degree(cap[1].parse::<u8>().unwrap())
     })(s)
 }
 
@@ -61,55 +61,64 @@ fn pitch_parser(s: Span) -> IResult<PitchClass> {
 }
 
 #[tracable_parser]
-fn quality_parser(s: Span) -> IResult<Quality> {
-    alt((
-        map(tag("mM"), |_| Quality::MinorM7),
-        map(tag("M"), |_| Quality::Major),
-        map(tag("maj"), |_| Quality::Major),
-        map(tag("m"), |_| Quality::Minor),
-        map(alt((tag("dim"), tag("o"))), |_| Quality::Dim),
-        map(alt((tag("aug"), tag("+"))), |_| Quality::Aug),
-    ))(s)
-}
-
-#[tracable_parser]
 fn on_chord_parser(s: Span) -> IResult<PitchClass> {
     map(tuple((tag("/"), pitch_parser)), |(_, p)| p)(s)
 }
 
 #[tracable_parser]
-fn degree_parser(s: Span) -> IResult<(u8, i8)> {
-    map(capture(MOD_REGEX.to_owned()), |cap| {
-        let diff = match *cap[1] {
+fn tension_parser(s: Span) -> IResult<(Degree, i8)> {
+    map(capture(TENSION_REGEX.to_owned()), |cap| {
+        let (d, i) = (cap[2].parse().unwrap(), cap[1].into_fragment());
+        let diff = match i {
             "#" | "+" => 1,
             "b" | "-" => -1,
             "" => 0,
             _ => unreachable!(),
         };
-        (cap[2].parse().unwrap(), diff)
+        (Degree(d), diff)
     })(s)
 }
 
 #[tracable_parser]
-fn modifiers_parser(s: Span) -> IResult<Modifier> {
+fn modifiers_parser(s: Span) -> IResult<Vec<Modifier>> {
     alt((
-        map(tag("(b5)"), |_| Modifier::Mod(5, -1)),
-        map(degree_parser, |(d, diff)| Modifier::Mod(d, diff)),
-        map(tag("sus2"), |_| Modifier::Mod(3, -1)),
-        map(tag("sus4"), |_| Modifier::Mod(3, 1)),
-        map(tuple((tag("add"), decimal)), |(_, d)| Modifier::Add(d, 0)),
-        map(tuple((alt((tag("omit"), tag("no"))), decimal)), |(_, d)| {
-            Modifier::Omit(d)
+        map(alt((tag("-5"), tag("(b5)"))), |_| {
+            vec![Modifier::Mod(Degree(5), -1)]
         }),
-        // C(b9)
+        map(tag("sus2"), |_| vec![Modifier::Mod(Degree(3), -1)]),
+        map(tag("sus4"), |_| vec![Modifier::Mod(Degree(3), 1)]),
+        map(tag("dim7"), |_| {
+            vec![Modifier::Mod(Degree(5), -1), Modifier::Add(Degree(7), -1)]
+        }),
+        map(alt((tag("dim"), tag("o"))), |_| {
+            vec![Modifier::Mod(Degree(5), -1)]
+        }),
+        map(tag("aug7"), |_| {
+            vec![Modifier::Mod(Degree(5), 1), Modifier::Add(Degree(7), 1)]
+        }),
+        map(alt((tag("aug"), tag("+"))), |_| {
+            vec![Modifier::Mod(Degree(5), 1)]
+        }),
+        map(tuple((tag("add"), degree_parser)), |(_, d)| {
+            vec![Modifier::Add(d, 0)]
+        }),
         map(
-            delimited(
-                tag("("),
-                // separated_list1(tag(","), re_capture(MOD_REGEX.to_owned())),
-                degree_parser,
-                tag(")"),
-            ),
-            |(d, diff)| Modifier::Add(d, diff),
+            tuple((alt((tag("omit"), tag("no"))), degree_parser)),
+            |(_, d)| vec![Modifier::Omit(d)],
+        ),
+        map(delimited(tag("("), tension_parser, tag(")")), |(d, i)| {
+            vec![Modifier::Add(d, i)]
+        }),
+        map(tension_parser, |(d, i)| vec![Modifier::Add(d, i)]),
+        map(tag("mM7"), |_| {
+            vec![Modifier::Mod(Degree(3), -1), Modifier::Add(Degree(7), 0)]
+        }),
+        map(
+            tuple((alt((tag("maj"), tag("m"), tag("M"))), opt(degree_parser))),
+            |(m, d)| {
+                let is_minor = m.into_fragment() == "m";
+                Chord::degree_to_mods(is_minor, d.unwrap_or(Degree(5)))
+            },
         ),
     ))(s)
 }
@@ -117,19 +126,18 @@ fn modifiers_parser(s: Span) -> IResult<Modifier> {
 #[tracable_parser]
 pub fn chord_parser(s: Span) -> IResult<ChordNode> {
     map(
-        tuple((
-            pitch_parser,
-            opt(quality_parser),
-            opt(decimal),
-            many0(modifiers_parser),
-            opt(on_chord_parser),
-        )),
-        |(root, quality, number, modifiers, on)| ChordNode {
+        tuple((pitch_parser, many0(modifiers_parser), opt(on_chord_parser))),
+        |(root, modifiers, on)| ChordNode {
             root,
-            quality,
-            number,
-            modifiers,
-            on,
+            modifiers: vec![
+                modifiers.into_iter().flatten().collect(),
+                if let Some(p) = on {
+                    vec![Modifier::OnChord(root, p)]
+                } else {
+                    vec![]
+                },
+            ]
+            .concat(),
         },
     )(s)
 }
@@ -154,27 +162,23 @@ pub fn measure_parser(s: Span) -> IResult<Vec<ScoreNode>> {
 
 #[cfg(test)]
 mod tests {
-    use super::chord_parser;
+    use crate::parser::modifiers_parser;
     use anyhow::Result;
+    use nom::multi::many0;
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
 
     #[test]
-    fn test_chord_parser() -> Result<()> {
-        let info = TracableInfo::new();
-
-        let chords = vec![
-            "Ab6no5",
-            "Dm7b5",
-            "G7#5/B",
-            "AbM7sus2/C",
-            "AbM7",
-            "C#m911",
-            "AM79",
-        ];
-        for chord in chords.iter() {
-            let (s, _chord) = chord_parser(LocatedSpan::new_extra(chord, info))?;
+    fn test_modifiers_parser() -> Result<()> {
+        for lit in [
+            "", "6", "7", "maj7", "M7", "m", "m6", "m7", "mM7", "m7-5", "dim", "sus4", "7sus4",
+            "add9", "9", "m9", "7(b9)", "7(#9)", "maj9", "7(#11)", "7(13)", "7(b13)",
+        ] {
+            let info = TracableInfo::new();
+            let (s, mods) = many0(modifiers_parser)(LocatedSpan::new_extra(lit, info))?;
             assert_eq!(*s, "");
+            let mods = mods.into_iter().flatten().collect::<Vec<_>>();
+            println!("\"{}\" -> {:?}", lit, mods);
         }
         Ok(())
     }

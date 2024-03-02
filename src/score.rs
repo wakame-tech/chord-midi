@@ -1,5 +1,5 @@
 use crate::{
-    chord::{Chord, Modifier, Quality},
+    chord::{Chord, Modifier},
     parser::measure_parser,
 };
 use anyhow::Result;
@@ -16,10 +16,7 @@ pub struct Score {
 #[derive(Debug, PartialEq)]
 pub struct ChordNode {
     pub root: PitchClass,
-    pub quality: Option<Quality>,
-    pub number: Option<u8>,
     pub modifiers: Vec<Modifier>,
-    pub on: Option<PitchClass>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -70,7 +67,7 @@ impl Score {
                 }
                 match node {
                     ScoreNode::Chord(node) => {
-                        let chord = Chord::from(node)?;
+                        let chord = Chord::from(node);
                         pre = Some(chord.clone());
                         sustain = dur;
                     }

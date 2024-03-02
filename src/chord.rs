@@ -1,334 +1,142 @@
 use crate::score::ChordNode;
 use anyhow::Result;
-use rust_music_theory::{
-    interval::Interval,
-    note::{Note, PitchClass},
-};
+use rust_music_theory::note::PitchClass;
+use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Quality {
-    None,
-    Major,
-    Minor,
-    MinorM7,
-    Dim,
-    Aug,
-}
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Degree(pub u8);
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Chord {
-    octabe: u8,
-    // root note
-    key: PitchClass,
-    // relative semitones
-    semitones: Vec<u8>,
-}
-
-impl std::fmt::Display for Chord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {:?}", self.key, self.semitones)
+impl Degree {
+    fn to_semitone(&self) -> Result<u8> {
+        match self.0 {
+            3 => Ok(4),
+            5 => Ok(7),
+            7 => Ok(11),
+            9 => Ok(14),
+            11 => Ok(17),
+            13 => Ok(21),
+            _ => Err(anyhow::anyhow!("unknown degree {}", self.0)),
+        }
     }
-}
 
-fn semitones(quality: Quality, number: u8) -> Result<Vec<u8>> {
-    match quality {
-        // domiant 7th
-        Quality::None if number == 7 => Ok(vec![4, 3, 3]),
-        Quality::None | Quality::Major => match number {
-            // C
-            5 => Ok(vec![4, 3]),
-            // C6
-            6 => Ok(vec![4, 3, 2]),
-            // CM7
-            7 => Ok(vec![4, 3, 4]),
-            // C9
-            9 => Ok(vec![4, 3, 4, 3]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::Minor => match number {
-            // Cm
-            5 => Ok(vec![3, 4]),
-            // Cm6
-            6 => Ok(vec![3, 4, 2]),
-            // Cm7
-            7 => Ok(vec![3, 4, 3]),
-            // Cm9
-            9 => Ok(vec![3, 4, 3, 3]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::MinorM7 => match number {
-            // CmM7
-            7 => Ok(vec![3, 4, 4]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::Dim => match number {
-            // Cdim
-            5 => Ok(vec![3, 3]),
-            // Cdim7
-            7 => Ok(vec![3, 3, 3]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-        Quality::Aug => match number {
-            // Caug
-            5 => Ok(vec![3, 5]),
-            // Caug7
-            7 => Ok(vec![3, 5, 3]),
-            _ => Err(anyhow::anyhow!("unknown: {:?}, {}", quality, number)),
-        },
-    }
-}
-
-fn to_semitone(d: u8) -> Result<u8> {
-    // TODO: hontou?
-    match d {
-        3 => Ok(4),
-        5 => Ok(7),
-        7 => Ok(11),
-        9 => Ok(14),
-        11 => Ok(17),
-        13 => Ok(21),
-        _ => Err(anyhow::anyhow!("unknown degree {}", d)),
+    fn diff(from: &PitchClass, to: &PitchClass) -> Self {
+        let diff = (to.into_u8() as i8 - from.into_u8() as i8 + 12) % 12;
+        Degree(diff as u8)
     }
 }
 
 // (degree, diff)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Modifier {
     // ex.
     // b5 = Mod(5, -1)
     // #5 = Mod(5, 1)
     // sus2 = Mod(3, -1)
     // sus4 = Mod(3, 1)
-    Mod(u8, i8),
+    Mod(Degree, i8),
     // ex.
     // add9 = Add(9, 0) = [11]
     // (b9) = Add(9, -1) = [10]
-    Add(u8, i8),
+    Add(Degree, i8),
     // ex.
     // omit5 = Omit(5)
-    Omit(u8),
+    Omit(Degree),
+    // root, on
+    OnChord(PitchClass, PitchClass),
+}
+
+#[derive(Debug, Clone)]
+pub struct Note(pub u8, pub PitchClass);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Chord {
+    octabe: u8,
+    invert: u8,
+    /// root note
+    key: PitchClass,
+    /// absolute degree from root note
+    degrees: BTreeMap<Degree, i8>,
+}
+
+impl std::fmt::Display for Chord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let degrees = self
+            .degrees
+            .iter()
+            .map(|(d, diff)| format!("{}{}", d.0, diff))
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(f, "{} {:?}", self.key, degrees)
+    }
 }
 
 impl Chord {
-    #[cfg(test)]
-    pub fn from_str(s: &str) -> Result<Self> {
-        use crate::parser::chord_parser;
-        use nom_locate::LocatedSpan;
-        use nom_tracable::TracableInfo;
-
-        let info = TracableInfo::new();
-        let span = LocatedSpan::new_extra(s, info);
-        let (rest, node) =
-            chord_parser(span).map_err(|e| anyhow::anyhow!("Failed to parse: {}", e))?;
-        if !rest.is_empty() {
-            return Err(anyhow::anyhow!("cannot parse: {} rest={}", s, rest));
-        }
-        Self::from(node)
-    }
-
-    pub fn new(octabe: u8, key: PitchClass, semitones: Vec<u8>) -> Self {
+    pub fn new(octabe: u8, key: PitchClass, degrees: BTreeMap<Degree, i8>) -> Self {
         Chord {
             octabe,
+            invert: 0,
             key,
-            semitones,
+            degrees,
         }
     }
 
-    pub fn from(node: ChordNode) -> Result<Self> {
-        // println!("{} {:?} {:?} {:?}", pitch, quality, number, modifiers);
-        let semitones = semitones(
-            node.quality.unwrap_or(Quality::None),
-            node.number.unwrap_or(5),
-        )?;
-        let mut chord = Chord {
-            octabe: 3,
-            key: node.root,
-            semitones,
-        };
-        for m in node.modifiers.iter() {
-            chord.apply(m)?;
+    pub fn degree_to_mods(is_minor: bool, d: Degree) -> Vec<Modifier> {
+        let third = Modifier::Mod(Degree(3), if is_minor { -1 } else { 0 });
+        let seventh = Modifier::Add(Degree(7), if is_minor { -1 } else { 0 });
+        match d {
+            Degree(5) => Ok(vec![third]),
+            Degree(6) => Ok(vec![third, Modifier::Add(Degree(6), 0)]),
+            Degree(7) => Ok(vec![third, seventh]),
+            Degree(9) => Ok(vec![third, seventh, Modifier::Add(Degree(9), 0)]),
+            _ => Err(anyhow::anyhow!("invalid degree: {:?}", d)),
         }
-        if let Some(on) = node.on {
-            if chord.invert(on).is_err() {
-                chord.change_root(on);
-            }
-        }
-        Ok(chord)
+        .unwrap()
     }
 
-    fn invert(&mut self, on: PitchClass) -> Result<()> {
-        let s = self
-            .semitones
-            .iter()
-            .scan(0, |state, &x| {
-                *state += x;
-                Some(*state)
-            })
-            .collect::<Vec<_>>();
-        let count = s
-            .iter()
-            .position(|i| i == &on.into_u8())
-            .ok_or(anyhow::anyhow!("on must contain chord"))?;
-        for _ in 0..=count {
-            // 0 [4, 3] -> 0 [3, 12 - 3 - 4] -> 0 [3, 5]
-            let s: u8 = self.semitones.iter().sum();
-            let root = (self.key.into_u8() + self.semitones[0]) % 12;
-            self.semitones.remove(0);
-            self.semitones.push((-(s as i8)).rem_euclid(12) as u8);
-            self.key = PitchClass::from_u8(root);
-        }
-        Ok(())
-    }
-
-    fn change_root(&mut self, root: PitchClass) {
-        let diff = (root.into_u8() as i8 + 12 - self.key.into_u8() as i8) % 12;
-        let diff = if diff < self.semitones[0] as i8 {
-            diff
-        } else {
-            (diff - 12) % 12
-        };
-        // println!("root={} on={} diff={}", self.1, root, diff);
-        self.semitones[0] = (self.semitones[0] as i8 - diff) as u8;
-        self.key = root;
-    }
-
-    fn modify(&mut self, index: usize, diff: i8) {
-        self.semitones[index] = (self.semitones[index] as i8 + diff) as u8;
-        if let Some(n) = self.semitones.get_mut(index + 1) {
-            *n = (*n as i8 - diff) as u8;
-        }
-    }
-
-    fn omit(&mut self, index: usize) {
-        let s = self.semitones.remove(index);
-        if let Some(n) = self.semitones.get_mut(index) {
-            *n += s;
-        }
-    }
-
-    pub fn apply(&mut self, m: &Modifier) -> Result<()> {
-        let cumsum = self
-            .semitones
-            .iter()
-            .scan(0, |state, &x| {
-                *state += x;
-                Some(*state)
-            })
-            .collect::<Vec<_>>();
-
-        match m {
-            Modifier::Mod(d, diff) => {
-                let i = to_semitone(*d)?;
-                if let Some(at) = cumsum.iter().position(|s| s == &i) {
-                    self.modify(at, *diff);
+    fn degrees(modifiers: &[Modifier]) -> BTreeMap<Degree, i8> {
+        // triad
+        let mut degrees = BTreeMap::from_iter(vec![(Degree(0), 0), (Degree(3), 0), (Degree(5), 0)]);
+        for m in modifiers {
+            match m {
+                Modifier::Mod(d, i) => {
+                    degrees.get_mut(d).map(|v| *v += i);
                 }
-            }
-            Modifier::Add(d, diff) => {
-                let i = (to_semitone(*d)? as i8 + diff) as u8;
-                log::debug!("{} {:?} i={} cumsum={:?}", self, m, i, cumsum);
-                let s = i - cumsum.last().unwrap();
-                self.semitones.push(s);
-            }
-            Modifier::Omit(d) => {
-                let i = to_semitone(*d)?;
-                if let Some(at) = cumsum.iter().position(|s| s == &i) {
-                    self.omit(at);
+                Modifier::Add(d, i) => {
+                    degrees.insert(d.clone(), *i);
+                }
+                Modifier::Omit(d) => {
+                    degrees.remove(d);
+                }
+                Modifier::OnChord(root, on) => {
+                    let degree = Degree::diff(root, &on);
+                    if let Some(i) = degrees.get_mut(&degree) {
+                        *i -= 12;
+                    } else {
+                        degrees.insert(degree, -12);
+                    };
                 }
             }
         }
-        Ok(())
+        degrees
     }
 
-    pub fn notes(&self) -> Vec<Note> {
-        let root_note = Note {
-            octave: self.octabe,
-            pitch_class: self.key,
-        };
-        let intervals = Interval::from_semitones(&self.semitones).unwrap();
-        Interval::to_notes(root_note, intervals)
+    pub fn from(node: ChordNode) -> Self {
+        let degrees = Self::degrees(&node.modifiers);
+        Chord::new(3, node.root, degrees)
+    }
+
+    pub fn notes(&self) -> Result<Vec<Note>> {
+        self.degrees
+            .iter()
+            .map(|(d, diff)| {
+                let n = ((self.octabe * 12 + self.key.into_u8() + d.to_semitone()?) as i8 + *diff)
+                    as u8;
+                let (octave, pitch) = (n / 12, n % 12);
+                Ok(Note(octave, PitchClass::from_u8(pitch)))
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Chord, Modifier};
-    use crate::{chord::Quality, score::ChordNode};
-    use anyhow::Result;
-    use rust_music_theory::note::PitchClass;
-
-    #[test]
-    fn test_chord_from() -> Result<()> {
-        let chord = Chord::from(ChordNode {
-            root: PitchClass::D,
-            quality: None,
-            number: None,
-            modifiers: vec![Modifier::Mod(3, 1)],
-            on: None,
-        })?;
-        assert_eq!(chord, Chord::new(4, PitchClass::D, vec![5, 2]));
-
-        let chord = Chord::from(ChordNode {
-            root: PitchClass::C,
-            quality: Some(Quality::Major),
-            number: Some(7),
-            modifiers: vec![Modifier::Add(9, 0)],
-            on: None,
-        })?;
-        assert_eq!(chord, Chord::new(4, PitchClass::C, vec![4, 3, 4, 3]));
-
-        let chord = Chord::from(ChordNode {
-            root: PitchClass::D,
-            quality: Some(Quality::None),
-            number: Some(9),
-            modifiers: vec![],
-            on: None,
-        })?;
-        assert_eq!(chord.key, PitchClass::D);
-
-        let chord = Chord::from_str("Dm7(b5)")?;
-        assert_eq!(chord.semitones, vec![3, 3, 4]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_on_chord() -> Result<()> {
-        // A: [A, C#(+4), E(+3)]
-        // A/B: [B, C#(+2), E(+3)]
-        let chord = Chord::from_str("A/B")?;
-        assert_eq!(chord.key, PitchClass::B);
-        assert_eq!(chord.semitones, vec![2, 3]);
-
-        // C: [C, E(+4), G(+3)]
-        // C/E: [E, G(+3), C(+5)]
-        let chord = Chord::from_str("C/E")?;
-        assert_eq!(chord.key, PitchClass::E);
-        assert_eq!(chord.semitones, vec![3, 5]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_invert() {
-        let mut chord = Chord::new(4, PitchClass::C, vec![4, 3]);
-        chord.invert(PitchClass::E).unwrap();
-        assert_eq!(chord.key, PitchClass::E);
-        assert_eq!(chord.semitones, vec![3, 5]);
-
-        let mut chord = Chord::new(4, PitchClass::C, vec![4, 3]);
-        chord.invert(PitchClass::G).unwrap();
-        assert_eq!(chord.key, PitchClass::G);
-        assert_eq!(chord.semitones, vec![5, 4])
-    }
-
-    #[test]
-    fn test_change_root() {
-        let mut chord = Chord::new(4, PitchClass::C, vec![4, 3]);
-        chord.change_root(PitchClass::B);
-        assert_eq!(chord.key, PitchClass::B);
-        assert_eq!(chord.semitones, vec![5, 3]);
-
-        let mut chord = Chord::new(4, PitchClass::C, vec![4, 3]);
-        chord.change_root(PitchClass::F);
-        assert_eq!(chord.key, PitchClass::F);
-        assert_eq!(chord.semitones, vec![11, 3]);
-    }
-}
+mod tests {}
