@@ -37,10 +37,10 @@ impl std::fmt::Display for Chord {
         let degrees = self
             .degrees
             .iter()
-            .map(|(d, diff)| format!("{}{}", d.0, diff))
+            .map(|(d, i)| format!("{}({})", d.0, i))
             .collect::<Vec<_>>()
             .join(",");
-        write!(f, "{:?} {:?}", self.key, degrees)
+        write!(f, "{:?} {}", self.key, degrees)
     }
 }
 
@@ -69,7 +69,7 @@ impl Chord {
 
     pub fn degrees(modifiers: &[Modifier]) -> BTreeMap<Degree, i8> {
         // triad
-        let mut degrees = BTreeMap::from_iter(vec![(Degree(0), 0), (Degree(3), 0), (Degree(5), 0)]);
+        let mut degrees = BTreeMap::from_iter(vec![(Degree(1), 0), (Degree(3), 0), (Degree(5), 0)]);
         for m in modifiers {
             match m {
                 Modifier::Mod(d, i) => {
@@ -82,9 +82,10 @@ impl Chord {
                     degrees.remove(d);
                 }
                 Modifier::OnChord(root, on) => {
-                    let degree = Degree::diff(root, &on);
-                    if let Some(i) = degrees.get_mut(&degree) {
-                        *i -= 12;
+                    let s = Pitch::diff(root, &on);
+                    let (degree, _) = Degree::from_semitone(s);
+                    if let Some(di) = degrees.get_mut(&degree) {
+                        *di -= 12;
                     } else {
                         degrees.insert(degree, -12);
                     };
@@ -95,14 +96,19 @@ impl Chord {
     }
 
     pub fn semitones(&self) -> Result<Vec<u8>> {
-        self.degrees
+        let s = self
+            .degrees
             .iter()
             .map(|(d, diff)| {
-                let semitone = ((self.octabe * 12 + self.key.into_u8() + d.to_semitone()?) as i8
-                    + *diff) as u8;
-                Ok(semitone)
+                let semitone = self.octabe as i8 * 12
+                    + self.key.into_u8() as i8
+                    + d.to_semitone()? as i8
+                    + *diff;
+                Ok(semitone as u8)
             })
-            .collect::<Result<Vec<_>>>()
+            .collect::<Result<Vec<_>>>()?;
+        log::debug!("{:?}", s);
+        Ok(s)
     }
 }
 

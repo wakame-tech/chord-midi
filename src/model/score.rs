@@ -49,12 +49,13 @@ impl Score {
         }
         match node {
             Node::Chord(node) => {
-                let chord = Chord::new(3, node.root, Chord::degrees(&node.modifiers));
+                let chord = Chord::new(5, node.root, Chord::degrees(&node.modifiers));
+                log::debug!("{:?} -> {}", node, chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
             Node::Degree(node) => {
-                let chord = Chord::new(3, Pitch::C, Chord::degrees(&node.modifiers));
+                let chord = Chord::new(5, Pitch::C, Chord::degrees(&node.modifiers));
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }

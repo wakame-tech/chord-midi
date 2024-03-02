@@ -7,8 +7,12 @@ pub struct Degree(pub u8);
 impl Degree {
     pub fn to_semitone(&self) -> Result<u8> {
         match self.0 {
+            1 => Ok(0),
+            2 => Ok(2),
             3 => Ok(4),
+            4 => Ok(5),
             5 => Ok(7),
+            6 => Ok(9),
             7 => Ok(11),
             9 => Ok(14),
             11 => Ok(17),
@@ -17,9 +21,22 @@ impl Degree {
         }
     }
 
-    pub fn diff(from: &Pitch, to: &Pitch) -> Self {
-        let diff = (to.into_u8() as i8 - from.into_u8() as i8 + 12) % 12;
-        Degree(diff as u8)
+    pub fn from_semitone(semitone: u8) -> (Degree, i8) {
+        match semitone % 12 {
+            0 => (Degree(1), 0),
+            1 => (Degree(1), 1),
+            2 => (Degree(2), 0),
+            3 => (Degree(2), 1),
+            4 => (Degree(3), 0),
+            5 => (Degree(4), 0),
+            6 => (Degree(4), 1),
+            7 => (Degree(5), 0),
+            8 => (Degree(5), 1),
+            9 => (Degree(6), 0),
+            10 => (Degree(6), 1),
+            11 => (Degree(7), 0),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -46,16 +63,16 @@ impl FromStr for Pitch {
         use Pitch::*;
         match s {
             "C" => Ok(C),
-            "C#" => Ok(Cs),
+            "C#" | "Db" => Ok(Cs),
             "D" => Ok(D),
-            "D#" => Ok(Ds),
+            "D#" | "Eb" => Ok(Ds),
             "E" => Ok(E),
             "F" => Ok(F),
-            "F#" => Ok(Fs),
+            "F#" | "Gb" => Ok(Fs),
             "G" => Ok(G),
-            "G#" => Ok(Gs),
+            "G#" | "Ab" => Ok(Gs),
             "A" => Ok(A),
-            "A#" => Ok(As),
+            "A#" | "Bb" => Ok(As),
             "B" => Ok(B),
             _ => Err(anyhow::anyhow!("invalid pitch: {}", s)),
         }
@@ -98,5 +115,10 @@ impl Pitch {
             As => 10,
             B => 11,
         }
+    }
+
+    pub fn diff(from: &Pitch, to: &Pitch) -> u8 {
+        let diff = (to.into_u8() as i8 - from.into_u8() as i8 + 12) % 12;
+        diff as u8
     }
 }

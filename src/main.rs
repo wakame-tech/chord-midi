@@ -18,11 +18,11 @@ struct Cli {
     #[arg(short, long)]
     input: PathBuf,
     #[arg(short, long)]
-    output: PathBuf,
+    output: Option<PathBuf>,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
     #[arg(long)]
-    key: Pitch,
+    key: Option<Pitch>,
 }
 
 fn main() -> Result<()> {
@@ -36,12 +36,14 @@ fn main() -> Result<()> {
     let ast = AST::parse(code.as_str())?;
     let notes = into_notes(&ast)?;
 
-    let mut f = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&args.output)
-        .unwrap();
-    dump(&mut f, &notes, args.bpm)?;
+    if let Some(output) = &args.output {
+        let mut f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(output)
+            .unwrap();
+        dump(&mut f, &notes, args.bpm)?;
+    }
     Ok(())
 }

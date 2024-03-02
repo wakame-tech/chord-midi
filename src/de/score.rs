@@ -51,7 +51,7 @@ impl Measure {
     pub fn parse(s: &str) -> Result<Self> {
         let info = TracableInfo::new().forward(true);
         let span = LocatedSpan::new_extra(s, info);
-        let (rest, notes) = nodes_parser(span).map_err(|e| anyhow::anyhow!("{}", e))?;
+        let (rest, nodes) = nodes_parser(span).map_err(|e| anyhow::anyhow!("{}", e))?;
         if !rest.is_empty() {
             return Err(anyhow::anyhow!("cannot parse {} rest={}", s, rest));
         }
@@ -60,7 +60,7 @@ impl Measure {
             nom_tracable::histogram();
             nom_tracable::cumulative_histogram();
         }
-        Ok(Self(notes))
+        Ok(Self(nodes))
     }
 }
 
