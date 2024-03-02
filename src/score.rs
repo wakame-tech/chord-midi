@@ -39,8 +39,12 @@ impl Score {
         let mut rest = 0;
         let mut pre: Option<Chord> = None;
         for (i, nodes) in nodes_list.into_iter().enumerate() {
-            let dur: u32 = match nodes.len() {
-                1 | 2 | 4 | 8 | 16 => MEASURE_LENGTH / nodes.len() as u32,
+            let len = match nodes.len() {
+                1 => 1,
+                2 => 2,
+                3..=4 => 4,
+                5..=8 => 8,
+                9..=16 => 16,
                 _ => {
                     return Err(anyhow::anyhow!(
                         "invalid measure length: @{} {} {:?}",
@@ -50,6 +54,7 @@ impl Score {
                     ));
                 }
             };
+            let dur: u32 = MEASURE_LENGTH / len;
             log::trace!("{:?} len={} dur={}", nodes, nodes.len(), dur);
             for node in nodes.into_iter() {
                 log::trace!("{:?} sus={} rest={}", node, sustain, rest);
@@ -104,9 +109,6 @@ impl Score {
 
                 if !s.is_empty() {
                     return Err(anyhow::anyhow!("cannot parse {} rest={}", m, s));
-                }
-                if !vec![1, 2, 4, 8, 16].contains(&nodes.len()) {
-                    return Err(anyhow::anyhow!("{} is invalid length: {}", m, nodes.len()));
                 }
 
                 #[cfg(feature = "trace")]

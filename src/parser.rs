@@ -65,6 +65,7 @@ fn quality_parser(s: Span) -> IResult<Quality> {
     alt((
         map(tag("mM"), |_| Quality::MinorM7),
         map(tag("M"), |_| Quality::Major),
+        map(tag("maj"), |_| Quality::Major),
         map(tag("m"), |_| Quality::Minor),
         map(alt((tag("dim"), tag("o"))), |_| Quality::Dim),
         map(alt((tag("aug"), tag("+"))), |_| Quality::Aug),
@@ -79,7 +80,6 @@ fn on_chord_parser(s: Span) -> IResult<PitchClass> {
 #[tracable_parser]
 fn degree_parser(s: Span) -> IResult<(u8, i8)> {
     map(capture(MOD_REGEX.to_owned()), |cap| {
-        dbg!(&cap);
         let diff = match *cap[1] {
             "#" | "+" => 1,
             "b" | "-" => -1,
