@@ -18,16 +18,13 @@ mod ser;
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
-    #[arg(short, long)]
     input: PathBuf,
     #[arg(short, long)]
     output: Option<PathBuf>,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
     #[arg(long)]
-    key: Option<Pitch>,
-    #[arg(long)]
-    as_degree: bool,
+    as_degree: Option<Pitch>,
 }
 
 fn main() -> Result<()> {
@@ -39,29 +36,25 @@ fn main() -> Result<()> {
     f.read_to_string(&mut code)?;
 
     let mut ast = AST::parse(code.as_str())?;
-    if args.as_degree {
-        if let Some(key) = args.key {
+
+    let mut out = args.output.map(|p| {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(p)
+            .unwrap()
+    });
+
+    if let Some(key) = args.as_degree {
+        if let Some(f) = out.as_mut() {
             ast.as_degree(key);
-        }
-        if let Some(output) = &args.output {
-            let mut f = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(output)
-                .unwrap();
-            score::dump(&mut f, &ast)?;
+            score::dump(f, &ast)?;
         }
     } else {
-        let notes = into_notes(&ast, args.key)?;
-        if let Some(output) = &args.output {
-            let mut f = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(output)
-                .unwrap();
-            midi::dump(&mut f, &notes, args.bpm)?;
+        if let Some(f) = out.as_mut() {
+            let notes = into_notes(ast, Some(Pitch::C))?;
+            midi::dump(f, &notes, args.bpm)?;
         }
     }
     Ok(())

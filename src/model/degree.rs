@@ -1,6 +1,45 @@
 use anyhow::Result;
 use std::{fmt::Display, str::FromStr};
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Accidental {
+    Natural,
+    Sharp,
+    Flat,
+}
+
+impl Display for Accidental {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Accidental::Natural => write!(f, ""),
+            Accidental::Sharp => write!(f, "#"),
+            Accidental::Flat => write!(f, "b"),
+        }
+    }
+}
+
+impl FromStr for Accidental {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "b" => Ok(Accidental::Flat),
+            "#" => Ok(Accidental::Sharp),
+            _ => Err(anyhow::anyhow!("invalid accidental: {}", s)),
+        }
+    }
+}
+
+impl Into<i8> for Accidental {
+    fn into(self) -> i8 {
+        match self {
+            Accidental::Natural => 0,
+            Accidental::Sharp => 1,
+            Accidental::Flat => -1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Degree(pub u8);
 
@@ -22,7 +61,7 @@ impl FromStr for Degree {
 }
 
 impl Degree {
-    pub fn to_semitone(&self) -> Result<u8> {
+    pub fn to_semitone(&self) -> Result<i8> {
         match self.0 {
             1 => Ok(0),
             2 => Ok(2),
@@ -37,24 +76,6 @@ impl Degree {
             _ => Err(anyhow::anyhow!("unknown degree {}", self.0)),
         }
     }
-
-    pub fn from_semitone(semitone: u8) -> (Degree, i8) {
-        match semitone % 12 {
-            0 => (Degree(1), 0),
-            1 => (Degree(1), 1),
-            2 => (Degree(2), 0),
-            3 => (Degree(2), 1),
-            4 => (Degree(3), 0),
-            5 => (Degree(4), 0),
-            6 => (Degree(4), 1),
-            7 => (Degree(5), 0),
-            8 => (Degree(5), 1),
-            9 => (Degree(6), 0),
-            10 => (Degree(6), 1),
-            11 => (Degree(7), 0),
-            _ => unreachable!(),
-        }
-    }
 }
 
 impl Display for Degree {
@@ -67,9 +88,6 @@ impl Display for Degree {
             5 => "V",
             6 => "VI",
             7 => "VII",
-            9 => "IX",
-            11 => "XI",
-            13 => "XIII",
             _ => unreachable!(),
         };
         write!(f, "{}", s)
@@ -115,6 +133,27 @@ impl FromStr for Pitch {
     }
 }
 
+impl Display for Pitch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Pitch::*;
+        let s = match self {
+            C => "C",
+            Cs => "C#",
+            D => "D",
+            Ds => "D#",
+            E => "E",
+            F => "F",
+            Fs => "F#",
+            G => "G",
+            Gs => "G#",
+            A => "A",
+            As => "A#",
+            B => "B",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 impl Pitch {
     pub fn from_u8(n: u8) -> Self {
         use Pitch::*;
@@ -157,4 +196,32 @@ impl Pitch {
         let diff = (to.into_u8() as i8 - from.into_u8() as i8 + 12) % 12;
         diff as u8
     }
+}
+
+pub fn into_semitone(a: Accidental, d: Degree) -> u8 {
+    let p = d.to_semitone().unwrap() as i8;
+    let a: i8 = a.into();
+    (p + a) as u8
+}
+
+pub fn from_semitone(s: u8) -> (Accidental, Degree) {
+    let d = match s % 12 {
+        0 => Degree(1),
+        2 => Degree(2),
+        4 => Degree(3),
+        5 => Degree(4),
+        7 => Degree(5),
+        9 => Degree(6),
+        11 => Degree(7),
+        _ => unreachable!(),
+    };
+    let a = match s % 12 {
+        1 => Accidental::Sharp,
+        3 => Accidental::Sharp,
+        6 => Accidental::Flat,
+        8 => Accidental::Flat,
+        10 => Accidental::Flat,
+        _ => Accidental::Natural,
+    };
+    (a, d)
 }

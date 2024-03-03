@@ -37,22 +37,22 @@ impl Score {
         }
     }
 
-    fn interpret_node(&mut self, node: &Node, dur: u32) -> Result<()> {
+    fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
         log::trace!("{:?} sus={} rest={}", node, self.sustain, self.rest);
-        if node != &Node::Sustain && self.sustain != 0 {
+        if node != Node::Sustain && self.sustain != 0 {
             log::trace!("push {:?} sus={}", self.pre, self.sustain);
             self.notes.push(Note::new(self.pre.clone(), self.sustain));
             self.sustain = 0;
         }
-        if node != &Node::Rest && self.rest != 0 {
+        if node != Node::Rest && self.rest != 0 {
             log::trace!("push None sus={}", self.rest);
             self.notes.push(Note::new(None, self.rest));
             self.rest = 0;
         }
         match node {
             Node::Chord(node) => {
-                let chord = Chord::new(5, node.root, Chord::degrees(&node.modifiers));
-                log::debug!("{:?} -> {}", node, chord);
+                let chord = node.into_chord(5)?;
+                log::debug!("-> {}", chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -60,8 +60,8 @@ impl Score {
                 let Some(key) = self.key else {
                     return Err(anyhow::anyhow!("key is not set"));
                 };
-                let chord = Chord::new(5, key, Chord::degrees(&node.modifiers));
-                log::debug!("{:?} -> {}", node, chord);
+                let chord = node.into_chord(key, 5)?;
+                log::debug!("-> {}", chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -93,11 +93,11 @@ impl Score {
         Ok(MEASURE_LENGTH / len)
     }
 
-    fn interpret(&mut self, ast: &AST) -> Result<()> {
-        for measure in &ast.0 {
+    fn interpret(&mut self, ast: AST) -> Result<()> {
+        for measure in ast.0 {
             let dur = Self::measure_unit_size(&measure).unwrap();
-            for node in &measure.0 {
-                self.interpret_node(&node, dur)?;
+            for node in measure.0 {
+                self.interpret_node(node, dur)?;
             }
         }
         if self.sustain != 0 {
@@ -107,7 +107,7 @@ impl Score {
     }
 }
 
-pub fn into_notes(ast: &AST, key: Option<Pitch>) -> Result<Vec<Note>> {
+pub fn into_notes(ast: AST, key: Option<Pitch>) -> Result<Vec<Note>> {
     let mut score = Score::new(key);
     score.interpret(ast)?;
     Ok(score.notes)

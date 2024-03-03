@@ -1,4 +1,4 @@
-use super::degree::{Degree, Pitch};
+use super::degree::{Accidental, Degree, Pitch};
 use anyhow::Result;
 use std::collections::BTreeMap;
 
@@ -10,16 +10,16 @@ pub enum Modifier {
     // #5 = Mod(5, 1)
     // sus2 = Mod(3, -1)
     // sus4 = Mod(3, 1)
-    Mod(Degree, i8),
+    Mod(Degree, Accidental),
     // ex.
     // add9 = Add(9, 0) = [11]
     // (b9) = Add(9, -1) = [10]
-    Add(Degree, i8),
+    Add(Degree, Accidental),
     // ex.
     // omit5 = Omit(5)
     Omit(Degree),
-    // root, on
-    OnChord(Degree),
+    // semitones from root
+    OnChord(u8),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,39 +54,24 @@ impl Chord {
         }
     }
 
-    pub fn degree_to_mods(is_minor: bool, d: Degree) -> Vec<Modifier> {
-        let third = Modifier::Mod(Degree(3), if is_minor { -1 } else { 0 });
-        let seventh = Modifier::Add(Degree(7), if is_minor { -1 } else { 0 });
-        match d {
-            Degree(5) => Ok(vec![third]),
-            Degree(6) => Ok(vec![third, Modifier::Add(Degree(6), 0)]),
-            Degree(7) => Ok(vec![third, seventh]),
-            Degree(9) => Ok(vec![third, seventh, Modifier::Add(Degree(9), 0)]),
-            _ => Err(anyhow::anyhow!("invalid degree: {:?}", d)),
-        }
-        .unwrap()
-    }
-
     pub fn degrees(modifiers: &[Modifier]) -> BTreeMap<Degree, i8> {
         // triad
         let mut degrees = BTreeMap::from_iter(vec![(Degree(1), 0), (Degree(3), 0), (Degree(5), 0)]);
         for m in modifiers {
             match m {
                 Modifier::Mod(d, i) => {
-                    degrees.get_mut(d).map(|v| *v += i);
+                    let s: i8 = i.clone().into();
+                    degrees.get_mut(d).map(|v| *v += s);
                 }
                 Modifier::Add(d, i) => {
-                    degrees.insert(d.clone(), *i);
+                    degrees.insert(d.clone(), i.clone().into());
                 }
                 Modifier::Omit(d) => {
                     degrees.remove(d);
                 }
-                Modifier::OnChord(d) => {
-                    if let Some(i) = degrees.get_mut(&d) {
-                        *i -= 12;
-                    } else {
-                        degrees.insert(d.clone(), -12);
-                    };
+                // TODO
+                Modifier::OnChord(s) => {
+                    log::warn!("OnChord is not implemented yet: {}", s);
                 }
             }
         }
