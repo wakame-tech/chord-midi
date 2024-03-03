@@ -1,11 +1,11 @@
 use crate::{
-    de::ast::{Node, AST},
+    de::ast::{Ast, Node},
     model::degree::Pitch,
 };
 use anyhow::Result;
 use std::io::Write;
 
-impl AST {
+impl Ast {
     pub fn as_degree(&mut self, key: Pitch) {
         for measure in &mut self.0 {
             for node in &mut measure.0 {
@@ -17,7 +17,7 @@ impl AST {
     }
 }
 
-pub fn dump(f: &mut impl Write, ast: &AST) -> Result<()> {
+pub fn dump(f: &mut impl Write, ast: &Ast) -> Result<()> {
     for measure in &ast.0 {
         for node in &measure.0 {
             write!(f, "{} ", node)?;

@@ -31,9 +31,9 @@ impl FromStr for Accidental {
     }
 }
 
-impl Into<i8> for Accidental {
-    fn into(self) -> i8 {
-        match self {
+impl From<Accidental> for i8 {
+    fn from(val: Accidental) -> Self {
+        match val {
             Accidental::Natural => 0,
             Accidental::Sharp => 1,
             Accidental::Flat => -1,
@@ -200,7 +200,7 @@ impl Pitch {
 }
 
 pub fn into_semitone(a: Accidental, d: Degree) -> u8 {
-    let p = d.to_semitone().unwrap() as i8;
+    let p = d.to_semitone().unwrap();
     let a: i8 = a.into();
     (p + a) as u8
 }

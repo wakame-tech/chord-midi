@@ -61,7 +61,9 @@ impl Chord {
             match m {
                 Modifier::Mod(d, i) => {
                     let s: i8 = i.clone().into();
-                    degrees.get_mut(d).map(|v| *v += s);
+                    if let Some(v) = degrees.get_mut(d) {
+                        *v += s;
+                    }
                 }
                 Modifier::Add(d, i) => {
                     degrees.insert(d.clone(), i.clone().into());
@@ -83,10 +85,8 @@ impl Chord {
             .degrees
             .iter()
             .map(|(d, diff)| {
-                let semitone = self.octabe as i8 * 12
-                    + self.key.into_u8() as i8
-                    + d.to_semitone()? as i8
-                    + *diff;
+                let semitone =
+                    self.octabe as i8 * 12 + self.key.into_u8() as i8 + d.to_semitone()? + *diff;
                 Ok(semitone as u8)
             })
             .collect::<Result<Vec<_>>>()?;

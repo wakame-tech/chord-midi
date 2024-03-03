@@ -136,7 +136,7 @@ impl Display for ChordNode {
         let root = format!("{}", root);
         let mods = fmt_mods(modifiers);
         let tensions = tensions
-            .map(|t| format!("({})", fmt_mods(&t)))
+            .map(|t| format!("({})", fmt_mods(t)))
             .unwrap_or("".to_string());
         let on = on.map(|p| format!("/{}", p)).unwrap_or("".to_string());
         write!(f, "{}{}{}{}", root, mods, tensions, on)
@@ -156,16 +156,16 @@ impl ChordNode {
 
     pub fn into_chord(self, octave: u8) -> Result<Chord> {
         let mods = into_modifiers(self.modifiers)?;
-        let tensions = into_modifiers(self.tensions.unwrap_or(vec![]))?;
+        let tensions = into_modifiers(self.tensions.unwrap_or_default())?;
         let on = self
             .on
             .as_ref()
             .map(|on| vec![Modifier::OnChord(Pitch::diff(&self.root, on))])
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
         Ok(Chord::new(
             octave,
             self.root,
-            Chord::degrees(&vec![mods, tensions, on].concat()),
+            Chord::degrees(&[mods, tensions, on].concat()),
         ))
     }
 }
@@ -185,7 +185,7 @@ impl Display for DegreeNode {
         let tensions = self
             .tensions
             .as_ref()
-            .map(|t| format!("({})", fmt_mods(&t)))
+            .map(|t| format!("({})", fmt_mods(t)))
             .unwrap_or("".to_string());
         let on = self
             .on
@@ -204,7 +204,7 @@ impl DegreeNode {
         let on = on
             .map(|(a, d)| vec![Modifier::OnChord(into_semitone(a, d))])
             .unwrap_or(vec![]);
-        let mods = vec![
+        let mods = [
             into_modifiers(modifiers)?,
             if let Some(tensions) = tensions {
                 into_modifiers(tensions)?
@@ -220,7 +220,7 @@ impl DegreeNode {
 }
 
 fn into_modifiers(mods: Vec<ModifierNode>) -> Result<Vec<Modifier>> {
-    Ok(vec![mods
+    Ok([mods
         .into_iter()
         .map(|m| m.into_modifiers())
         .collect::<Result<Vec<_>>>()?
@@ -288,9 +288,9 @@ fn line_parser(s: Span) -> IResult<Span, Vec<Measure>> {
 }
 
 #[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, AST> {
+fn ast_parser(s: Span) -> IResult<Span, Ast> {
     map(many0(line_parser), |lines| {
-        AST(lines.into_iter().flatten().collect())
+        Ast(lines.into_iter().flatten().collect())
     })(s)
 }
 
@@ -298,9 +298,9 @@ fn ast_parser(s: Span) -> IResult<Span, AST> {
 pub struct Measure(pub Vec<Node>);
 
 #[derive(Debug)]
-pub struct AST(pub Vec<Measure>);
+pub struct Ast(pub Vec<Measure>);
 
-pub fn parse(code: &str) -> Result<AST> {
+pub fn parse(code: &str) -> Result<Ast> {
     let span = LocatedSpan::new_extra(code, TracableInfo::new());
     let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
     if !rest.is_empty() {

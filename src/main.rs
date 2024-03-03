@@ -53,11 +53,9 @@ fn main() -> Result<()> {
         } else {
             score::dump(&mut std::io::stdout(), &ast)?;
         }
-    } else {
-        if let Some(f) = out.as_mut() {
-            let notes = into_notes(ast, Some(Pitch::C))?;
-            midi::dump(f, &notes, args.bpm)?;
-        }
+    } else if let Some(f) = out.as_mut() {
+        let notes = into_notes(ast, Some(Pitch::C))?;
+        midi::dump(f, &notes, args.bpm)?;
     }
     Ok(())
 }

@@ -40,7 +40,7 @@ pub fn dump(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
         let semitones = chord
             .semitones()?
             .into_iter()
-            .map(|s| NoteNumber::new(s))
+            .map(NoteNumber::new)
             .collect::<Vec<_>>();
         write_notes(&mut track, ch, &semitones, dur, &mut skip);
     }

@@ -27,8 +27,7 @@ fn capture(re: Regex) -> impl Fn(Span) -> IResult<Span, Vec<Span>> {
         if let Some(c) = re.captures(*s) {
             let v: Vec<_> = c
                 .iter()
-                .filter(|el| el.is_some())
-                .map(|el| el.unwrap())
+                .flatten()
                 .map(|m| s.slice(m.start()..m.end()))
                 .collect();
             let offset = {
@@ -113,7 +112,7 @@ fn modifier_node_parser(s: Span) -> IResult<Span, ModifierNode> {
         map(tuple((tag("m"), opt(degree_number_parser))), |(_, d)| {
             ModifierNode::Minor(d.unwrap_or(Degree(5)))
         }),
-        map(degree_number_parser, |d| ModifierNode::Major(d)),
+        map(degree_number_parser, ModifierNode::Major),
     ))(s)
 }
 

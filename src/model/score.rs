@@ -1,6 +1,6 @@
 use super::chord::Chord;
 use crate::{
-    de::ast::{Measure, Node, AST},
+    de::ast::{Ast, Measure, Node},
     model::degree::Pitch,
 };
 use anyhow::Result;
@@ -93,7 +93,7 @@ impl Score {
         Ok(MEASURE_LENGTH / len)
     }
 
-    fn interpret(&mut self, ast: AST) -> Result<()> {
+    fn interpret(&mut self, ast: Ast) -> Result<()> {
         for measure in ast.0 {
             let dur = Self::measure_unit_size(&measure).unwrap();
             for node in measure.0 {
@@ -107,7 +107,7 @@ impl Score {
     }
 }
 
-pub fn into_notes(ast: AST, key: Option<Pitch>) -> Result<Vec<Note>> {
+pub fn into_notes(ast: Ast, key: Option<Pitch>) -> Result<Vec<Note>> {
     let mut score = Score::new(key);
     score.interpret(ast)?;
     Ok(score.notes)
