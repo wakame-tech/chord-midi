@@ -1,4 +1,5 @@
 use anyhow::Result;
+use core::panic;
 use std::{fmt::Display, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,7 +89,7 @@ impl Display for Degree {
             5 => "V",
             6 => "VI",
             7 => "VII",
-            _ => unreachable!(),
+            _ => panic!("invalid degree: {}", self.0),
         };
         write!(f, "{}", s)
     }
@@ -205,23 +206,19 @@ pub fn into_semitone(a: Accidental, d: Degree) -> u8 {
 }
 
 pub fn from_semitone(s: u8) -> (Accidental, Degree) {
-    let d = match s % 12 {
-        0 => Degree(1),
-        2 => Degree(2),
-        4 => Degree(3),
-        5 => Degree(4),
-        7 => Degree(5),
-        9 => Degree(6),
-        11 => Degree(7),
-        _ => unreachable!(),
-    };
-    let a = match s % 12 {
-        1 => Accidental::Sharp,
-        3 => Accidental::Sharp,
-        6 => Accidental::Flat,
-        8 => Accidental::Flat,
-        10 => Accidental::Flat,
-        _ => Accidental::Natural,
-    };
-    (a, d)
+    match s {
+        0 => (Accidental::Natural, Degree(1)),
+        1 => (Accidental::Sharp, Degree(1)),
+        2 => (Accidental::Natural, Degree(2)),
+        3 => (Accidental::Sharp, Degree(2)),
+        4 => (Accidental::Natural, Degree(3)),
+        5 => (Accidental::Natural, Degree(4)),
+        6 => (Accidental::Sharp, Degree(4)),
+        7 => (Accidental::Natural, Degree(5)),
+        8 => (Accidental::Sharp, Degree(5)),
+        9 => (Accidental::Natural, Degree(6)),
+        10 => (Accidental::Sharp, Degree(6)),
+        11 => (Accidental::Natural, Degree(7)),
+        _ => panic!("invalid semitone: {}", s),
+    }
 }

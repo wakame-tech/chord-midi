@@ -1,13 +1,15 @@
 use super::chord::{chord_node_parser, degree_node_parser};
-use super::{IResult, Span};
+use super::Span;
 use crate::model::chord::Chord;
 use crate::model::degree::{from_semitone, into_semitone, Accidental, Degree};
 use crate::model::{chord::Modifier, degree::Pitch};
 use anyhow::Result;
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_until};
 use nom::combinator::map;
-use nom::multi::many1;
+use nom::multi::{many0, many1, separated_list1};
+use nom::sequence::tuple;
+use nom::IResult;
 use nom_locate::LocatedSpan;
 use nom_tracable::{tracable_parser, TracableInfo};
 use std::fmt::Display;
@@ -32,8 +34,8 @@ pub enum ModifierNode {
 impl Display for ModifierNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ModifierNode::Major(d) => write!(f, "{}", d),
-            ModifierNode::Minor(d) => write!(f, "m{}", d),
+            ModifierNode::Major(d) => write!(f, "{}", d.0),
+            ModifierNode::Minor(d) => write!(f, "m{}", d.0),
             ModifierNode::MinorMajaor7 => write!(f, "mM7"),
             ModifierNode::Sus2 => write!(f, "sus2"),
             ModifierNode::Sus4 => write!(f, "sus4"),
@@ -42,9 +44,9 @@ impl Display for ModifierNode {
             ModifierNode::Aug7 => write!(f, "aug7"),
             ModifierNode::Dim => write!(f, "dim"),
             ModifierNode::Dim7 => write!(f, "dim7"),
-            ModifierNode::Omit(d) => write!(f, "omit{}", d),
-            ModifierNode::Add(d) => write!(f, "add{}", d),
-            ModifierNode::Tension(d, a) => write!(f, "{}{}", a, d),
+            ModifierNode::Omit(d) => write!(f, "omit{}", d.0),
+            ModifierNode::Add(d) => write!(f, "add{}", d.0),
+            ModifierNode::Tension(a, d) => write!(f, "{}{}", a, d.0),
         }
     }
 }
@@ -250,52 +252,59 @@ impl Display for Node {
 }
 
 #[tracable_parser]
-pub fn node_parser(s: Span) -> IResult<Node> {
+fn node_parser(s: Span) -> IResult<Span, Node> {
     alt((
         map(tag("="), |_| Node::Sustain),
         map(tag("_"), |_| Node::Rest),
         map(tag("%"), |_| Node::Repeat),
+        map(tag("N.C."), |_| Node::Rest),
         map(chord_node_parser, Node::Chord),
         map(degree_node_parser, Node::Degree),
     ))(s)
 }
 
 #[tracable_parser]
-pub fn nodes_parser(s: Span) -> IResult<Vec<Node>> {
-    alt((map(tag("N.C."), |_| vec![Node::Rest]), many1(node_parser)))(s)
+fn measure_parser(s: Span) -> IResult<Span, Measure> {
+    map(many1(node_parser), Measure)(s)
+}
+
+#[tracable_parser]
+fn breaks_parser(s: Span) -> IResult<Span, Vec<Measure>> {
+    map(alt((tag("\r\n"), tag("\n"), tag("|"))), |_| vec![])(s)
+}
+
+#[tracable_parser]
+fn comment_parser(s: Span) -> IResult<Span, Vec<Measure>> {
+    map(tuple((tag("#"), take_until("\n"))), |_| vec![])(s)
+}
+
+#[tracable_parser]
+fn line_parser(s: Span) -> IResult<Span, Vec<Measure>> {
+    alt((
+        breaks_parser,
+        comment_parser,
+        separated_list1(breaks_parser, measure_parser),
+    ))(s)
+}
+
+#[tracable_parser]
+fn ast_parser(s: Span) -> IResult<Span, AST> {
+    map(many0(line_parser), |lines| {
+        AST(lines.into_iter().flatten().collect())
+    })(s)
 }
 
 #[derive(Debug)]
 pub struct Measure(pub Vec<Node>);
 
-impl Measure {
-    pub fn parse(s: &str) -> Result<Self> {
-        let info = TracableInfo::new().forward(true);
-        let span = LocatedSpan::new_extra(s, info);
-        let (rest, nodes) = nodes_parser(span).map_err(|e| anyhow::anyhow!("{}", e))?;
-        if !rest.is_empty() {
-            return Err(anyhow::anyhow!("cannot parse {} rest={}", s, rest));
-        }
-        #[cfg(feature = "trace")]
-        {
-            nom_tracable::histogram();
-            nom_tracable::cumulative_histogram();
-        }
-        Ok(Self(nodes))
-    }
-}
-
+#[derive(Debug)]
 pub struct AST(pub Vec<Measure>);
 
-impl AST {
-    pub fn parse(s: &str) -> Result<Self> {
-        let measures = s
-            .split("\r\n")
-            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-            .flat_map(|line| line.split('|').collect::<Vec<_>>())
-            .filter(|s| !s.trim().is_empty())
-            .map(|m| Measure::parse(m))
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Self(measures))
+pub fn parse(code: &str) -> Result<AST> {
+    let span = LocatedSpan::new_extra(code, TracableInfo::new());
+    let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
+    if !rest.is_empty() {
+        return Err(anyhow::anyhow!("parse error: {:?}", rest));
     }
+    Ok(ast)
 }

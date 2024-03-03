@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
-# default = ["trace"]
+default = ["trace"]
 trace = ["nom-tracable/trace"]
 
 [dependencies]
@@ -19,6 +18,6 @@ simplelog = "0.12.1"
 clap = { version = "4.4.8", features = ["derive"] }
 nom = "7.1.3"
 nom-regex = "0.2.0"
-nom_locate = "4.2.0"
+nom_locate = "4.0.0"
 nom-tracable = { version = "0.9.0", features = ["trace"] }
 midi_file = "0.0.3"

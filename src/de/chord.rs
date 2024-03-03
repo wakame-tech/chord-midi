@@ -1,12 +1,13 @@
 use super::ast::{ChordNode, DegreeNode, ModifierNode};
-use super::{IResult, Span};
+use super::Span;
 use crate::model::degree::{Accidental, Degree, Pitch};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{map, opt};
 use nom::error::ErrorKind;
-use nom::multi::{many0, many1};
+use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
+use nom::IResult;
 use nom::Slice;
 use nom_regex::lib::nom::Err;
 use nom_tracable::tracable_parser;
@@ -21,7 +22,7 @@ static DEGREE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|
 static DEGREE_NAME_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)").unwrap());
 
-fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
+fn capture(re: Regex) -> impl Fn(Span) -> IResult<Span, Vec<Span>> {
     move |s| {
         if let Some(c) = re.captures(*s) {
             let v: Vec<_> = c
@@ -45,52 +46,52 @@ fn capture(re: Regex) -> impl Fn(Span) -> IResult<Vec<Span>> {
 }
 
 #[tracable_parser]
-fn degree_number_parser(s: Span) -> IResult<Degree> {
+fn degree_number_parser(s: Span) -> IResult<Span, Degree> {
     map(capture(DEGREE_NUMBER_REGEX.to_owned()), |cap| {
         Degree(cap[1].parse::<u8>().unwrap())
     })(s)
 }
 
 #[tracable_parser]
-fn accidental_parser(s: Span) -> IResult<Accidental> {
+fn accidental_parser(s: Span) -> IResult<Span, Accidental> {
     map(capture(Regex::new(r"([b#+-])").unwrap()), |cap| {
         Accidental::from_str(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
-fn degree_name_parser(s: Span) -> IResult<Degree> {
+fn degree_name_parser(s: Span) -> IResult<Span, Degree> {
     map(capture(DEGREE_NAME_REGEX.to_owned()), |cap| {
         Degree::from_str(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
-fn degree_parser(s: Span) -> IResult<(Accidental, Degree)> {
+fn degree_parser(s: Span) -> IResult<Span, (Accidental, Degree)> {
     tuple((accidental_parser, degree_name_parser))(s)
 }
 
 #[tracable_parser]
-fn pitch_parser(s: Span) -> IResult<Pitch> {
+fn pitch_parser(s: Span) -> IResult<Span, Pitch> {
     map(capture(PITCH_REGEX.to_owned()), |cap| {
         Pitch::from_str(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
-fn chord_on_chord_parser(s: Span) -> IResult<Pitch> {
+fn chord_on_chord_parser(s: Span) -> IResult<Span, Pitch> {
     preceded(tag("/"), pitch_parser)(s)
 }
 
 #[tracable_parser]
-fn degree_on_chord_parser(s: Span) -> IResult<(Accidental, Degree)> {
+fn degree_on_chord_parser(s: Span) -> IResult<Span, (Accidental, Degree)> {
     preceded(tag("/"), degree_parser)(s)
 }
 
 #[tracable_parser]
-fn modifier_node_parser(s: Span) -> IResult<ModifierNode> {
+fn modifier_node_parser(s: Span) -> IResult<Span, ModifierNode> {
     alt((
-        map(tag("-5"), |_| ModifierNode::Flat5th),
+        map(alt((tag("-5"), tag("b5"))), |_| ModifierNode::Flat5th),
         map(tag("sus2"), |_| ModifierNode::Sus2),
         map(tag("sus4"), |_| ModifierNode::Sus4),
         map(tag("dim7"), |_| ModifierNode::Dim7),
@@ -105,20 +106,25 @@ fn modifier_node_parser(s: Span) -> IResult<ModifierNode> {
             |(_, d)| ModifierNode::Omit(d),
         ),
         map(tag("mM7"), |_| ModifierNode::MinorMajaor7),
-        map(tuple((tag("m"), opt(degree_number_parser))), |(_, d)| {
-            ModifierNode::Minor(d.unwrap_or(Degree(5)))
-        }),
         map(
             tuple((alt((tag("maj"), tag("M"))), opt(degree_number_parser))),
             |(_, d)| ModifierNode::Major(d.unwrap_or(Degree(5))),
         ),
+        map(tuple((tag("m"), opt(degree_number_parser))), |(_, d)| {
+            ModifierNode::Minor(d.unwrap_or(Degree(5)))
+        }),
+        map(degree_number_parser, |d| ModifierNode::Major(d)),
     ))(s)
 }
 
 #[tracable_parser]
-fn tensions_parser(s: Span) -> IResult<Vec<ModifierNode>> {
+fn tensions_parser(s: Span) -> IResult<Span, Vec<ModifierNode>> {
     map(
-        delimited(tag("("), many1(degree_parser), tag(")")),
+        delimited(
+            tag("("),
+            separated_list1(tag(","), tuple((accidental_parser, degree_number_parser))),
+            tag(")"),
+        ),
         |tensions| {
             tensions
                 .into_iter()
@@ -129,7 +135,7 @@ fn tensions_parser(s: Span) -> IResult<Vec<ModifierNode>> {
 }
 
 #[tracable_parser]
-pub fn chord_node_parser(s: Span) -> IResult<ChordNode> {
+pub fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
     map(
         tuple((
             pitch_parser,
@@ -147,7 +153,7 @@ pub fn chord_node_parser(s: Span) -> IResult<ChordNode> {
 }
 
 #[tracable_parser]
-pub fn degree_node_parser(s: Span) -> IResult<DegreeNode> {
+pub fn degree_node_parser(s: Span) -> IResult<Span, DegreeNode> {
     map(
         tuple((
             degree_parser,

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use de::ast::AST;
+use de::ast::parse;
 use model::{degree::Pitch, score::into_notes};
 use ser::{
     midi::{self},
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     let mut code = String::new();
     f.read_to_string(&mut code)?;
 
-    let mut ast = AST::parse(code.as_str())?;
+    let mut ast = parse(code.as_str())?;
 
     let mut out = args.output.map(|p| {
         OpenOptions::new()
@@ -47,9 +47,11 @@ fn main() -> Result<()> {
     });
 
     if let Some(key) = args.as_degree {
+        ast.as_degree(key);
         if let Some(f) = out.as_mut() {
-            ast.as_degree(key);
             score::dump(f, &ast)?;
+        } else {
+            score::dump(&mut std::io::stdout(), &ast)?;
         }
     } else {
         if let Some(f) = out.as_mut() {
