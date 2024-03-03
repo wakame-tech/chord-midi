@@ -1,26 +1,30 @@
 use anyhow::Result;
 use clap::Parser;
-use midi::write_to_midi;
-use score::Score;
+use de::ast::parse;
+use model::{degree::Pitch, score::into_notes};
+use ser::{
+    midi::{self},
+    score,
+};
 use std::{
     fs::{File, OpenOptions},
     io::Read,
     path::PathBuf,
 };
 
-mod chord;
-mod midi;
-mod parser;
-mod score;
+mod de;
+mod model;
+mod ser;
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
-    #[arg(short, long)]
     input: PathBuf,
     #[arg(short, long)]
-    output: PathBuf,
+    output: Option<PathBuf>,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
+    #[arg(long)]
+    as_degree: Option<Pitch>,
 }
 
 fn main() -> Result<()> {
@@ -30,15 +34,28 @@ fn main() -> Result<()> {
     let mut f = File::open(&args.input)?;
     let mut code = String::new();
     f.read_to_string(&mut code)?;
-    let score = Score::new(args.bpm, code.as_str())?;
 
-    let mut f = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&args.output)
-        .unwrap();
+    let mut ast = parse(code.as_str())?;
 
-    write_to_midi(&mut f, &score)?;
+    let mut out = args.output.map(|p| {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(p)
+            .unwrap()
+    });
+
+    if let Some(key) = args.as_degree {
+        ast.as_degree(key);
+        if let Some(f) = out.as_mut() {
+            score::dump(f, &ast)?;
+        } else {
+            score::dump(&mut std::io::stdout(), &ast)?;
+        }
+    } else if let Some(f) = out.as_mut() {
+        let notes = into_notes(ast, Some(Pitch::C))?;
+        midi::dump(f, &notes, args.bpm)?;
+    }
     Ok(())
 }
