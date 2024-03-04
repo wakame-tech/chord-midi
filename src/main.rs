@@ -35,6 +35,8 @@ fn main() -> Result<()> {
     let mut code = String::new();
     f.read_to_string(&mut code)?;
 
+    // CR+LF to LF
+    code = code.replace("\r\n", "\n");
     let mut ast = parse(code.as_str())?;
 
     let mut out = args.output.map(|p| {

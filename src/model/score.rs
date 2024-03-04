@@ -1,6 +1,6 @@
 use super::chord::Chord;
 use crate::{
-    de::ast::{Ast, Measure, Node},
+    de::ast::{Ast, Node},
     model::degree::Pitch,
 };
 use anyhow::Result;
@@ -78,32 +78,41 @@ impl Score {
         Ok(())
     }
 
-    fn measure_unit_size(measure: &Measure) -> Result<u32> {
+    fn measure_unit_size(n: usize) -> Result<u32> {
         const MEASURE_LENGTH: u32 = 16;
-        let len = match measure.0.len() {
+        let len = match n {
             1 => 1,
             2 => 2,
             3..=4 => 4,
             5..=8 => 8,
             9..=16 => 16,
             _ => {
-                return Err(anyhow::anyhow!("too many nodes: {:?}", measure));
+                return Err(anyhow::anyhow!("too many nodes: {}", n));
             }
         };
         Ok(MEASURE_LENGTH / len)
     }
 
     fn interpret(&mut self, ast: Ast) -> Result<()> {
-        for measure in ast.0 {
-            let dur = Self::measure_unit_size(&measure).unwrap();
-            for node in measure.0 {
-                self.interpret_node(node, dur)?;
+        match ast {
+            Ast::Comment(_) => return Ok(()),
+            Ast::Score(score) => {
+                for node in score.into_iter() {
+                    self.interpret(*node)?
+                }
+                Ok(())
+            }
+            Ast::Measure(measure, _) => {
+                let dur = Self::measure_unit_size(measure.len()).unwrap();
+                for node in measure {
+                    self.interpret_node(node, dur)?;
+                }
+                if self.sustain != 0 {
+                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
+                }
+                Ok(())
             }
         }
-        if self.sustain != 0 {
-            self.notes.push(Note::new(self.pre.clone(), self.sustain));
-        }
-        Ok(())
     }
 }
 

@@ -6,9 +6,10 @@ use crate::model::{chord::Modifier, degree::Pitch};
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
-use nom::combinator::map;
-use nom::multi::{many0, many1, separated_list1};
-use nom::sequence::tuple;
+use nom::character::complete::space0;
+use nom::combinator::{map, opt};
+use nom::multi::{many1, separated_list1};
+use nom::sequence::{delimited, tuple};
 use nom::IResult;
 use nom_locate::LocatedSpan;
 use nom_tracable::{tracable_parser, TracableInfo};
@@ -264,41 +265,45 @@ fn node_parser(s: Span) -> IResult<Span, Node> {
 }
 
 #[tracable_parser]
-fn measure_parser(s: Span) -> IResult<Span, Measure> {
-    map(many1(node_parser), Measure)(s)
+fn comment_parser(s: Span) -> IResult<Span, Ast> {
+    map(
+        delimited(tag("#"), take_until("\n"), tag("\n")),
+        |comment: Span| Ast::Comment(comment.fragment().to_string()),
+    )(s)
 }
 
+// if linebreaks, bool is true
+// measure is consisted of some nodes
+// measure is separated by "|" and may be surrounded by "|"
 #[tracable_parser]
-fn breaks_parser(s: Span) -> IResult<Span, Vec<Measure>> {
-    map(alt((tag("\r\n"), tag("\n"), tag("|"))), |_| vec![])(s)
-}
-
-#[tracable_parser]
-fn comment_parser(s: Span) -> IResult<Span, Vec<Measure>> {
-    map(tuple((tag("#"), take_until("\n"))), |_| vec![])(s)
-}
-
-#[tracable_parser]
-fn line_parser(s: Span) -> IResult<Span, Vec<Measure>> {
-    alt((
-        breaks_parser,
-        comment_parser,
-        separated_list1(breaks_parser, measure_parser),
-    ))(s)
+fn measure_parser(s: Span) -> IResult<Span, Ast> {
+    map(
+        tuple((
+            opt(tag("|")),
+            space0,
+            separated_list1(space0, node_parser),
+            space0,
+            opt(tag("|")),
+            space0,
+            opt(tag("\n")),
+        )),
+        |(_, _, nodes, _, _, _, br)| Ast::Measure(nodes, br.is_some()),
+    )(s)
 }
 
 #[tracable_parser]
 fn ast_parser(s: Span) -> IResult<Span, Ast> {
-    map(many0(line_parser), |lines| {
-        Ast(lines.into_iter().flatten().collect())
+    map(many1(alt((comment_parser, measure_parser))), |score| {
+        Ast::Score(score.into_iter().map(|s| Box::new(s)).collect())
     })(s)
 }
 
 #[derive(Debug)]
-pub struct Measure(pub Vec<Node>);
-
-#[derive(Debug)]
-pub struct Ast(pub Vec<Measure>);
+pub enum Ast {
+    Comment(String),
+    Measure(Vec<Node>, bool),
+    Score(Vec<Box<Ast>>),
+}
 
 pub fn parse(code: &str) -> Result<Ast> {
     let span = LocatedSpan::new_extra(code, TracableInfo::new());
