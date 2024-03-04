@@ -1,4 +1,6 @@
-use crate::model::score::Note;
+use crate::de::ast::Ast;
+use crate::model::degree::Pitch;
+use crate::model::score::{into_notes, Note};
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
 use midi_file::file::{QuartersPerMinute, Track};
@@ -21,7 +23,12 @@ fn write_notes(track: &mut Track, ch: Channel, semitones: &[NoteNumber], dur: u3
     }
 }
 
-pub fn dump(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
+pub fn dump(f: &mut impl Write, ast: Ast, key: Option<Pitch>, bpm: u8) -> Result<()> {
+    let notes = into_notes(ast, key)?;
+    dump_notes(f, &notes, bpm)
+}
+
+fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
     let mut mfile = MidiFile::new();
     let mut track = Track::default();
     let ch = Channel::new(0);

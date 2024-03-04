@@ -1,0 +1,19 @@
+[package]
+name = "chord_midi"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["trace"]
+trace = ["nom-tracable/trace"]
+
+[dependencies]
+anyhow = "1"
+regex = "1.10.2"
+log = "0.4.20"
+once_cell = "1.19.0"
+nom = "7.1.3"
+nom-regex = "0.2.0"
+nom_locate = "4.0.0"
+nom-tracable = { version = "0.9.0", features = ["trace"] }
+midi_file = "0.0.3"

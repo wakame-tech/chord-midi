@@ -1,0 +1,11 @@
+[package]
+name = "chord_midi_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+log = "0.4.20"
+simplelog = "0.12.1"
+clap = { version = "4.4.8", features = ["derive"] }
+chord_midi = { path = "../chord_midi", features = ["trace"] }
