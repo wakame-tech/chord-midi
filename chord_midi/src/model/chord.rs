@@ -45,6 +45,18 @@ impl std::fmt::Display for Chord {
 }
 
 impl Chord {
+    pub fn set_nearest_octabe(&mut self, pre: &Chord) {
+        self.octabe = [-1, 0, 1]
+            .into_iter()
+            .map(|o| Chord {
+                octabe: (pre.octabe as i8 + o) as u8,
+                ..self.clone()
+            })
+            .min_by_key(|c| c.distance(pre).unwrap())
+            .unwrap()
+            .octabe;
+    }
+
     pub fn new(octabe: u8, key: Pitch, degrees: BTreeMap<Degree, i8>) -> Self {
         Chord {
             octabe,
@@ -92,6 +104,18 @@ impl Chord {
             .collect::<Result<Vec<_>>>()?;
         log::debug!("{:?}", s);
         Ok(s)
+    }
+
+    /// returns edit distance of each semitone
+    pub fn distance(&self, other: &Self) -> Result<usize> {
+        let s1 = self.semitones()?;
+        let s2 = other.semitones()?;
+        let d = s1
+            .into_iter()
+            .zip(s2)
+            .map(|(a, b)| (a as i8 - b as i8).unsigned_abs() as usize)
+            .sum();
+        Ok(d)
     }
 }
 

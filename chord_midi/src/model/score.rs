@@ -66,7 +66,10 @@ impl Score {
         }
         match node {
             Node::Chord(node) => {
-                let chord = node.into_chord(5)?;
+                let mut chord = node.into_chord(5)?;
+                if let Some(pre) = &self.pre {
+                    chord.set_nearest_octabe(pre);
+                }
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
