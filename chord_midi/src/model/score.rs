@@ -26,6 +26,8 @@ pub struct Score {
     pre: Option<Chord>,
 }
 
+const MEASURE_LENGTH: u32 = 16;
+
 impl Score {
     fn new(key: Option<Pitch>) -> Self {
         Score {
@@ -37,22 +39,34 @@ impl Score {
         }
     }
 
+    fn inspect(&self) {
+        log::debug!(
+            "pre={} sus={}/{}, rest={}/{}",
+            self.pre
+                .as_ref()
+                .map(|c| c.to_string())
+                .unwrap_or("None".to_string()),
+            self.sustain,
+            MEASURE_LENGTH,
+            self.rest,
+            MEASURE_LENGTH
+        );
+    }
+
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
-        log::trace!("{:?} sus={} rest={}", node, self.sustain, self.rest);
+        log::debug!("{}", node);
+        self.inspect();
         if node != Node::Sustain && self.sustain != 0 {
-            log::trace!("push {:?} sus={}", self.pre, self.sustain);
             self.notes.push(Note::new(self.pre.clone(), self.sustain));
             self.sustain = 0;
         }
         if node != Node::Rest && self.rest != 0 {
-            log::trace!("push None sus={}", self.rest);
             self.notes.push(Note::new(None, self.rest));
             self.rest = 0;
         }
         match node {
             Node::Chord(node) => {
                 let chord = node.into_chord(5)?;
-                log::debug!("-> {}", chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -61,7 +75,6 @@ impl Score {
                     return Err(anyhow::anyhow!("key is not set"));
                 };
                 let chord = node.into_chord(key, 5)?;
-                log::debug!("-> {}", chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -79,7 +92,6 @@ impl Score {
     }
 
     fn measure_unit_size(n: usize) -> Result<u32> {
-        const MEASURE_LENGTH: u32 = 16;
         let len = match n {
             1 => 1,
             2 => 2,
@@ -100,6 +112,10 @@ impl Score {
                 for node in score.into_iter() {
                     self.interpret(*node)?
                 }
+                if self.sustain != 0 {
+                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
+                    self.sustain = 0;
+                }
                 Ok(())
             }
             Ast::Measure(measure, _) => {
@@ -107,9 +123,8 @@ impl Score {
                 for node in measure {
                     self.interpret_node(node, dur)?;
                 }
-                if self.sustain != 0 {
-                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
-                }
+                log::debug!("measure end");
+                self.inspect();
                 Ok(())
             }
         }
