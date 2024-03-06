@@ -24,7 +24,7 @@ pub enum Modifier {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chord {
-    octabe: u8,
+    octave: u8,
     invert: u8,
     /// root note
     key: Pitch,
@@ -45,21 +45,21 @@ impl std::fmt::Display for Chord {
 }
 
 impl Chord {
-    pub fn set_nearest_octabe(&mut self, pre: &Chord) {
-        self.octabe = [-1, 0, 1]
+    pub fn set_nearest_octave(&mut self, pre: &Chord) {
+        self.octave = [-1, 0, 1]
             .into_iter()
             .map(|o| Chord {
-                octabe: (pre.octabe as i8 + o) as u8,
+                octave: (pre.octave as i8 + o) as u8,
                 ..self.clone()
             })
             .min_by_key(|c| c.distance(pre).unwrap())
             .unwrap()
-            .octabe;
+            .octave;
     }
 
-    pub fn new(octabe: u8, key: Pitch, degrees: BTreeMap<Degree, i8>) -> Self {
+    pub fn new(octave: u8, key: Pitch, degrees: BTreeMap<Degree, i8>) -> Self {
         Chord {
-            octabe,
+            octave,
             invert: 0,
             key,
             degrees,
@@ -98,7 +98,7 @@ impl Chord {
             .iter()
             .map(|(d, diff)| {
                 let semitone =
-                    self.octabe as i8 * 12 + self.key.into_u8() as i8 + d.to_semitone()? + *diff;
+                    self.octave as i8 * 12 + self.key.into_u8() as i8 + d.to_semitone()? + *diff;
                 Ok(semitone as u8)
             })
             .collect::<Result<Vec<_>>>()?;
