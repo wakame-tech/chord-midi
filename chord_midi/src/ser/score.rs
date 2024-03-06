@@ -33,7 +33,7 @@ pub fn dump(f: &mut impl Write, ast: &Ast) -> Result<()> {
             }
         }
         Ast::Comment(comment) => {
-            write!(f, "# {}\n", comment)?;
+            writeln!(f, "# {}", comment)?;
         }
         Ast::Measure(nodes, br) => {
             write!(
@@ -47,7 +47,7 @@ pub fn dump(f: &mut impl Write, ast: &Ast) -> Result<()> {
             )?;
             write!(f, " | ")?;
             if *br {
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
         }
     }

@@ -9,12 +9,12 @@ use std::{
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-    #[arg(global = true)]
+    #[arg()]
     input: PathBuf,
     #[arg(short, long, global = true)]
     output: Option<PathBuf>,
+    #[command(subcommand)]
+    command: Commands,
 }
 
 #[derive(Debug, clap::Parser)]
