@@ -1,6 +1,6 @@
 use super::chord::Chord;
 use crate::{
-    de::ast::{Ast, Measure, Node},
+    de::ast::{Ast, Node},
     model::degree::Pitch,
 };
 use anyhow::Result;
@@ -26,6 +26,8 @@ pub struct Score {
     pre: Option<Chord>,
 }
 
+const MEASURE_LENGTH: u32 = 16;
+
 impl Score {
     fn new(key: Option<Pitch>) -> Self {
         Score {
@@ -37,22 +39,37 @@ impl Score {
         }
     }
 
+    fn inspect(&self) {
+        log::debug!(
+            "pre={} sus={}/{}, rest={}/{}",
+            self.pre
+                .as_ref()
+                .map(|c| c.to_string())
+                .unwrap_or("None".to_string()),
+            self.sustain,
+            MEASURE_LENGTH,
+            self.rest,
+            MEASURE_LENGTH
+        );
+    }
+
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
-        log::trace!("{:?} sus={} rest={}", node, self.sustain, self.rest);
+        log::debug!("{}", node);
+        self.inspect();
         if node != Node::Sustain && self.sustain != 0 {
-            log::trace!("push {:?} sus={}", self.pre, self.sustain);
             self.notes.push(Note::new(self.pre.clone(), self.sustain));
             self.sustain = 0;
         }
         if node != Node::Rest && self.rest != 0 {
-            log::trace!("push None sus={}", self.rest);
             self.notes.push(Note::new(None, self.rest));
             self.rest = 0;
         }
         match node {
             Node::Chord(node) => {
-                let chord = node.into_chord(5)?;
-                log::debug!("-> {}", chord);
+                let mut chord = node.into_chord(5)?;
+                if let Some(pre) = &self.pre {
+                    chord.set_nearest_octave(pre);
+                }
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -61,7 +78,6 @@ impl Score {
                     return Err(anyhow::anyhow!("key is not set"));
                 };
                 let chord = node.into_chord(key, 5)?;
-                log::debug!("-> {}", chord);
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -78,32 +94,43 @@ impl Score {
         Ok(())
     }
 
-    fn measure_unit_size(measure: &Measure) -> Result<u32> {
-        const MEASURE_LENGTH: u32 = 16;
-        let len = match measure.0.len() {
+    fn measure_unit_size(n: usize) -> Result<u32> {
+        let len = match n {
             1 => 1,
             2 => 2,
             3..=4 => 4,
             5..=8 => 8,
             9..=16 => 16,
             _ => {
-                return Err(anyhow::anyhow!("too many nodes: {:?}", measure));
+                return Err(anyhow::anyhow!("too many nodes: {}", n));
             }
         };
         Ok(MEASURE_LENGTH / len)
     }
 
     fn interpret(&mut self, ast: Ast) -> Result<()> {
-        for measure in ast.0 {
-            let dur = Self::measure_unit_size(&measure).unwrap();
-            for node in measure.0 {
-                self.interpret_node(node, dur)?;
+        match ast {
+            Ast::Comment(_) => Ok(()),
+            Ast::Score(score) => {
+                for node in score.into_iter() {
+                    self.interpret(*node)?
+                }
+                if self.sustain != 0 {
+                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
+                    self.sustain = 0;
+                }
+                Ok(())
+            }
+            Ast::Measure(measure, _) => {
+                let dur = Self::measure_unit_size(measure.len()).unwrap();
+                for node in measure {
+                    self.interpret_node(node, dur)?;
+                }
+                log::debug!("measure end");
+                self.inspect();
+                Ok(())
             }
         }
-        if self.sustain != 0 {
-            self.notes.push(Note::new(self.pre.clone(), self.sustain));
-        }
-        Ok(())
     }
 }
 

@@ -24,7 +24,7 @@ pub enum Modifier {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chord {
-    octabe: u8,
+    octave: u8,
     invert: u8,
     /// root note
     key: Pitch,
@@ -45,9 +45,21 @@ impl std::fmt::Display for Chord {
 }
 
 impl Chord {
-    pub fn new(octabe: u8, key: Pitch, degrees: BTreeMap<Degree, i8>) -> Self {
+    pub fn set_nearest_octave(&mut self, pre: &Chord) {
+        self.octave = [-1, 0, 1]
+            .into_iter()
+            .map(|o| Chord {
+                octave: (pre.octave as i8 + o) as u8,
+                ..self.clone()
+            })
+            .min_by_key(|c| c.distance(pre).unwrap())
+            .unwrap()
+            .octave;
+    }
+
+    pub fn new(octave: u8, key: Pitch, degrees: BTreeMap<Degree, i8>) -> Self {
         Chord {
-            octabe,
+            octave,
             invert: 0,
             key,
             degrees,
@@ -86,12 +98,24 @@ impl Chord {
             .iter()
             .map(|(d, diff)| {
                 let semitone =
-                    self.octabe as i8 * 12 + self.key.into_u8() as i8 + d.to_semitone()? + *diff;
+                    self.octave as i8 * 12 + self.key.into_u8() as i8 + d.to_semitone()? + *diff;
                 Ok(semitone as u8)
             })
             .collect::<Result<Vec<_>>>()?;
         log::debug!("{:?}", s);
         Ok(s)
+    }
+
+    /// returns edit distance of each semitone
+    pub fn distance(&self, other: &Self) -> Result<usize> {
+        let s1 = self.semitones()?;
+        let s2 = other.semitones()?;
+        let d = s1
+            .into_iter()
+            .zip(s2)
+            .map(|(a, b)| (a as i8 - b as i8).unsigned_abs() as usize)
+            .sum();
+        Ok(d)
     }
 }
 
