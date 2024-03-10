@@ -1,4 +1,4 @@
-use crate::syntax::{Accidental, Ast, ChordNode, Degree, DegreeNode, ModifierNode, Node, Pitch};
+use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
 use std::fmt::Display;
 
 impl Display for Ast {
@@ -33,46 +33,29 @@ impl Display for Ast {
     }
 }
 
-fn fmt_mods(mods: &[ModifierNode]) -> String {
-    mods.iter()
-        .map(|m| format!("{}", m))
-        .collect::<Vec<_>>()
-        .join("")
+impl Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Absolute(pitch) => write!(f, "{}", pitch),
+            Key::Relative(degree) => write!(f, "{}", degree),
+        }
+    }
 }
 
 impl Display for ChordNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (root, modifiers, tensions, on) = (
-            &self.root,
-            &self.modifiers,
-            &self.tensions.as_ref(),
-            &self.on,
-        );
-        let root = format!("{}", root);
-        let mods = fmt_mods(modifiers);
-        let tensions = tensions
-            .map(|t| format!("({})", fmt_mods(t)))
-            .unwrap_or("".to_string());
-        let on = on.map(|p| format!("/{}", p)).unwrap_or("".to_string());
-        write!(f, "{}{}{}{}", root, mods, tensions, on)
-    }
-}
-
-impl Display for DegreeNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let root = format!("{}{}", self.root.0, self.root.1);
-        let mods = fmt_mods(&self.modifiers);
-        let tensions = self
-            .tensions
-            .as_ref()
-            .map(|t| format!("({})", fmt_mods(t)))
-            .unwrap_or("".to_string());
+        let mods = self
+            .modifiers
+            .iter()
+            .map(|m| format!("{}", m))
+            .collect::<Vec<_>>()
+            .join("");
         let on = self
             .on
             .as_ref()
-            .map(|(a, d)| format!("/{}{}", a, d))
+            .map(|p| format!("/{}", p))
             .unwrap_or("".to_string());
-        write!(f, "{}{}{}{}", root, mods, tensions, on)
+        write!(f, "{}{}{}", self.key, mods, on)
     }
 }
 
@@ -80,7 +63,6 @@ impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Node::Chord(c) => write!(f, "{}", c),
-            Node::Degree(d) => write!(f, "{}", d),
             Node::Rest => write!(f, ""),
             Node::Sustain => write!(f, "_"),
             Node::Repeat => write!(f, "%"),
@@ -88,22 +70,22 @@ impl Display for Node {
     }
 }
 
-impl Display for ModifierNode {
+impl Display for Modifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ModifierNode::Major(d) => write!(f, "{}", d.0),
-            ModifierNode::Minor(d) => write!(f, "m{}", d.0),
-            ModifierNode::MinorMajaor7 => write!(f, "mM7"),
-            ModifierNode::Sus2 => write!(f, "sus2"),
-            ModifierNode::Sus4 => write!(f, "sus4"),
-            ModifierNode::Flat5th => write!(f, "-5"),
-            ModifierNode::Aug => write!(f, "aug"),
-            ModifierNode::Aug7 => write!(f, "aug7"),
-            ModifierNode::Dim => write!(f, "dim"),
-            ModifierNode::Dim7 => write!(f, "dim7"),
-            ModifierNode::Omit(d) => write!(f, "omit{}", d.0),
-            ModifierNode::Add(d) => write!(f, "add{}", d.0),
-            ModifierNode::Tension(a, d) => write!(f, "{}{}", a, d.0),
+            Modifier::Major(d) => write!(f, "{}", d),
+            Modifier::Minor(d) => write!(f, "m{}", d),
+            Modifier::MinorMajaor7 => write!(f, "mM7"),
+            Modifier::Sus2 => write!(f, "sus2"),
+            Modifier::Sus4 => write!(f, "sus4"),
+            Modifier::Flat5th => write!(f, "-5"),
+            Modifier::Aug => write!(f, "aug"),
+            Modifier::Aug7 => write!(f, "aug7"),
+            Modifier::Dim => write!(f, "dim"),
+            Modifier::Dim7 => write!(f, "dim7"),
+            Modifier::Omit(d) => write!(f, "omit{}", d),
+            Modifier::Add(d) => write!(f, "add{}", d),
+            Modifier::Tension(Degree(a, d)) => write!(f, "{}{}", a, d),
         }
     }
 }
@@ -118,19 +100,22 @@ impl Display for Accidental {
     }
 }
 
+fn to_roman_str(v: u8) -> &'static str {
+    match v {
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        7 => "VII",
+        _ => panic!("invalid degree: {}", v),
+    }
+}
+
 impl Display for Degree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self.0 {
-            1 => "I",
-            2 => "II",
-            3 => "III",
-            4 => "IV",
-            5 => "V",
-            6 => "VI",
-            7 => "VII",
-            _ => panic!("invalid degree: {}", self.0),
-        };
-        write!(f, "{}", s)
+        write!(f, "{}{}", to_roman_str(self.0), self.1)
     }
 }
 

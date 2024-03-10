@@ -1,5 +1,5 @@
 use crate::parser_util::{capture, Span};
-use crate::syntax::{Accidental, Ast, ChordNode, Degree, DegreeNode, ModifierNode, Node, Pitch};
+use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
@@ -13,6 +13,7 @@ use nom_tracable::tracable_parser;
 use nom_tracable::TracableInfo;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
@@ -34,20 +35,16 @@ impl FromStr for Accidental {
     }
 }
 
-impl FromStr for Degree {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "I" => Ok(Degree(1)),
-            "II" => Ok(Degree(2)),
-            "III" => Ok(Degree(3)),
-            "IV" => Ok(Degree(4)),
-            "V" => Ok(Degree(5)),
-            "VI" => Ok(Degree(6)),
-            "VII" => Ok(Degree(7)),
-            _ => Err(anyhow::anyhow!("invalid degree: {}", s)),
-        }
+fn parser_roman_num(s: &str) -> Result<u8> {
+    match s {
+        "I" => Ok(1),
+        "II" => Ok(2),
+        "III" => Ok(3),
+        "IV" => Ok(4),
+        "V" => Ok(5),
+        "VI" => Ok(6),
+        "VII" => Ok(7),
+        _ => Err(anyhow::anyhow!("invalid degree: {}", s)),
     }
 }
 
@@ -126,7 +123,14 @@ fn node_parser(s: Span) -> IResult<Span, Node> {
         map(tag("%"), |_| Node::Repeat),
         map(tag("N.C."), |_| Node::Rest),
         map(chord_node_parser, Node::Chord),
-        map(degree_node_parser, Node::Degree),
+    ))(s)
+}
+
+#[tracable_parser]
+fn key_parser(s: Span) -> IResult<Span, Key> {
+    alt((
+        map(pitch_parser, |p| Key::Absolute(p)),
+        map(degree_parser, |d| Key::Relative(d)),
     ))(s)
 }
 
@@ -134,62 +138,47 @@ fn node_parser(s: Span) -> IResult<Span, Node> {
 fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
     map(
         tuple((
-            pitch_parser,
+            key_parser,
             many0(modifier_node_parser),
             opt(tensions_parser),
-            opt(chord_on_chord_parser),
+            opt(preceded(tag("/"), key_parser)),
         )),
-        |(root, modifiers, tensions, on)| ChordNode {
-            root,
-            modifiers,
-            tensions,
+        |(key, modifiers, tensions, on)| ChordNode {
+            key,
+            modifiers: HashSet::from_iter(
+                modifiers.into_iter().chain(tensions.into_iter().flatten()),
+            ),
             on,
         },
     )(s)
 }
 
 #[tracable_parser]
-fn degree_node_parser(s: Span) -> IResult<Span, DegreeNode> {
-    map(
-        tuple((
-            degree_parser,
-            many0(modifier_node_parser),
-            opt(tensions_parser),
-            opt(degree_on_chord_parser),
-        )),
-        |(root, modifiers, tensions, on)| DegreeNode {
-            root,
-            modifiers,
-            tensions,
-            on,
-        },
-    )(s)
-}
-
-#[tracable_parser]
-fn degree_number_parser(s: Span) -> IResult<Span, Degree> {
+fn degree_number_parser(s: Span) -> IResult<Span, u8> {
     map(capture(DEGREE_NUMBER_REGEX.to_owned()), |cap| {
-        Degree(cap[1].parse::<u8>().unwrap())
+        cap[1].parse::<u8>().unwrap()
+    })(s)
+}
+
+#[tracable_parser]
+fn degree_name_parser(s: Span) -> IResult<Span, u8> {
+    map(capture(DEGREE_NAME_REGEX.to_owned()), |cap| {
+        parser_roman_num(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
 fn accidental_parser(s: Span) -> IResult<Span, Accidental> {
-    map(capture(Regex::new(r"([b#+-])").unwrap()), |cap| {
+    map(capture(Regex::new(r"([b#])").unwrap()), |cap| {
         Accidental::from_str(&cap[1]).unwrap()
     })(s)
 }
 
 #[tracable_parser]
-fn degree_name_parser(s: Span) -> IResult<Span, Degree> {
-    map(capture(DEGREE_NAME_REGEX.to_owned()), |cap| {
-        Degree::from_str(&cap[1]).unwrap()
+fn degree_parser(s: Span) -> IResult<Span, Degree> {
+    map(tuple((accidental_parser, degree_name_parser)), |(a, d)| {
+        Degree(d, a)
     })(s)
-}
-
-#[tracable_parser]
-fn degree_parser(s: Span) -> IResult<Span, (Accidental, Degree)> {
-    tuple((accidental_parser, degree_name_parser))(s)
 }
 
 #[tracable_parser]
@@ -200,46 +189,36 @@ fn pitch_parser(s: Span) -> IResult<Span, Pitch> {
 }
 
 #[tracable_parser]
-fn chord_on_chord_parser(s: Span) -> IResult<Span, Pitch> {
-    preceded(tag("/"), pitch_parser)(s)
-}
-
-#[tracable_parser]
-fn degree_on_chord_parser(s: Span) -> IResult<Span, (Accidental, Degree)> {
-    preceded(tag("/"), degree_parser)(s)
-}
-
-#[tracable_parser]
-fn modifier_node_parser(s: Span) -> IResult<Span, ModifierNode> {
+fn modifier_node_parser(s: Span) -> IResult<Span, Modifier> {
     alt((
-        map(alt((tag("-5"), tag("b5"))), |_| ModifierNode::Flat5th),
-        map(tag("sus2"), |_| ModifierNode::Sus2),
-        map(tag("sus4"), |_| ModifierNode::Sus4),
-        map(tag("dim7"), |_| ModifierNode::Dim7),
-        map(alt((tag("dim"), tag("o"))), |_| ModifierNode::Dim),
-        map(tag("aug7"), |_| ModifierNode::Aug7),
-        map(alt((tag("aug"), tag("+"))), |_| ModifierNode::Aug),
+        map(alt((tag("-5"), tag("b5"))), |_| Modifier::Flat5th),
+        map(tag("sus2"), |_| Modifier::Sus2),
+        map(tag("sus4"), |_| Modifier::Sus4),
+        map(tag("dim7"), |_| Modifier::Dim7),
+        map(alt((tag("dim"), tag("o"))), |_| Modifier::Dim),
+        map(tag("aug7"), |_| Modifier::Aug7),
+        map(alt((tag("aug"), tag("+"))), |_| Modifier::Aug),
         map(tuple((tag("add"), degree_number_parser)), |(_, d)| {
-            ModifierNode::Add(d)
+            Modifier::Add(d)
         }),
         map(
             tuple((alt((tag("omit"), tag("no"))), degree_number_parser)),
-            |(_, d)| ModifierNode::Omit(d),
+            |(_, d)| Modifier::Omit(d),
         ),
-        map(tag("mM7"), |_| ModifierNode::MinorMajaor7),
+        map(tag("mM7"), |_| Modifier::MinorMajaor7),
         map(
             tuple((alt((tag("maj"), tag("M"))), opt(degree_number_parser))),
-            |(_, d)| ModifierNode::Major(d.unwrap_or(Degree(5))),
+            |(_, d)| Modifier::Major(d.unwrap_or(5)),
         ),
         map(tuple((tag("m"), opt(degree_number_parser))), |(_, d)| {
-            ModifierNode::Minor(d.unwrap_or(Degree(5)))
+            Modifier::Minor(d.unwrap_or(5))
         }),
-        map(degree_number_parser, ModifierNode::Major),
+        map(degree_number_parser, Modifier::Major),
     ))(s)
 }
 
 #[tracable_parser]
-fn tensions_parser(s: Span) -> IResult<Span, Vec<ModifierNode>> {
+fn tensions_parser(s: Span) -> IResult<Span, Vec<Modifier>> {
     map(
         delimited(
             tag("("),
@@ -249,7 +228,7 @@ fn tensions_parser(s: Span) -> IResult<Span, Vec<ModifierNode>> {
         |tensions| {
             tensions
                 .into_iter()
-                .map(|(a, d)| ModifierNode::Tension(a, d))
+                .map(|(a, d)| Modifier::Tension(Degree(d, a)))
                 .collect()
         },
     )(s)

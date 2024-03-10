@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             let mut out = out
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
-            ast.as_degree(args.key);
+            ast.with_pitch(args.key);
             writeln!(out, "{}", ast)?;
         }
         Commands::Midi(args) => {
