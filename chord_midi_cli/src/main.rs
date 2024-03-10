@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chord_midi::{midi_dump, parser::parse, score_dump, syntax::Pitch};
+use chord_midi::{midi::dump, parser::parse, syntax::Pitch};
 use clap::Parser;
 use std::{
     fs::{File, OpenOptions},
@@ -63,11 +63,11 @@ fn main() -> Result<()> {
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
             ast.as_degree(args.key);
-            score_dump(&mut out, &ast)?;
+            writeln!(out, "{}", ast)?;
         }
         Commands::Midi(args) => {
             if let Some(f) = out.as_mut() {
-                midi_dump(f, ast, args.key, args.bpm)?;
+                dump(f, ast, args.key, args.bpm)?;
             }
         }
     }
