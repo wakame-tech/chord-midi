@@ -1,11 +1,11 @@
-use crate::de::ast::Ast;
-use crate::model::degree::Pitch;
-use crate::model::score::{into_notes, Note};
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
 use midi_file::file::{QuartersPerMinute, Track};
 use midi_file::MidiFile;
 use std::io::Write;
+
+use crate::score::{into_notes, Note};
+use crate::syntax::{Ast, Pitch};
 
 const UNIT: u32 = 1024 / 4;
 

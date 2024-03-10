@@ -1,19 +1,38 @@
-use super::chord::{chord_node_parser, degree_node_parser};
-use super::Span;
-use crate::model::chord::Chord;
-use crate::model::degree::{from_semitone, into_semitone, Accidental, Degree};
-use crate::model::{chord::Modifier, degree::Pitch};
+use crate::chord::{Chord, Modifier};
 use anyhow::Result;
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{line_ending, space0};
-use nom::combinator::{eof, map, value};
-use nom::multi::{many1};
-use nom::sequence::{delimited, tuple};
-use nom::IResult;
-use nom_locate::LocatedSpan;
-use nom_tracable::{tracable_parser, TracableInfo};
 use std::fmt::Display;
+
+#[derive(Debug)]
+pub enum Ast {
+    Comment(String),
+    Measure(Vec<Node>, bool),
+    Score(Vec<Box<Ast>>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Node {
+    Chord(ChordNode),
+    Degree(DegreeNode),
+    Rest,
+    Sustain,
+    Repeat,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ChordNode {
+    pub root: Pitch,
+    pub modifiers: Vec<ModifierNode>,
+    pub tensions: Option<Vec<ModifierNode>>,
+    pub on: Option<Pitch>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DegreeNode {
+    pub root: (Accidental, Degree),
+    pub modifiers: Vec<ModifierNode>,
+    pub tensions: Option<Vec<ModifierNode>>,
+    pub on: Option<(Accidental, Degree)>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModifierNode {
@@ -30,6 +49,187 @@ pub enum ModifierNode {
     Omit(Degree),
     Add(Degree),
     Tension(Accidental, Degree),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Accidental {
+    Natural,
+    Sharp,
+    Flat,
+}
+
+impl Display for Accidental {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Accidental::Natural => write!(f, ""),
+            Accidental::Sharp => write!(f, "#"),
+            Accidental::Flat => write!(f, "b"),
+        }
+    }
+}
+
+impl From<Accidental> for i8 {
+    fn from(val: Accidental) -> Self {
+        match val {
+            Accidental::Natural => 0,
+            Accidental::Sharp => 1,
+            Accidental::Flat => -1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Degree(pub u8);
+
+impl Degree {
+    pub fn to_semitone(&self) -> Result<i8> {
+        match self.0 {
+            1 => Ok(0),
+            2 => Ok(2),
+            3 => Ok(4),
+            4 => Ok(5),
+            5 => Ok(7),
+            6 => Ok(9),
+            7 => Ok(11),
+            9 => Ok(14),
+            11 => Ok(17),
+            13 => Ok(21),
+            _ => Err(anyhow::anyhow!("unknown degree {}", self.0)),
+        }
+    }
+}
+
+impl Display for Degree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self.0 {
+            1 => "I",
+            2 => "II",
+            3 => "III",
+            4 => "IV",
+            5 => "V",
+            6 => "VI",
+            7 => "VII",
+            _ => panic!("invalid degree: {}", self.0),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Pitch {
+    C,
+    Cs,
+    D,
+    Ds,
+    E,
+    F,
+    Fs,
+    G,
+    Gs,
+    A,
+    As,
+    B,
+}
+
+impl Display for Pitch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Pitch::*;
+        let s = match self {
+            C => "C",
+            Cs => "C#",
+            D => "D",
+            Ds => "D#",
+            E => "E",
+            F => "F",
+            Fs => "F#",
+            G => "G",
+            Gs => "G#",
+            A => "A",
+            As => "A#",
+            B => "B",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl Pitch {
+    pub fn from_u8(n: u8) -> Self {
+        use Pitch::*;
+        match n {
+            0 => C,
+            1 => Cs,
+            2 => D,
+            3 => Ds,
+            4 => E,
+            5 => F,
+            6 => Fs,
+            7 => G,
+            8 => Gs,
+            9 => A,
+            10 => As,
+            11 => B,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn into_u8(self) -> u8 {
+        use Pitch::*;
+        match self {
+            C => 0,
+            Cs => 1,
+            D => 2,
+            Ds => 3,
+            E => 4,
+            F => 5,
+            Fs => 6,
+            G => 7,
+            Gs => 8,
+            A => 9,
+            As => 10,
+            B => 11,
+        }
+    }
+
+    pub fn diff(from: &Pitch, to: &Pitch) -> u8 {
+        let diff = (to.into_u8() as i8 - from.into_u8() as i8 + 12) % 12;
+        diff as u8
+    }
+}
+
+pub fn into_semitone(a: Accidental, d: Degree) -> u8 {
+    let p = d.to_semitone().unwrap();
+    let a: i8 = a.into();
+    (p + a) as u8
+}
+
+pub fn from_semitone(s: u8) -> (Accidental, Degree) {
+    match s {
+        0 => (Accidental::Natural, Degree(1)),
+        1 => (Accidental::Sharp, Degree(1)),
+        2 => (Accidental::Natural, Degree(2)),
+        3 => (Accidental::Sharp, Degree(2)),
+        4 => (Accidental::Natural, Degree(3)),
+        5 => (Accidental::Natural, Degree(4)),
+        6 => (Accidental::Sharp, Degree(4)),
+        7 => (Accidental::Natural, Degree(5)),
+        8 => (Accidental::Sharp, Degree(5)),
+        9 => (Accidental::Natural, Degree(6)),
+        10 => (Accidental::Sharp, Degree(6)),
+        11 => (Accidental::Natural, Degree(7)),
+        _ => panic!("invalid semitone: {}", s),
+    }
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Node::Chord(c) => write!(f, "{}", c),
+            Node::Degree(d) => write!(f, "{}", d),
+            Node::Rest => write!(f, ""),
+            Node::Sustain => write!(f, "_"),
+            Node::Repeat => write!(f, "%"),
+        }
+    }
 }
 
 impl Display for ModifierNode {
@@ -111,14 +311,6 @@ impl ModifierNode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct ChordNode {
-    pub root: Pitch,
-    pub modifiers: Vec<ModifierNode>,
-    pub tensions: Option<Vec<ModifierNode>>,
-    pub on: Option<Pitch>,
-}
-
 fn fmt_mods(mods: &[ModifierNode]) -> String {
     mods.iter()
         .map(|m| format!("{}", m))
@@ -171,14 +363,6 @@ impl ChordNode {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct DegreeNode {
-    pub root: (Accidental, Degree),
-    pub modifiers: Vec<ModifierNode>,
-    pub tensions: Option<Vec<ModifierNode>>,
-    pub on: Option<(Accidental, Degree)>,
-}
-
 impl Display for DegreeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let root = format!("{}{}", self.root.0, self.root.1);
@@ -229,135 +413,4 @@ fn into_modifiers(mods: Vec<ModifierNode>) -> Result<Vec<Modifier>> {
         .flatten()
         .collect::<Vec<_>>()]
     .concat())
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Node {
-    Chord(ChordNode),
-    Degree(DegreeNode),
-    Rest,
-    Sustain,
-    Repeat,
-}
-
-impl Display for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Node::Chord(c) => write!(f, "{}", c),
-            Node::Degree(d) => write!(f, "{}", d),
-            Node::Rest => write!(f, ""),
-            Node::Sustain => write!(f, "_"),
-            Node::Repeat => write!(f, "%"),
-        }
-    }
-}
-
-#[tracable_parser]
-fn node_parser(s: Span) -> IResult<Span, Node> {
-    alt((
-        map(tag("="), |_| Node::Sustain),
-        map(tag("_"), |_| Node::Rest),
-        map(tag("%"), |_| Node::Repeat),
-        map(tag("N.C."), |_| Node::Rest),
-        map(chord_node_parser, Node::Chord),
-        map(degree_node_parser, Node::Degree),
-    ))(s)
-}
-
-#[tracable_parser]
-fn comment_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        delimited(tag("#"), take_until("\n"), tag("\n")),
-        |comment: Span| Ast::Comment(comment.fragment().to_string()),
-    )(s)
-}
-
-fn measure_end_parser(s: Span) -> IResult<Span, bool> {
-    alt((
-        value(false, tag("|")),
-        value(true, eof),
-        value(true, line_ending),
-    ))(s)
-}
-
-#[tracable_parser]
-fn measure_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((
-            many1(delimited(space0, node_parser, space0)),
-            measure_end_parser,
-        )),
-        |(nodes, br)| Ast::Measure(nodes, br),
-    )(s)
-}
-
-#[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((many1(alt((comment_parser, measure_parser))), eof)),
-        |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
-    )(s)
-}
-
-#[derive(Debug)]
-pub enum Ast {
-    Comment(String),
-    Measure(Vec<Node>, bool),
-    Score(Vec<Box<Ast>>),
-}
-
-pub fn parse(code: &str) -> Result<Ast> {
-    let span = LocatedSpan::new_extra(code, TracableInfo::new());
-    let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
-    if !rest.is_empty() {
-        return Err(anyhow::anyhow!("parse error: {:?}", rest));
-    }
-    Ok(ast)
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::de::{
-        ast::{ast_parser, measure_parser},
-        chord::chord_node_parser,
-    };
-    use anyhow::Result;
-    use nom_locate::LocatedSpan;
-    use nom_tracable::TracableInfo;
-
-    fn span(s: &str) -> LocatedSpan<&str, TracableInfo> {
-        LocatedSpan::new_extra(s, TracableInfo::new())
-    }
-
-    #[test]
-    fn test_chord_node_parser() -> Result<()> {
-        for chord in [
-            "C", "Cm", "CmM7", "Csus2", "Csus4", "C-5", "Caug", "Caug7", "Cdim", "Cdim7", "C/D",
-        ] {
-            let span = span(chord);
-            let (res, _ast) = chord_node_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_measure_parser() -> Result<()> {
-        for measure in ["C", "CC", "C C |", "C|", "C\n"] {
-            let span = span(measure);
-            let (res, _ast) = measure_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_ast_parser() -> Result<()> {
-        for score in ["# comment\nCCC", "CCC|", "CCC\n"] {
-            let span = span(score);
-            let (res, _ast) = ast_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
 }

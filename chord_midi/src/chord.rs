@@ -1,6 +1,7 @@
-use super::degree::{Accidental, Degree, Pitch};
 use anyhow::Result;
 use std::collections::BTreeMap;
+
+use crate::syntax::{Accidental, Degree, Pitch};
 
 // (degree, diff)
 #[derive(Debug, PartialEq, Clone)]

@@ -1,9 +1,7 @@
-use crate::{
-    de::ast::{Ast, Node},
-    model::degree::Pitch,
-};
 use anyhow::Result;
 use std::io::Write;
+
+use crate::syntax::{Ast, Node, Pitch};
 
 impl Ast {
     pub fn as_degree(&mut self, key: Pitch) {

@@ -1,8 +1,5 @@
 use super::chord::Chord;
-use crate::{
-    de::ast::{Ast, Node},
-    model::degree::Pitch,
-};
+use crate::syntax::{Ast, Node, Pitch};
 use anyhow::Result;
 
 #[derive(Debug, Clone)]

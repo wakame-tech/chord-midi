@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chord_midi::{midi_dump, model::degree::Pitch, parse, score_dump};
+use chord_midi::{midi_dump, parser::parse, score_dump, syntax::Pitch};
 use clap::Parser;
 use std::{
     fs::{File, OpenOptions},
