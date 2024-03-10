@@ -37,7 +37,7 @@ impl Display for Key {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Key::Absolute(pitch) => write!(f, "{}", pitch),
-            Key::Relative(degree) => write!(f, "{}", degree),
+            Key::Relative(semitone) => write!(f, "{}", to_roman_str(*semitone)),
         }
     }
 }
@@ -78,7 +78,7 @@ impl Display for Modifier {
             Modifier::MinorMajaor7 => write!(f, "mM7"),
             Modifier::Sus2 => write!(f, "sus2"),
             Modifier::Sus4 => write!(f, "sus4"),
-            Modifier::Flat5th => write!(f, "-5"),
+            Modifier::Flat5th => write!(f, "b5"),
             Modifier::Aug => write!(f, "aug"),
             Modifier::Aug7 => write!(f, "aug7"),
             Modifier::Dim => write!(f, "dim"),
@@ -100,16 +100,21 @@ impl Display for Accidental {
     }
 }
 
-fn to_roman_str(v: u8) -> &'static str {
-    match v {
-        1 => "I",
+fn to_roman_str(semitone: u8) -> &'static str {
+    match semitone {
+        0 => "I",
+        1 => "I#",
         2 => "II",
-        3 => "III",
-        4 => "IV",
-        5 => "V",
-        6 => "VI",
-        7 => "VII",
-        _ => panic!("invalid degree: {}", v),
+        3 => "II#",
+        4 => "III",
+        5 => "IV",
+        6 => "IV#",
+        7 => "V",
+        8 => "V#",
+        9 => "VI",
+        10 => "VI#",
+        11 => "VII",
+        _ => panic!("invalid semitone: {}", semitone),
     }
 }
 

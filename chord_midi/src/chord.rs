@@ -133,12 +133,9 @@ impl Chord {
                 let b = other.octave * 12 + bp.clone() as u8;
                 Ok::<_, anyhow::Error>(a.abs_diff(b))
             }
-            (Key::Relative(ad), Key::Relative(bd)) => {
-                let a =
-                    self.octave as i8 * 12 + Scale::Major.semitone(ad.0) as i8 + ad.1.clone() as i8;
-                let b = other.octave as i8 * 12
-                    + Scale::Major.semitone(bd.0) as i8
-                    + bd.1.clone() as i8;
+            (Key::Relative(sa), Key::Relative(sb)) => {
+                let a = self.octave * 12 + *sa;
+                let b = other.octave * 12 + *sb;
                 Ok(a.abs_diff(b))
             }
             _ => return Err(anyhow::anyhow!("key type mismatch")),
@@ -150,5 +147,25 @@ impl Chord {
             .map(|(a, b)| a.abs_diff(*b))
             .sum::<u8>();
         Ok((key_dist + semitones_dist) as usize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Chord;
+    use crate::syntax::{Key, Modifier, Pitch};
+    use anyhow::Result;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn test_chord_modify() -> Result<()> {
+        let mut chord = Chord::new(4, Key::Absolute(Pitch::C));
+        chord.modify(Modifier::Major(5))?;
+        assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7]));
+        chord.modify(Modifier::Minor(5))?;
+        assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 3, 7]));
+        chord.modify(Modifier::Major(7))?;
+        assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7, 11]));
+        Ok(())
     }
 }

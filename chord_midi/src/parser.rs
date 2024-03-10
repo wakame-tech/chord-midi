@@ -1,4 +1,5 @@
 use crate::parser_util::{capture, Span};
+use crate::scale::Scale;
 use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
 use anyhow::Result;
 use nom::branch::alt;
@@ -175,9 +176,9 @@ fn accidental_parser(s: Span) -> IResult<Span, Accidental> {
 }
 
 #[tracable_parser]
-fn degree_parser(s: Span) -> IResult<Span, Degree> {
+fn degree_parser(s: Span) -> IResult<Span, u8> {
     map(tuple((accidental_parser, degree_name_parser)), |(a, d)| {
-        Degree(d, a)
+        (Scale::Major.semitone(d) as i8 + a as i8) as u8
     })(s)
 }
 

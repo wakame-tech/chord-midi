@@ -19,14 +19,16 @@ struct Cli {
 
 #[derive(Debug, clap::Parser)]
 enum Commands {
-    Degree(Degree),
+    Convert(Convert),
     Midi(Midi),
 }
 
 #[derive(Debug, clap::Parser)]
-struct Degree {
+struct Convert {
     #[arg(long)]
-    key: Pitch,
+    as_pitch: Option<Pitch>,
+    #[arg(long)]
+    as_degree: Option<Pitch>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -58,11 +60,18 @@ fn main() -> Result<()> {
     });
 
     match args.command {
-        Commands::Degree(args) => {
+        Commands::Convert(args) => {
             let mut out = out
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
-            ast.with_pitch(args.key);
+
+            if let Some(p) = args.as_pitch {
+                ast.as_pitch(p);
+            }
+            if let Some(p) = args.as_degree {
+                ast.as_degree(p);
+            }
+
             writeln!(out, "{}", ast)?;
         }
         Commands::Midi(args) => {

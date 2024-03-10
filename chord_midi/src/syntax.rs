@@ -9,17 +9,35 @@ pub enum Ast {
 }
 
 impl Ast {
-    pub fn with_pitch(&mut self, pitch: Pitch) {
+    pub fn as_degree(&mut self, key: Pitch) {
         match self {
             Ast::Score(nodes) => {
                 for node in nodes {
-                    node.with_pitch(pitch);
+                    node.as_degree(key);
                 }
             }
             Ast::Measure(nodes, _) => {
                 for node in nodes {
                     if let Node::Chord(c) = node {
-                        c.key.with_pitch(pitch);
+                        c.key.as_degree(key);
+                    }
+                }
+            }
+            Ast::Comment(_) => {}
+        }
+    }
+
+    pub fn as_pitch(&mut self, pitch: Pitch) {
+        match self {
+            Ast::Score(nodes) => {
+                for node in nodes {
+                    node.as_pitch(pitch);
+                }
+            }
+            Ast::Measure(nodes, _) => {
+                for node in nodes {
+                    if let Node::Chord(c) = node {
+                        c.key.as_pitch(pitch);
                     }
                 }
             }
@@ -39,14 +57,24 @@ pub enum Node {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Key {
     Absolute(Pitch),
-    Relative(Degree),
+    // semitones
+    Relative(u8),
 }
 
 impl Key {
-    pub fn with_pitch(&mut self, pitch: Pitch) {
+    pub fn as_degree(&mut self, key: Pitch) {
+        match self {
+            Key::Absolute(pitch) => *self = Key::Relative(pitch.diff(&key)),
+            Key::Relative(_) => {}
+        }
+    }
+
+    pub fn as_pitch(&mut self, pitch: Pitch) {
         match self {
             Key::Absolute(_) => {}
-            Key::Relative(degree) => *self = Key::Absolute(degree.with_pitch(pitch)),
+            Key::Relative(degree) => {
+                *self = Key::Absolute(Pitch::try_from((*degree + pitch as u8) % 12).unwrap())
+            }
         }
     }
 }
@@ -138,5 +166,13 @@ impl TryFrom<u8> for Pitch {
             11 => Ok(Pitch::B),
             _ => Err(anyhow::anyhow!("invalid pitch: {}", value)),
         }
+    }
+}
+
+impl Pitch {
+    fn diff(&self, other: &Self) -> u8 {
+        let a = *self as i8;
+        let b = *other as i8;
+        (a - b + 12) as u8 % 12
     }
 }
