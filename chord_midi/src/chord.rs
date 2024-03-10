@@ -3,14 +3,28 @@ use crate::{
     syntax::{Degree, Key, Modifier},
 };
 use anyhow::Result;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt::Debug};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Chord {
     pub octave: u8,
     pub key: Key,
     pub semitones: BTreeSet<u8>,
     pub on: Option<Key>,
+}
+
+impl Debug for Chord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}{}",
+            self.key,
+            self.on
+                .as_ref()
+                .map(|on| format!("/{}", on))
+                .unwrap_or_default()
+        )
+    }
 }
 
 impl Chord {
@@ -36,7 +50,7 @@ impl Chord {
         self.semitones.remove(&Scale::Major.semitone(degree));
     }
 
-    pub fn modify(&mut self, modifier: Modifier) -> Result<()> {
+    pub fn modify(&mut self, modifier: &Modifier) -> Result<()> {
         fn modify_degree(chord: &mut Chord, scale: Scale, degrees: &[u8]) -> Result<()> {
             for d in degrees {
                 chord.remove_degree(*d);
@@ -110,15 +124,16 @@ impl Chord {
                 Ok(())
             }
             Modifier::Omit(d) => {
-                self.semitones.remove(&self.scale().semitone(d));
+                self.semitones.remove(&self.scale().semitone(*d));
                 Ok(())
             }
             Modifier::Add(d) => {
-                self.semitones.insert(self.scale().semitone(d));
+                self.semitones.insert(self.scale().semitone(*d));
                 Ok(())
             }
             Modifier::Tension(Degree(d, a)) => {
-                self.semitones.insert(self.scale().semitone(d) + a as u8);
+                self.semitones
+                    .insert(self.scale().semitone(*d) + a.clone() as u8);
                 Ok(())
             }
             _ => Err(anyhow::anyhow!("unknown mod: {:?}", modifier)),
@@ -160,11 +175,11 @@ mod tests {
     #[test]
     fn test_chord_modify() -> Result<()> {
         let mut chord = Chord::new(4, Key::Absolute(Pitch::C));
-        chord.modify(Modifier::Major(5))?;
+        chord.modify(&Modifier::Major(5))?;
         assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7]));
-        chord.modify(Modifier::Minor(5))?;
+        chord.modify(&Modifier::Minor(5))?;
         assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 3, 7]));
-        chord.modify(Modifier::Major(7))?;
+        chord.modify(&Modifier::Major(7))?;
         assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7, 11]));
         Ok(())
     }

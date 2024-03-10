@@ -1,5 +1,5 @@
 use crate::chord::Chord;
-use crate::syntax::{Ast, Key, Node, Pitch};
+use crate::syntax::{Ast, Key, Node};
 use anyhow::anyhow;
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
@@ -9,14 +9,34 @@ use std::io::Write;
 
 const UNIT: u32 = 1024 / 4;
 
+fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
+    let Key::Absolute(p) = chord.key else {
+        return Err(anyhow!("Relative key is not supported"));
+    };
+    let on = chord.on.clone().and_then(|on| {
+        if let Key::Absolute(on) = on {
+            Some(on)
+        } else {
+            None
+        }
+    });
+    // C4 is 60
+    Ok(chord
+        .semitones
+        .iter()
+        .map(|s| NoteNumber::new(12 + 12 * chord.octave + (p as u8) + *s))
+        .chain(on.map(|p| NoteNumber::new(12 + 12 * chord.octave + (p as u8))))
+        .collect())
+}
+
 #[derive(Debug, Clone)]
 struct Note {
-    pub chord: Option<Chord>,
+    pub chord: Option<Vec<NoteNumber>>,
     pub duration: u32,
 }
 
 impl Note {
-    fn new(chord: Option<Chord>, duration: u32) -> Self {
+    fn new(chord: Option<Vec<NoteNumber>>, duration: u32) -> Self {
         Note { chord, duration }
     }
 }
@@ -68,10 +88,14 @@ impl Score {
     }
 
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
-        log::debug!("{}", node);
         self.inspect();
         if !matches!(node, Node::Sustain) && self.sustain != 0 {
-            self.notes.push(Note::new(self.pre.clone(), self.sustain));
+            let notes = if let Some(pre) = &self.pre {
+                Some(into_note_numbers(pre)?)
+            } else {
+                None
+            };
+            self.notes.push(Note::new(notes, self.sustain));
             self.sustain = 0;
         }
         if !matches!(node, Node::Rest) && self.rest != 0 {
@@ -80,14 +104,16 @@ impl Score {
         }
         match node {
             Node::Chord(node) => {
-                let mut chord = Chord::new(4, node.key);
-                chord.on = node.on;
-                for modifier in node.modifiers {
+                let mut chord = Chord::new(4, node.key.clone());
+                chord.on = node.on.clone();
+                for modifier in &node.modifiers {
                     chord.modify(modifier)?;
                 }
-                if let Some(pre) = &self.pre {
-                    chord.octave = nearest_octave(&chord, pre);
-                }
+                // if let Some(pre) = &self.pre {
+                //     chord.octave = nearest_octave(&chord, pre);
+                // }
+                log::debug!("chord: {}: {:?}", node, node.modifiers);
+
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -126,7 +152,12 @@ impl Score {
                     self.interpret(*node)?
                 }
                 if self.sustain != 0 {
-                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
+                    let notes = if let Some(pre) = &self.pre {
+                        Some(into_note_numbers(pre)?)
+                    } else {
+                        None
+                    };
+                    self.notes.push(Note::new(notes, self.sustain));
                     self.sustain = 0;
                 }
                 Ok(())
@@ -136,49 +167,31 @@ impl Score {
                 for node in measure {
                     self.interpret_node(node, dur)?;
                 }
-                log::debug!("measure end");
-                self.inspect();
+                log::debug!("---");
                 Ok(())
             }
         }
     }
 }
 
-fn into_notes(ast: Ast, _key: Option<Pitch>) -> Result<Vec<Note>> {
-    let mut score = Score::new();
-    score.interpret(ast)?;
-    Ok(score.notes)
-}
-
-fn write_notes(track: &mut Track, ch: Channel, semitones: &[NoteNumber], dur: u32, skip: &mut u32) {
-    for (i, n) in semitones.iter().enumerate() {
+fn write_notes(track: &mut Track, ch: Channel, notes: &[NoteNumber], dur: u32, skip: &mut u32) {
+    for (i, n) in notes.iter().enumerate() {
         track
             .push_note_on(if i == 0 { *skip } else { 0 }, ch, *n, Velocity::default())
             .unwrap();
         *skip = 0;
     }
-    for (i, n) in semitones.iter().enumerate() {
+    for (i, n) in notes.iter().enumerate() {
         track
             .push_note_off(if i == 0 { dur } else { 0 }, ch, *n, Velocity::default())
             .unwrap();
     }
 }
 
-pub fn dump(f: &mut impl Write, ast: Ast, key: Option<Pitch>, bpm: u8) -> Result<()> {
-    let notes = into_notes(ast, key)?;
-    dump_notes(f, &notes, bpm)
-}
-
-fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
-    let Key::Absolute(p) = chord.key else {
-        return Err(anyhow!("Relative key is not supported"));
-    };
-    // C4 is 60
-    Ok(chord
-        .semitones
-        .iter()
-        .map(|s| NoteNumber::new(12 + 12 * chord.octave + (p as u8) + *s))
-        .collect())
+pub fn dump(f: &mut impl Write, ast: Ast, bpm: u8) -> Result<()> {
+    let mut score = Score::new();
+    score.interpret(ast)?;
+    dump_notes(f, &score.notes, bpm)
 }
 
 fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
@@ -197,7 +210,7 @@ fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
             skip = dur;
             continue;
         };
-        write_notes(&mut track, ch, &into_note_numbers(chord)?, dur, &mut skip);
+        write_notes(&mut track, ch, chord, dur, &mut skip);
     }
 
     mfile.push_track(track)?;

@@ -101,7 +101,7 @@ fn measure_end_parser(s: Span) -> IResult<Span, bool> {
     alt((
         value(false, tag("|")),
         value(true, eof),
-        value(true, line_ending),
+        value(true, many1(line_ending)),
     ))(s)
 }
 
@@ -147,7 +147,10 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
         |(key, modifiers, tensions, on)| ChordNode {
             key,
             modifiers: HashSet::from_iter(
-                modifiers.into_iter().chain(tensions.into_iter().flatten()),
+                vec![Modifier::Major(5)]
+                    .into_iter()
+                    .chain(modifiers.into_iter())
+                    .chain(tensions.into_iter().flatten()),
             ),
             on,
         },
@@ -237,11 +240,10 @@ fn tensions_parser(s: Span) -> IResult<Span, Vec<Modifier>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::{ast_parser, chord_node_parser, measure_parser};
     use anyhow::Result;
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
-
-    use crate::parser::{ast_parser, chord_node_parser, measure_parser};
 
     fn span(s: &str) -> LocatedSpan<&str, TracableInfo> {
         LocatedSpan::new_extra(s, TracableInfo::new())

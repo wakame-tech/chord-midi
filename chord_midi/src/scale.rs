@@ -16,7 +16,7 @@ impl Scale {
         let s = self.degrees();
         let mut semitone = 0;
         for i in 0..degree as usize - 1 {
-            semitone += s[i % 8];
+            semitone += s[i % 7];
         }
         semitone
     }

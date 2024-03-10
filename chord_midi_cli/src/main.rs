@@ -33,8 +33,6 @@ struct Convert {
 
 #[derive(Debug, clap::Parser)]
 struct Midi {
-    #[arg(long)]
-    key: Option<Pitch>,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
 }
@@ -76,7 +74,7 @@ fn main() -> Result<()> {
         }
         Commands::Midi(args) => {
             if let Some(f) = out.as_mut() {
-                dump(f, ast, args.key, args.bpm)?;
+                dump(f, ast, args.bpm)?;
             }
         }
     }
