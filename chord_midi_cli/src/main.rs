@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chord_midi::{midi_dump, model::degree::Pitch, parse, score_dump};
+use chord_midi::{midi::dump, parser::parse, syntax::Pitch};
 use clap::Parser;
 use std::{
     fs::{File, OpenOptions},
@@ -19,20 +19,20 @@ struct Cli {
 
 #[derive(Debug, clap::Parser)]
 enum Commands {
-    Degree(Degree),
+    Convert(Convert),
     Midi(Midi),
 }
 
 #[derive(Debug, clap::Parser)]
-struct Degree {
+struct Convert {
     #[arg(long)]
-    key: Pitch,
+    as_pitch: Option<Pitch>,
+    #[arg(long)]
+    as_degree: Option<Pitch>,
 }
 
 #[derive(Debug, clap::Parser)]
 struct Midi {
-    #[arg(long)]
-    key: Option<Pitch>,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
 }
@@ -58,16 +58,23 @@ fn main() -> Result<()> {
     });
 
     match args.command {
-        Commands::Degree(args) => {
+        Commands::Convert(args) => {
             let mut out = out
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
-            ast.as_degree(args.key);
-            score_dump(&mut out, &ast)?;
+
+            if let Some(p) = args.as_pitch {
+                ast.as_pitch(p);
+            }
+            if let Some(p) = args.as_degree {
+                ast.as_degree(p);
+            }
+
+            writeln!(out, "{}", ast)?;
         }
         Commands::Midi(args) => {
             if let Some(f) = out.as_mut() {
-                midi_dump(f, ast, args.key, args.bpm)?;
+                dump(f, ast, args.bpm)?;
             }
         }
     }

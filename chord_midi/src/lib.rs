@@ -1,7 +1,7 @@
-pub mod de;
-pub mod model;
-pub mod ser;
-
-pub use de::ast::parse;
-pub use ser::midi::dump as midi_dump;
-pub use ser::score::dump as score_dump;
+pub mod chord;
+pub mod format;
+pub mod midi;
+pub mod parser;
+pub mod parser_util;
+pub mod scale;
+pub mod syntax;
