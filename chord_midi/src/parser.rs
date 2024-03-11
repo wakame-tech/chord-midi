@@ -3,8 +3,8 @@ use crate::scale::Scale;
 use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
 use anyhow::Result;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{line_ending, space0};
+use nom::bytes::complete::tag;
+use nom::character::complete::{line_ending, not_line_ending};
 use nom::combinator::{eof, map, opt, value};
 use nom::multi::{many0, many1, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
@@ -92,27 +92,32 @@ fn ast_parser(s: Span) -> IResult<Span, Ast> {
 #[tracable_parser]
 fn comment_parser(s: Span) -> IResult<Span, Ast> {
     map(
-        delimited(tag("#"), take_until("\n"), tag("\n")),
-        |comment: Span| Ast::Comment(comment.fragment().to_string()),
+        tuple((tag("#"), not_line_ending, line_ending)),
+        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.to_string()),
     )(s)
 }
 
-fn measure_end_parser(s: Span) -> IResult<Span, bool> {
-    alt((
-        value(false, tag("|")),
-        value(true, eof),
-        value(true, many1(line_ending)),
-    ))(s)
+fn measure_sep(s: Span) -> IResult<Span, bool> {
+    alt((value(false, tag("|")), value(true, line_ending)))(s)
+}
+
+fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
+    value((), many0(alt((tag(" "), line_ending))))(s)
 }
 
 #[tracable_parser]
 fn measure_parser(s: Span) -> IResult<Span, Ast> {
     map(
         tuple((
-            many1(delimited(space0, node_parser, space0)),
-            measure_end_parser,
+            many1(delimited(
+                space_or_line_ending_many0,
+                node_parser,
+                space_or_line_ending_many0,
+            )),
+            measure_sep,
+            space_or_line_ending_many0,
         )),
-        |(nodes, br)| Ast::Measure(nodes, br),
+        |(nodes, br, _)| Ast::Measure(nodes, br),
     )(s)
 }
 
@@ -217,6 +222,10 @@ fn modifier_node_parser(s: Span) -> IResult<Span, Modifier> {
         map(tuple((tag("m"), opt(degree_number_parser))), |(_, d)| {
             Modifier::Minor(d.unwrap_or(5))
         }),
+        map(
+            tuple((accidental_parser, degree_number_parser)),
+            |(a, d)| Modifier::Tension(Degree(d, a)),
+        ),
         map(degree_number_parser, Modifier::Major),
     ))(s)
 }
