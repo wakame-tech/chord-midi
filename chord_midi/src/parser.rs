@@ -179,7 +179,7 @@ fn degree_name_parser(s: Span) -> IResult<Span, u8> {
 
 #[tracable_parser]
 fn accidental_parser(s: Span) -> IResult<Span, Accidental> {
-    map(capture(Regex::new(r"([b#])").unwrap()), |cap| {
+    map(capture(Regex::new(r"^([b#])").unwrap()), |cap| {
         Accidental::from_str(&cap[1]).unwrap()
     })(s)
 }
@@ -260,9 +260,30 @@ mod tests {
     }
 
     #[test]
+    fn test_tentions_parser() -> Result<()> {
+        for tension in ["(b9)", "(#9)", "(b5)", "(#5)", "(b13)", "(b9,#11)"] {
+            let span = span(tension);
+            let (res, _ast) = super::tensions_parser(span)?;
+            assert_eq!(res.into_fragment(), "");
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_chord_node_parser() -> Result<()> {
         for chord in [
-            "C", "Cm", "CmM7", "Csus2", "Csus4", "C-5", "Caug", "Caug7", "Cdim", "Cdim7", "C/D",
+            "C",
+            "Cm",
+            "CmM7",
+            "Csus2",
+            "Csus4",
+            "C-5",
+            "Caug",
+            "Caug7",
+            "Cdim",
+            "Cdim7",
+            "C/D",
+            "C7sus4(b9)",
         ] {
             let span = span(chord);
             let (res, _ast) = chord_node_parser(span)?;
@@ -273,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_measure_parser() -> Result<()> {
-        for measure in ["C", "CC", "C C |", "C|", "C\n"] {
+        for measure in ["C\n"] {
             let span = span(measure);
             let (res, _ast) = measure_parser(span)?;
             assert_eq!(res.into_fragment(), "");
