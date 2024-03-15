@@ -73,7 +73,8 @@ impl FromStr for Pitch {
 }
 
 pub fn parse(code: &str) -> Result<Ast> {
-    let span = LocatedSpan::new_extra(code, TracableInfo::new());
+    let code = code.replace("♭", "b");
+    let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
     let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
     if !rest.is_empty() {
         return Err(anyhow::anyhow!("parse error: {:?}", rest));
