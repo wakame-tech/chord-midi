@@ -183,4 +183,15 @@ mod tests {
         assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7, 11]));
         Ok(())
     }
+
+    #[test]
+    fn test_modifier_multi() -> Result<()> {
+        let mods = BTreeSet::from_iter(vec![Modifier::Major(5), Modifier::Aug]);
+        let mut chord = Chord::new(4, Key::Absolute(Pitch::F));
+        for m in mods {
+            chord.modify(&m)?;
+        }
+        assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 8]));
+        Ok(())
+    }
 }

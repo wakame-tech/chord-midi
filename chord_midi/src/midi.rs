@@ -1,5 +1,5 @@
 use crate::chord::Chord;
-use crate::syntax::{Ast, Key, Node};
+use crate::syntax::{Ast, ChordNode, Key, Node};
 use anyhow::anyhow;
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
@@ -25,7 +25,7 @@ fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
         .semitones
         .iter()
         .map(|s| NoteNumber::new(12 + 12 * chord.octave + (p as u8) + *s))
-        .chain(on.map(|p| NoteNumber::new(12 + 12 * chord.octave + (p as u8))))
+        .chain(on.map(|p| NoteNumber::new(12 + 12 * (chord.octave - 1) + (p as u8))))
         .collect())
 }
 
@@ -87,6 +87,18 @@ impl Score {
         );
     }
 
+    fn to_chord(&self, node: ChordNode) -> Result<Chord> {
+        let mut chord = Chord::new(4, node.key.clone());
+        chord.on = node.on.clone();
+        for modifier in &node.modifiers {
+            chord.modify(modifier)?;
+        }
+        // if let Some(pre) = &self.pre {
+        //     chord.octave = nearest_octave(&chord, pre);
+        // }
+        Ok(chord)
+    }
+
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
         self.inspect();
         if !matches!(node, Node::Sustain) && self.sustain != 0 {
@@ -104,16 +116,8 @@ impl Score {
         }
         match node {
             Node::Chord(node) => {
-                let mut chord = Chord::new(4, node.key.clone());
-                chord.on = node.on.clone();
-                for modifier in &node.modifiers {
-                    chord.modify(modifier)?;
-                }
-                // if let Some(pre) = &self.pre {
-                //     chord.octave = nearest_octave(&chord, pre);
-                // }
                 log::debug!("chord: {}: {:?}", node, node.modifiers);
-
+                let chord = self.to_chord(node)?;
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }

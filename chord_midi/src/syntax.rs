@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 #[derive(Debug)]
 pub enum Ast {
@@ -82,11 +82,11 @@ impl Key {
 #[derive(Debug, Clone)]
 pub struct ChordNode {
     pub key: Key,
-    pub modifiers: HashSet<Modifier>,
+    pub modifiers: BTreeSet<Modifier>,
     pub on: Option<Key>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Modifier {
     Major(u8),
     Minor(u8),

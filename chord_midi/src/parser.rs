@@ -14,7 +14,7 @@ use nom_tracable::tracable_parser;
 use nom_tracable::TracableInfo;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::str::FromStr;
 
 static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
@@ -152,7 +152,7 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
         )),
         |(key, modifiers, tensions, on)| ChordNode {
             key,
-            modifiers: HashSet::from_iter(
+            modifiers: BTreeSet::from_iter(
                 vec![Modifier::Major(5)]
                     .into_iter()
                     .chain(modifiers.into_iter())
