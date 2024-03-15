@@ -20,12 +20,22 @@ fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
             None
         }
     });
-    // C4 is 60
-    Ok(chord
+    let mut semitones = chord
         .semitones
         .iter()
-        .map(|s| NoteNumber::new(12 + 12 * chord.octave + (p as u8) + *s))
-        .chain(on.map(|p| NoteNumber::new(12 + 12 * (chord.octave - 1) + (p as u8))))
+        // C4 is 60
+        .map(|s| 12 * chord.octave + (p as u8) + *s)
+        .collect::<Vec<_>>();
+    for _ in 0..chord.inversion {
+        let n = semitones.remove(0);
+        semitones.push(n + 12);
+    }
+    if let Some(on) = on {
+        semitones.push(12 * (chord.octave - 1) + (on as u8));
+    }
+    Ok(semitones
+        .into_iter()
+        .map(|s| NoteNumber::new(12 + s))
         .collect())
 }
 
@@ -51,16 +61,24 @@ struct Score {
 
 const MEASURE_LENGTH: u32 = 16;
 
-fn nearest_octave(a: &Chord, b: &Chord) -> u8 {
-    [-1, 0, 1]
-        .into_iter()
-        .map(|o| Chord {
-            octave: (b.octave as i8 + o) as u8,
-            ..a.clone()
-        })
-        .min_by_key(|c| c.distance(b).unwrap())
-        .unwrap()
-        .octave
+/// returns best octave and inversion to base pitch
+fn match_pitches(base: u8, chord: &Chord) -> Result<(u8, u8)> {
+    let (mut diff, mut best_octave, mut best_inversion) = (u8::MAX, 0, 0);
+    let mut chord = chord.clone();
+    for octave in 0..8 {
+        for inversion in 0..chord.semitones.len() as u8 {
+            chord.octave = octave;
+            chord.inversion = inversion;
+            let chord_root = chord.root_pitch().unwrap();
+            let d = base.abs_diff(chord_root);
+            if d < diff {
+                diff = d;
+                best_octave = octave;
+                best_inversion = inversion;
+            }
+        }
+    }
+    Ok((best_octave, best_inversion))
 }
 
 impl Score {
@@ -88,14 +106,14 @@ impl Score {
     }
 
     fn to_chord(&self, node: ChordNode) -> Result<Chord> {
-        let mut chord = Chord::new(4, node.key.clone());
+        let mut chord = Chord::new(5, 0, node.key.clone());
         chord.on = node.on.clone();
         for modifier in &node.modifiers {
             chord.modify(modifier)?;
         }
-        // if let Some(pre) = &self.pre {
-        //     chord.octave = nearest_octave(&chord, pre);
-        // }
+        let (octave, inversion) = match_pitches(12 * chord.octave, &chord)?;
+        chord.octave = octave;
+        chord.inversion = inversion;
         Ok(chord)
     }
 

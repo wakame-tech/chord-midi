@@ -8,6 +8,7 @@ use std::{collections::BTreeSet, fmt::Debug};
 #[derive(Clone, PartialEq)]
 pub struct Chord {
     pub octave: u8,
+    pub inversion: u8,
     pub key: Key,
     pub semitones: BTreeSet<u8>,
     pub on: Option<Key>,
@@ -28,9 +29,10 @@ impl Debug for Chord {
 }
 
 impl Chord {
-    pub fn new(octave: u8, key: Key) -> Self {
+    pub fn new(octave: u8, inversion: u8, key: Key) -> Self {
         Self {
             octave,
+            inversion,
             key,
             semitones: BTreeSet::new(),
             on: None,
@@ -140,6 +142,14 @@ impl Chord {
         }
     }
 
+    pub fn root_pitch(&self) -> Result<u8> {
+        let s = *self.semitones.iter().nth(self.inversion as usize).unwrap();
+        match &self.key {
+            Key::Absolute(p) => Ok(12 + 12 * self.octave + p.clone() as u8 + s - 1),
+            Key::Relative(d) => Err(anyhow::anyhow!("relative key: {}", d)),
+        }
+    }
+
     /// returns edit distance of each semitone
     pub fn distance(&self, other: &Self) -> Result<usize> {
         let key_dist = match (&self.key, &other.key) {
@@ -174,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_chord_modify() -> Result<()> {
-        let mut chord = Chord::new(4, Key::Absolute(Pitch::C));
+        let mut chord = Chord::new(4, 0, Key::Absolute(Pitch::C));
         chord.modify(&Modifier::Major(5))?;
         assert_eq!(chord.semitones, BTreeSet::from_iter(vec![0, 4, 7]));
         chord.modify(&Modifier::Minor(5))?;
@@ -187,7 +197,7 @@ mod tests {
     #[test]
     fn test_modifier_multi() -> Result<()> {
         let mods = BTreeSet::from_iter(vec![Modifier::Major(5), Modifier::Aug]);
-        let mut chord = Chord::new(4, Key::Absolute(Pitch::F));
+        let mut chord = Chord::new(4, 0, Key::Absolute(Pitch::F));
         for m in mods {
             chord.modify(&m)?;
         }
