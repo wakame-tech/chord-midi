@@ -59,14 +59,15 @@ impl FromStr for Pitch {
             "C#" | "Db" => Ok(Cs),
             "D" => Ok(D),
             "D#" | "Eb" => Ok(Ds),
-            "E" => Ok(E),
-            "F" => Ok(F),
+            "E" | "Fb" => Ok(E),
+            "F" | "E#" => Ok(F),
             "F#" | "Gb" => Ok(Fs),
             "G" => Ok(G),
             "G#" | "Ab" => Ok(Gs),
             "A" => Ok(A),
             "A#" | "Bb" => Ok(As),
             "B" => Ok(B),
+            "B#" | "Cb" => Ok(Cs),
             _ => Err(anyhow::anyhow!("invalid pitch: {}", s)),
         }
     }
@@ -236,13 +237,16 @@ fn tensions_parser(s: Span) -> IResult<Span, Vec<Modifier>> {
     map(
         delimited(
             tag("("),
-            separated_list1(tag(","), tuple((accidental_parser, degree_number_parser))),
+            separated_list1(
+                tag(","),
+                tuple((opt(accidental_parser), degree_number_parser)),
+            ),
             tag(")"),
         ),
         |tensions| {
             tensions
                 .into_iter()
-                .map(|(a, d)| Modifier::Tension(Degree(d, a)))
+                .map(|(a, d)| Modifier::Tension(Degree(d, a.unwrap_or(Accidental::Natural))))
                 .collect()
         },
     )(s)
@@ -284,6 +288,8 @@ mod tests {
             "Cdim7",
             "C/D",
             "C7sus4(b9)",
+            "C7(13)",
+            "AbmM7/Eb",
         ] {
             let span = span(chord);
             let (res, _ast) = chord_node_parser(span)?;
