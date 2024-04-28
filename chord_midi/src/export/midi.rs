@@ -1,5 +1,7 @@
-use crate::import::ast::Ast;
-use crate::import::ast::Node;
+use super::Exporter;
+use super::MidiExporter;
+use crate::model::ast::Ast;
+use crate::model::ast::Node;
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -180,10 +182,12 @@ fn write_notes(track: &mut Track, ch: Channel, notes: &[NoteNumber], dur: u32, s
     }
 }
 
-pub fn dump(f: &mut impl Write, ast: Ast, bpm: u8) -> Result<()> {
-    let mut score = Score::new();
-    score.interpret(ast)?;
-    dump_notes(f, &score.notes, bpm)
+impl Exporter for MidiExporter {
+    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+        let mut score = Score::new();
+        score.interpret(ast)?;
+        dump_notes(f, &score.notes, self.bpm)
+    }
 }
 
 fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {

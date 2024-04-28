@@ -1,7 +1,8 @@
 use anyhow::Result;
+use chord_midi::export::Exporter;
 use chord_midi::import::Importer;
 use chord_midi::model::pitch::Pitch;
-use chord_midi::{import::RechordImporter, midi::dump};
+use chord_midi::{export::MidiExporter, import::RechordImporter};
 use clap::Parser as _;
 use std::{
     fs::{File, OpenOptions},
@@ -77,7 +78,8 @@ fn main() -> Result<()> {
         }
         Commands::Midi(args) => {
             if let Some(f) = out.as_mut() {
-                dump(f, ast, args.bpm)?;
+                let exporter = MidiExporter { bpm: args.bpm };
+                exporter.export(f, ast)?;
             }
         }
     }

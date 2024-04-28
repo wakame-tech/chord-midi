@@ -1,5 +1,5 @@
 use crate::{
-    import::ast::{Ast, ChordNode, Node},
+    model::ast::{Ast, ChordNode, Node},
     model::pitch::Pitch,
 };
 
@@ -59,9 +59,9 @@ impl Ast {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        import::ast::{Ast, ChordNode, Node},
-        model::pitch::Pitch,
+    use crate::model::{
+        ast::{Ast, ChordNode, Node},
+        pitch::Pitch,
     };
 
     #[test]

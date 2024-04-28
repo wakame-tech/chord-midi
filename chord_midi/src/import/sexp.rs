@@ -1,9 +1,9 @@
 use super::{
-    ast::{Ast, ChordNode, Node},
     chord::{parser_roman_num, DEGREE_REGEX, PITCH_REGEX},
     SexpImporter,
 };
 use crate::model::{
+    ast::{Ast, ChordNode, Node},
     key::Key,
     pitch::{Accidental, Pitch},
     scale::Scale,
@@ -98,10 +98,8 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        import::{
-            ast::{Ast, ChordNode, Node},
-            Importer, SexpImporter,
-        },
+        import::{Importer, SexpImporter},
+        model::ast::{Ast, ChordNode, Node},
         model::pitch::Pitch,
     };
     use anyhow::Result;

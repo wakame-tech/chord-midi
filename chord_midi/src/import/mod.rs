@@ -1,6 +1,5 @@
-use self::ast::Ast;
+use crate::model::ast::Ast;
 
-pub mod ast;
 mod chord;
 mod parser_util;
 mod rechord;

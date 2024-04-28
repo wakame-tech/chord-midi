@@ -1,7 +1,7 @@
-use super::ast::Ast;
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
+use crate::model::ast::Ast;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;

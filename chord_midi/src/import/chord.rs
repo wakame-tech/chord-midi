@@ -1,5 +1,5 @@
-use super::ast::{ChordNode, Node};
 use super::parser_util::{capture, Span};
+use crate::model::ast::{ChordNode, Node};
 use crate::model::key::Key;
 use crate::model::modifier::Modifier;
 use crate::model::pitch::{Accidental, Pitch};
