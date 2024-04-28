@@ -1,6 +1,4 @@
-pub mod chord;
-pub mod format;
 pub mod midi;
+pub mod model;
 pub mod parser;
-pub mod scale;
-pub mod syntax;
+pub mod transform;

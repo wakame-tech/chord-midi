@@ -1,6 +1,9 @@
+use super::ast::{ChordNode, Node};
 use super::parser_util::{capture, Span};
-use crate::scale::Scale;
-use crate::syntax::{Accidental, ChordNode, Degree, Key, Modifier, Node, Pitch};
+use crate::model::key::Key;
+use crate::model::modifier::Modifier;
+use crate::model::pitch::{Accidental, Pitch};
+use crate::model::scale::{Degree, Scale};
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -24,18 +27,6 @@ pub static DEGREE_NAME_REGEX: Lazy<Regex> =
 pub static DEGREE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)[#b]?").unwrap());
 
-impl FromStr for Accidental {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "b" => Ok(Accidental::Flat),
-            "#" => Ok(Accidental::Sharp),
-            _ => Err(anyhow::anyhow!("invalid accidental: {}", s)),
-        }
-    }
-}
-
 pub fn parser_roman_num(s: &str) -> Result<u8> {
     match s {
         "I" => Ok(1),
@@ -46,30 +37,6 @@ pub fn parser_roman_num(s: &str) -> Result<u8> {
         "VI" => Ok(6),
         "VII" => Ok(7),
         _ => Err(anyhow::anyhow!("invalid degree: {}", s)),
-    }
-}
-
-impl FromStr for Pitch {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use Pitch::*;
-        match s {
-            "C" => Ok(C),
-            "C#" | "Db" => Ok(Cs),
-            "D" => Ok(D),
-            "D#" | "Eb" => Ok(Ds),
-            "E" | "Fb" => Ok(E),
-            "F" | "E#" => Ok(F),
-            "F#" | "Gb" => Ok(Fs),
-            "G" => Ok(G),
-            "G#" | "Ab" => Ok(Gs),
-            "A" => Ok(A),
-            "A#" | "Bb" => Ok(As),
-            "B" => Ok(B),
-            "B#" | "Cb" => Ok(Cs),
-            _ => Err(anyhow::anyhow!("invalid pitch: {}", s)),
-        }
     }
 }
 
@@ -97,7 +64,7 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
     map(
         tuple((
             key_parser,
-            many0(modifier_node_parser),
+            many0(modifier_parser),
             opt(tensions_parser),
             opt(preceded(tag("/"), key_parser)),
         )),
@@ -150,7 +117,7 @@ fn pitch_parser(s: Span) -> IResult<Span, Pitch> {
 }
 
 #[tracable_parser]
-fn modifier_node_parser(s: Span) -> IResult<Span, Modifier> {
+fn modifier_parser(s: Span) -> IResult<Span, Modifier> {
     alt((
         map(alt((tag("-5"), tag("b5"))), |_| Modifier::Flat5th),
         map(tag("sus2"), |_| Modifier::Sus2),

@@ -1,6 +1,7 @@
 use anyhow::Result;
+use chord_midi::model::pitch::Pitch;
 use chord_midi::parser::Parser;
-use chord_midi::{midi::dump, parser::RechordParser, syntax::Pitch};
+use chord_midi::{midi::dump, parser::RechordParser};
 use clap::Parser as _;
 use std::{
     fs::{File, OpenOptions},

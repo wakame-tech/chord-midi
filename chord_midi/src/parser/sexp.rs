@@ -1,10 +1,12 @@
 use super::{
+    ast::{Ast, ChordNode, Node},
     chord::{parser_roman_num, DEGREE_REGEX, PITCH_REGEX},
     SexpParser,
 };
-use crate::{
+use crate::model::{
+    key::Key,
+    pitch::{Accidental, Pitch},
     scale::Scale,
-    syntax::{Accidental, Ast, ChordNode, Key, Node, Pitch},
 };
 use anyhow::Result;
 use std::{collections::BTreeSet, str::FromStr};
@@ -95,8 +97,13 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{Parser, SexpParser};
-    use crate::syntax::{Ast, ChordNode, Node, Pitch};
+    use crate::{
+        model::pitch::Pitch,
+        parser::{
+            ast::{Ast, ChordNode, Node},
+            Parser, SexpParser,
+        },
+    };
     use anyhow::Result;
 
     #[test]

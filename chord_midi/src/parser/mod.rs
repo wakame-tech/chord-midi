@@ -1,9 +1,10 @@
+use self::ast::Ast;
+
+pub mod ast;
 mod chord;
 mod parser_util;
 mod rechord;
 mod sexp;
-
-use crate::syntax::Ast;
 
 pub trait Parser {
     fn parse(&self, code: &str) -> anyhow::Result<Ast>;
