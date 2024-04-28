@@ -1,17 +1,14 @@
-use crate::parser_util::{capture, Span};
+use super::parser_util::{capture, Span};
 use crate::scale::Scale;
-use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
+use crate::syntax::{Accidental, ChordNode, Degree, Key, Modifier, Node, Pitch};
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{line_ending, not_line_ending, space0};
-use nom::combinator::{eof, map, opt, value};
-use nom::multi::{many0, many1, separated_list1};
+use nom::combinator::{map, opt};
+use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
 use nom::IResult;
-use nom_locate::LocatedSpan;
 use nom_tracable::tracable_parser;
-use nom_tracable::TracableInfo;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::BTreeSet;
@@ -73,54 +70,8 @@ impl FromStr for Pitch {
     }
 }
 
-pub fn parse(code: &str) -> Result<Ast> {
-    let code = code.replace("♭", "b");
-    let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
-    let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
-    if !rest.is_empty() {
-        return Err(anyhow::anyhow!("parse error: {:?}", rest));
-    }
-    Ok(ast)
-}
-
 #[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((many1(alt((comment_parser, measure_parser))), eof)),
-        |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
-    )(s)
-}
-
-#[tracable_parser]
-fn comment_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((tag("#"), not_line_ending, line_ending)),
-        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.to_string()),
-    )(s)
-}
-
-fn measure_sep(s: Span) -> IResult<Span, bool> {
-    alt((value(false, tag("|")), value(true, line_ending)))(s)
-}
-
-fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
-    value((), many0(alt((tag(" "), line_ending))))(s)
-}
-
-#[tracable_parser]
-fn measure_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((
-            many1(delimited(space0, node_parser, space0)),
-            measure_sep,
-            space_or_line_ending_many0,
-        )),
-        |(nodes, br, _)| Ast::Measure(nodes, br),
-    )(s)
-}
-
-#[tracable_parser]
-fn node_parser(s: Span) -> IResult<Span, Node> {
+pub fn node_parser(s: Span) -> IResult<Span, Node> {
     alt((
         map(tag("="), |_| Node::Sustain),
         map(tag("_"), |_| Node::Rest),
@@ -250,7 +201,7 @@ fn tensions_parser(s: Span) -> IResult<Span, Vec<Modifier>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{ast_parser, chord_node_parser, measure_parser};
+    use super::chord_node_parser;
     use anyhow::Result;
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
@@ -289,26 +240,6 @@ mod tests {
         ] {
             let span = span(chord);
             let (res, _ast) = chord_node_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_measure_parser() -> Result<()> {
-        for measure in ["C\n"] {
-            let span = span(measure);
-            let (res, _ast) = measure_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_ast_parser() -> Result<()> {
-        for score in ["# comment\nCCC", "CCC|", "CCC\n"] {
-            let span = span(score);
-            let (res, _ast) = ast_parser(span)?;
             assert_eq!(res.into_fragment(), "");
         }
         Ok(())
