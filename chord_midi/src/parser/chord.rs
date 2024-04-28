@@ -21,6 +21,9 @@ static DEGREE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|
 pub static DEGREE_NAME_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)").unwrap());
 
+pub static DEGREE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)[#b]?").unwrap());
+
 impl FromStr for Accidental {
     type Err = anyhow::Error;
 
@@ -33,7 +36,7 @@ impl FromStr for Accidental {
     }
 }
 
-fn parser_roman_num(s: &str) -> Result<u8> {
+pub fn parser_roman_num(s: &str) -> Result<u8> {
     match s {
         "I" => Ok(1),
         "II" => Ok(2),

@@ -1,7 +1,10 @@
-use super::{chord::PITCH_REGEX, SexpParser};
+use super::{
+    chord::{parser_roman_num, DEGREE_REGEX, PITCH_REGEX},
+    SexpParser,
+};
 use crate::{
-    parser::chord::DEGREE_NAME_REGEX,
-    syntax::{Ast, ChordNode, Key, Node, Pitch},
+    scale::Scale,
+    syntax::{Accidental, Ast, ChordNode, Key, Node, Pitch},
 };
 use anyhow::Result;
 use std::{collections::BTreeSet, str::FromStr};
@@ -14,10 +17,24 @@ impl super::Parser for SexpParser {
     }
 }
 
+fn degree_from_str(s: &str) -> Result<u8> {
+    match s {
+        s if s.ends_with("b") | s.ends_with("#") => {
+            let d = parser_roman_num(&s[..s.len() - 1])?;
+            let a = Accidental::from_str(&s[s.len() - 1..])?;
+            Ok((Scale::Major.semitone(d) as i8 + a as i8) as u8)
+        }
+        s => {
+            let d = parser_roman_num(s)?;
+            Ok(Scale::Major.semitone(d) as u8)
+        }
+    }
+}
+
 fn parse_key(key: &str) -> Result<Key> {
     match key {
         pitch if PITCH_REGEX.is_match(&pitch) => Ok(Key::Absolute(Pitch::from_str(pitch)?)),
-        degree if DEGREE_NAME_REGEX.is_match(&degree) => Ok(Key::Relative(degree.parse()?)),
+        degree if DEGREE_REGEX.is_match(&degree) => Ok(Key::Relative(degree_from_str(degree)?)),
         _ => Err(anyhow::anyhow!("invalid key: {}", key)),
     }
 }
@@ -56,6 +73,15 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
                 .collect::<Result<Vec<_>>>()?;
             Ok(Ast::Score(measures))
         }
+        // keyed(pitch: Pitch, measure: Measure) -> Measure
+        Sexp::List(list) if starts_with(sexp, "keyed") => {
+            let key = parse_key(list[1].string()?)?;
+            let Key::Absolute(pitch) = key else {
+                return Err(anyhow::anyhow!("pitch must be absolute: {:?}", key));
+            };
+            let measure = parse_ast(&list[2])?.into_pitch(pitch);
+            Ok(measure)
+        }
         // (...: Node): Measure
         Sexp::List(list) => Ok(Ast::Measure(
             list.into_iter()
@@ -70,32 +96,36 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 #[cfg(test)]
 mod tests {
     use crate::parser::{Parser, SexpParser};
-    use crate::syntax::{Ast, ChordNode, Key, Node, Pitch};
+    use crate::syntax::{Ast, ChordNode, Node, Pitch};
     use anyhow::Result;
-    use std::collections::BTreeSet;
-    use std::str::FromStr;
 
     #[test]
     fn test_parse_score() -> Result<()> {
-        let score = "(score (C D) (E F))";
-
-        fn pitch(key: &str) -> Node {
-            Node::Chord(ChordNode {
-                key: Key::Absolute(Pitch::from_str(key).unwrap()),
-                modifiers: BTreeSet::new(),
-                on: None,
-            })
-        }
-
-        let ast = SexpParser.parse(score)?;
-        println!("{}", ast);
+        let c = Node::Chord(ChordNode::absolute(Pitch::C));
+        let d = Node::Chord(ChordNode::absolute(Pitch::D));
+        let e = Node::Chord(ChordNode::absolute(Pitch::E));
+        let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
-            ast,
+            SexpParser.parse("(score (C D) (E F))")?,
             Ast::Score(vec![
-                Box::new(Ast::Measure(vec![pitch("C"), pitch("D")], false)),
-                Box::new(Ast::Measure(vec![pitch("E"), pitch("F")], false))
+                Box::new(Ast::Measure(vec![c, d], false)),
+                Box::new(Ast::Measure(vec![e, f], false))
             ])
         );
+
+        let is = Node::Chord(ChordNode::relative(1));
+        let iv = Node::Chord(ChordNode::relative(5));
+        assert_eq!(
+            SexpParser.parse("(score (I# IV))")?,
+            Ast::Score(vec![Box::new(Ast::Measure(vec![is, iv], false))])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_modifier() -> Result<()> {
+        let score = SexpParser.parse("(score (keyed C (I IV)) (keyed D (I IV)))")?;
+        assert_eq!(score, SexpParser.parse("(score (C F) (D G))")?);
         Ok(())
     }
 }

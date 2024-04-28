@@ -1,6 +1,7 @@
 use anyhow::Result;
-use chord_midi::{midi::dump, parser::parse, syntax::Pitch};
-use clap::Parser;
+use chord_midi::parser::Parser;
+use chord_midi::{midi::dump, parser::RechordParser, syntax::Pitch};
+use clap::Parser as _;
 use std::{
     fs::{File, OpenOptions},
     io::{self, Read, Write},
@@ -46,7 +47,7 @@ fn main() -> Result<()> {
     f.read_to_string(&mut code)?;
     // CR+LF to LF
     code = code.replace("\r\n", "\n");
-    let mut ast = parse(code.as_str())?;
+    let ast = RechordParser.parse(code.as_str())?;
 
     let mut out = args.output.map(|p| {
         OpenOptions::new()
@@ -63,12 +64,13 @@ fn main() -> Result<()> {
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
 
-            if let Some(p) = args.as_pitch {
-                ast.as_pitch(p);
-            }
-            if let Some(p) = args.as_degree {
-                ast.as_degree(p);
-            }
+            let ast = if let Some(p) = args.as_pitch {
+                ast.into_pitch(p)
+            } else if let Some(p) = args.as_degree {
+                ast.into_degree(p)
+            } else {
+                ast
+            };
 
             writeln!(out, "{}", ast)?;
         }
