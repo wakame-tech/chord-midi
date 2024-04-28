@@ -1,7 +1,7 @@
 use super::{
     ast::{Ast, ChordNode, Node},
     chord::{parser_roman_num, DEGREE_REGEX, PITCH_REGEX},
-    SexpParser,
+    SexpImporter,
 };
 use crate::model::{
     key::Key,
@@ -12,8 +12,8 @@ use anyhow::Result;
 use std::{collections::BTreeSet, str::FromStr};
 use symbolic_expressions::{parser::parse_str, Sexp};
 
-impl super::Parser for SexpParser {
-    fn parse(&self, code: &str) -> Result<Ast> {
+impl super::Importer for SexpImporter {
+    fn import(&self, code: &str) -> Result<Ast> {
         let score = parse_str(code)?;
         parse_ast(&score)
     }
@@ -98,11 +98,11 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        model::pitch::Pitch,
-        parser::{
+        import::{
             ast::{Ast, ChordNode, Node},
-            Parser, SexpParser,
+            Importer, SexpImporter,
         },
+        model::pitch::Pitch,
     };
     use anyhow::Result;
 
@@ -113,7 +113,7 @@ mod tests {
         let e = Node::Chord(ChordNode::absolute(Pitch::E));
         let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
-            SexpParser.parse("(score (C D) (E F))")?,
+            SexpImporter.import("(score (C D) (E F))")?,
             Ast::Score(vec![
                 Box::new(Ast::Measure(vec![c, d], false)),
                 Box::new(Ast::Measure(vec![e, f], false))
@@ -123,7 +123,7 @@ mod tests {
         let is = Node::Chord(ChordNode::relative(1));
         let iv = Node::Chord(ChordNode::relative(5));
         assert_eq!(
-            SexpParser.parse("(score (I# IV))")?,
+            SexpImporter.import("(score (I# IV))")?,
             Ast::Score(vec![Box::new(Ast::Measure(vec![is, iv], false))])
         );
         Ok(())
@@ -131,8 +131,8 @@ mod tests {
 
     #[test]
     fn test_modifier() -> Result<()> {
-        let score = SexpParser.parse("(score (keyed C (I IV)) (keyed D (I IV)))")?;
-        assert_eq!(score, SexpParser.parse("(score (C F) (D G))")?);
+        let score = SexpImporter.import("(score (keyed C (I IV)) (keyed D (I IV)))")?;
+        assert_eq!(score, SexpImporter.import("(score (C F) (D G))")?);
         Ok(())
     }
 }

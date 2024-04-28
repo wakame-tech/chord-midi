@@ -1,7 +1,7 @@
 use anyhow::Result;
+use chord_midi::import::Importer;
 use chord_midi::model::pitch::Pitch;
-use chord_midi::parser::Parser;
-use chord_midi::{midi::dump, parser::RechordParser};
+use chord_midi::{import::RechordImporter, midi::dump};
 use clap::Parser as _;
 use std::{
     fs::{File, OpenOptions},
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
     f.read_to_string(&mut code)?;
     // CR+LF to LF
     code = code.replace("\r\n", "\n");
-    let ast = RechordParser.parse(code.as_str())?;
+    let ast = RechordImporter.import(code.as_str())?;
 
     let mut out = args.output.map(|p| {
         OpenOptions::new()

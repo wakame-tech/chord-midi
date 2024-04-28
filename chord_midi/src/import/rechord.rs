@@ -1,7 +1,7 @@
 use super::ast::Ast;
 use super::parser_util::Span;
-use crate::parser::chord::node_parser;
-use crate::parser::RechordParser;
+use crate::import::chord::node_parser;
+use crate::import::RechordImporter;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -14,8 +14,8 @@ use nom_locate::LocatedSpan;
 use nom_tracable::tracable_parser;
 use nom_tracable::TracableInfo;
 
-impl super::Parser for RechordParser {
-    fn parse(&self, code: &str) -> Result<Ast> {
+impl super::Importer for RechordImporter {
+    fn import(&self, code: &str) -> Result<Ast> {
         let code = code.replace("♭", "b");
         let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
         let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;

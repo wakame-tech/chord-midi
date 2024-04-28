@@ -1,6 +1,6 @@
 use crate::{
+    import::ast::{Ast, ChordNode, Node},
     model::pitch::Pitch,
-    parser::ast::{Ast, ChordNode, Node},
 };
 
 impl Ast {
@@ -60,8 +60,8 @@ impl Ast {
 #[cfg(test)]
 mod tests {
     use crate::{
+        import::ast::{Ast, ChordNode, Node},
         model::pitch::Pitch,
-        parser::ast::{Ast, ChordNode, Node},
     };
 
     #[test]
