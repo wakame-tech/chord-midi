@@ -4,7 +4,7 @@ use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pit
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{line_ending, not_line_ending};
+use nom::character::complete::{line_ending, not_line_ending, space0};
 use nom::combinator::{eof, map, opt, value};
 use nom::multi::{many0, many1, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
@@ -111,11 +111,7 @@ fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
 fn measure_parser(s: Span) -> IResult<Span, Ast> {
     map(
         tuple((
-            many1(delimited(
-                space_or_line_ending_many0,
-                node_parser,
-                space_or_line_ending_many0,
-            )),
+            many1(delimited(space0, node_parser, space0)),
             measure_sep,
             space_or_line_ending_many0,
         )),
