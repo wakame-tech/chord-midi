@@ -12,8 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: rustup target add wasm32-unknown-unknown
-      - run: cargo install cargo-binstall
-      - run: cargo binstall trunk
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall -y trunk
       - run: cd chord_midi_web && trunk build --release --public-url chord_midi
       - run: cp -r ./chord_midi_web/dist/ ./public/
       - uses: peaceiris/actions-gh-pages@v3
