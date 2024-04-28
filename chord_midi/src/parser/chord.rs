@@ -14,11 +14,11 @@ use regex::Regex;
 use std::collections::BTreeSet;
 use std::str::FromStr;
 
-static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
+pub static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
 static DEGREE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|11|13)").unwrap());
 
-static DEGREE_NAME_REGEX: Lazy<Regex> =
+pub static DEGREE_NAME_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)").unwrap());
 
 impl FromStr for Accidental {
@@ -206,7 +206,7 @@ mod tests {
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
 
-    fn span(s: &str) -> LocatedSpan<&str, TracableInfo> {
+    fn span<'a>(s: &'a str) -> LocatedSpan<&'a str, TracableInfo> {
         LocatedSpan::new_extra(s, TracableInfo::new())
     }
 

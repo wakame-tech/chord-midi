@@ -17,3 +17,4 @@ nom-regex = "0.2.0"
 nom_locate = "4.0.0"
 nom-tracable = { version = "0.9.0", features = ["trace"] }
 midi_file = "0.0.3"
+symbolic_expressions = "5.0.3"

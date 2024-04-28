@@ -1,9 +1,10 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Ast {
     Comment(String),
+    // nodes, br?
     Measure(Vec<Node>, bool),
     Score(Vec<Box<Ast>>),
 }
@@ -46,7 +47,7 @@ impl Ast {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Node {
     Chord(ChordNode),
     Rest,
@@ -79,7 +80,7 @@ impl Key {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChordNode {
     pub key: Key,
     pub modifiers: BTreeSet<Modifier>,
