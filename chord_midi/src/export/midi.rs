@@ -1,5 +1,9 @@
-use crate::chord::Chord;
-use crate::syntax::{Ast, ChordNode, Key, Node};
+use super::Exporter;
+use super::MidiExporter;
+use crate::model::ast::Ast;
+use crate::model::ast::Node;
+use crate::model::chord::Chord;
+use crate::model::key::Key;
 use anyhow::anyhow;
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
@@ -61,26 +65,6 @@ struct Score {
 
 const MEASURE_LENGTH: u32 = 16;
 
-/// returns best octave and inversion to base pitch
-fn match_pitches(base: u8, chord: &Chord) -> Result<(u8, u8)> {
-    let (mut diff, mut best_octave, mut best_inversion) = (u8::MAX, 0, 0);
-    let mut chord = chord.clone();
-    for octave in 0..8 {
-        for inversion in 0..chord.semitones.len() as u8 {
-            chord.octave = octave;
-            chord.inversion = inversion;
-            let chord_root = chord.root_pitch().unwrap();
-            let d = base.abs_diff(chord_root);
-            if d < diff {
-                diff = d;
-                best_octave = octave;
-                best_inversion = inversion;
-            }
-        }
-    }
-    Ok((best_octave, best_inversion))
-}
-
 impl Score {
     fn new() -> Self {
         Score {
@@ -105,18 +89,6 @@ impl Score {
         );
     }
 
-    fn to_chord(&self, node: ChordNode) -> Result<Chord> {
-        let mut chord = Chord::new(5, 0, node.key.clone());
-        chord.on = node.on.clone();
-        for modifier in &node.modifiers {
-            chord.modify(modifier)?;
-        }
-        let (octave, inversion) = match_pitches(12 * chord.octave, &chord)?;
-        chord.octave = octave;
-        chord.inversion = inversion;
-        Ok(chord)
-    }
-
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
         self.inspect();
         if !matches!(node, Node::Sustain) && self.sustain != 0 {
@@ -135,7 +107,7 @@ impl Score {
         match node {
             Node::Chord(node) => {
                 log::debug!("chord: {}: {:?}", node, node.modifiers);
-                let chord = self.to_chord(node)?;
+                let chord = node.to_chord()?;
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
@@ -210,10 +182,12 @@ fn write_notes(track: &mut Track, ch: Channel, notes: &[NoteNumber], dur: u32, s
     }
 }
 
-pub fn dump(f: &mut impl Write, ast: Ast, bpm: u8) -> Result<()> {
-    let mut score = Score::new();
-    score.interpret(ast)?;
-    dump_notes(f, &score.notes, bpm)
+impl Exporter for MidiExporter {
+    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+        let mut score = Score::new();
+        score.interpret(ast)?;
+        dump_notes(f, &score.notes, self.bpm)
+    }
 }
 
 fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {

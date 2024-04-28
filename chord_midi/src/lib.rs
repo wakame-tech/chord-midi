@@ -1,7 +1,3 @@
-pub mod chord;
-pub mod format;
-pub mod midi;
-pub mod parser;
-pub mod parser_util;
-pub mod scale;
-pub mod syntax;
+pub mod export;
+pub mod import;
+pub mod model;

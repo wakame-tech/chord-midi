@@ -1,42 +1,33 @@
-use crate::parser_util::{capture, Span};
-use crate::scale::Scale;
-use crate::syntax::{Accidental, Ast, ChordNode, Degree, Key, Modifier, Node, Pitch};
+use super::parser_util::{capture, Span};
+use crate::model::ast::{ChordNode, Node};
+use crate::model::key::Key;
+use crate::model::modifier::Modifier;
+use crate::model::pitch::{Accidental, Pitch};
+use crate::model::scale::{Degree, Scale};
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{line_ending, not_line_ending};
-use nom::combinator::{eof, map, opt, value};
-use nom::multi::{many0, many1, separated_list1};
+use nom::combinator::{map, opt};
+use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
 use nom::IResult;
-use nom_locate::LocatedSpan;
 use nom_tracable::tracable_parser;
-use nom_tracable::TracableInfo;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::BTreeSet;
 use std::str::FromStr;
 
-static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
+pub static PITCH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([CDEFGAB][#b]?)").unwrap());
 
 static DEGREE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(3|5|6|7|9|11|13)").unwrap());
 
-static DEGREE_NAME_REGEX: Lazy<Regex> =
+pub static DEGREE_NAME_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)").unwrap());
 
-impl FromStr for Accidental {
-    type Err = anyhow::Error;
+pub static DEGREE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(IV|VII|VI|V|III|II|I)[#b]?").unwrap());
 
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "b" => Ok(Accidental::Flat),
-            "#" => Ok(Accidental::Sharp),
-            _ => Err(anyhow::anyhow!("invalid accidental: {}", s)),
-        }
-    }
-}
-
-fn parser_roman_num(s: &str) -> Result<u8> {
+pub fn parser_roman_num(s: &str) -> Result<u8> {
     match s {
         "I" => Ok(1),
         "II" => Ok(2),
@@ -49,82 +40,8 @@ fn parser_roman_num(s: &str) -> Result<u8> {
     }
 }
 
-impl FromStr for Pitch {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use Pitch::*;
-        match s {
-            "C" => Ok(C),
-            "C#" | "Db" => Ok(Cs),
-            "D" => Ok(D),
-            "D#" | "Eb" => Ok(Ds),
-            "E" | "Fb" => Ok(E),
-            "F" | "E#" => Ok(F),
-            "F#" | "Gb" => Ok(Fs),
-            "G" => Ok(G),
-            "G#" | "Ab" => Ok(Gs),
-            "A" => Ok(A),
-            "A#" | "Bb" => Ok(As),
-            "B" => Ok(B),
-            "B#" | "Cb" => Ok(Cs),
-            _ => Err(anyhow::anyhow!("invalid pitch: {}", s)),
-        }
-    }
-}
-
-pub fn parse(code: &str) -> Result<Ast> {
-    let code = code.replace("♭", "b");
-    let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
-    let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
-    if !rest.is_empty() {
-        return Err(anyhow::anyhow!("parse error: {:?}", rest));
-    }
-    Ok(ast)
-}
-
 #[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((many1(alt((comment_parser, measure_parser))), eof)),
-        |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
-    )(s)
-}
-
-#[tracable_parser]
-fn comment_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((tag("#"), not_line_ending, line_ending)),
-        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.to_string()),
-    )(s)
-}
-
-fn measure_sep(s: Span) -> IResult<Span, bool> {
-    alt((value(false, tag("|")), value(true, line_ending)))(s)
-}
-
-fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
-    value((), many0(alt((tag(" "), line_ending))))(s)
-}
-
-#[tracable_parser]
-fn measure_parser(s: Span) -> IResult<Span, Ast> {
-    map(
-        tuple((
-            many1(delimited(
-                space_or_line_ending_many0,
-                node_parser,
-                space_or_line_ending_many0,
-            )),
-            measure_sep,
-            space_or_line_ending_many0,
-        )),
-        |(nodes, br, _)| Ast::Measure(nodes, br),
-    )(s)
-}
-
-#[tracable_parser]
-fn node_parser(s: Span) -> IResult<Span, Node> {
+pub fn node_parser(s: Span) -> IResult<Span, Node> {
     alt((
         map(tag("="), |_| Node::Sustain),
         map(tag("_"), |_| Node::Rest),
@@ -147,7 +64,7 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
     map(
         tuple((
             key_parser,
-            many0(modifier_node_parser),
+            many0(modifier_parser),
             opt(tensions_parser),
             opt(preceded(tag("/"), key_parser)),
         )),
@@ -200,7 +117,7 @@ fn pitch_parser(s: Span) -> IResult<Span, Pitch> {
 }
 
 #[tracable_parser]
-fn modifier_node_parser(s: Span) -> IResult<Span, Modifier> {
+fn modifier_parser(s: Span) -> IResult<Span, Modifier> {
     alt((
         map(alt((tag("-5"), tag("b5"))), |_| Modifier::Flat5th),
         map(tag("sus2"), |_| Modifier::Sus2),
@@ -254,12 +171,12 @@ fn tensions_parser(s: Span) -> IResult<Span, Vec<Modifier>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{ast_parser, chord_node_parser, measure_parser};
+    use super::chord_node_parser;
     use anyhow::Result;
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
 
-    fn span(s: &str) -> LocatedSpan<&str, TracableInfo> {
+    fn span<'a>(s: &'a str) -> LocatedSpan<&'a str, TracableInfo> {
         LocatedSpan::new_extra(s, TracableInfo::new())
     }
 
@@ -293,26 +210,6 @@ mod tests {
         ] {
             let span = span(chord);
             let (res, _ast) = chord_node_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_measure_parser() -> Result<()> {
-        for measure in ["C\n"] {
-            let span = span(measure);
-            let (res, _ast) = measure_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_ast_parser() -> Result<()> {
-        for score in ["# comment\nCCC", "CCC|", "CCC\n"] {
-            let span = span(score);
-            let (res, _ast) = ast_parser(span)?;
             assert_eq!(res.into_fragment(), "");
         }
         Ok(())

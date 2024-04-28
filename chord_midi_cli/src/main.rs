@@ -1,40 +1,29 @@
 use anyhow::Result;
-use chord_midi::{midi::dump, parser::parse, syntax::Pitch};
-use clap::Parser;
+use chord_midi::export::{Exporter, RechordExporter};
+use chord_midi::import::{Importer, SexpImporter};
+use chord_midi::{export::MidiExporter, import::RechordImporter};
+use clap::Parser as _;
 use std::{
     fs::{File, OpenOptions},
-    io::{self, Read, Write},
+    io::Read,
     path::PathBuf,
 };
 
 #[derive(Debug, clap::Parser)]
 struct Cli {
-    #[arg()]
+    #[arg(short, long)]
     input: PathBuf,
-    #[arg(short, long, global = true)]
-    output: Option<PathBuf>,
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Debug, clap::Parser)]
-enum Commands {
-    Convert(Convert),
-    Midi(Midi),
-}
-
-#[derive(Debug, clap::Parser)]
-struct Convert {
-    #[arg(long)]
-    as_pitch: Option<Pitch>,
-    #[arg(long)]
-    as_degree: Option<Pitch>,
-}
-
-#[derive(Debug, clap::Parser)]
-struct Midi {
+    #[arg(short, long)]
+    output: PathBuf,
     #[arg(long, default_value_t = 180)]
     bpm: u8,
+}
+
+fn extension(path: &PathBuf) -> String {
+    path.extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string()
 }
 
 fn main() -> Result<()> {
@@ -46,37 +35,29 @@ fn main() -> Result<()> {
     f.read_to_string(&mut code)?;
     // CR+LF to LF
     code = code.replace("\r\n", "\n");
-    let mut ast = parse(code.as_str())?;
 
-    let mut out = args.output.map(|p| {
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(p)
-            .unwrap()
-    });
+    let importer = match extension(&args.input).as_str() {
+        "sexp" => Box::new(SexpImporter) as Box<dyn Importer>,
+        _ => Box::new(RechordImporter) as Box<dyn Importer>,
+    };
+    let ast = importer.import(code.as_str())?;
 
-    match args.command {
-        Commands::Convert(args) => {
-            let mut out = out
-                .map(|f| Box::new(f) as Box<dyn Write>)
-                .unwrap_or(Box::new(io::stdout()) as Box<dyn Write>);
+    let mut out = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&args.output)
+        .unwrap();
 
-            if let Some(p) = args.as_pitch {
-                ast.as_pitch(p);
-            }
-            if let Some(p) = args.as_degree {
-                ast.as_degree(p);
-            }
-
-            writeln!(out, "{}", ast)?;
+    match extension(&args.output).as_str() {
+        "midi" => {
+            MidiExporter { bpm: args.bpm }.export(&mut out, ast)?;
+            println!("Exported to {}", args.output.display());
         }
-        Commands::Midi(args) => {
-            if let Some(f) = out.as_mut() {
-                dump(f, ast, args.bpm)?;
-            }
+        _ => {
+            RechordExporter.export(&mut out, ast)?;
+            println!("Exported to {}", args.output.display());
         }
-    }
+    };
     Ok(())
 }
