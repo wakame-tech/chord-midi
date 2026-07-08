@@ -45,6 +45,10 @@ fn app() -> Html {
     let url = use_state(String::new);
     let playing = use_mut_ref(|| false);
     let pending = use_mut_ref(|| None::<String>);
+    // live mirror of the URL currently applied to the player src. Read this in
+    // the once-registered stop listener, whose captured `url` UseStateHandle would
+    // otherwise be a stale first-render snapshot (so its prev-URL revoke never ran).
+    let applied = use_mut_ref(|| String::new());
     let player_ref = use_node_ref();
 
     // input か bpm が変わるたびに再計算
@@ -54,18 +58,21 @@ fn app() -> Html {
         let url = url.clone();
         let playing = playing.clone();
         let pending = pending.clone();
+        let applied = applied.clone();
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
                 result.set(String::new());
-                if let Some(old) = pending.borrow_mut().take() {
+                let old_pending = pending.borrow_mut().take();
+                if let Some(old) = old_pending {
                     let _ = web_sys::Url::revoke_object_url(&old);
                 }
                 if !*playing.borrow() {
-                    let prev = (*url).clone();
+                    let prev = applied.borrow().clone();
                     if !prev.is_empty() {
                         let _ = web_sys::Url::revoke_object_url(&prev);
                     }
+                    *applied.borrow_mut() = String::new();
                     url.set(String::new());
                 }
                 return;
@@ -78,14 +85,16 @@ fn app() -> Html {
                     let object_url =
                         web_sys::Url::create_object_url_with_blob(&blob).unwrap();
                     if *playing.borrow() {
-                        if let Some(old) = pending.borrow_mut().replace(object_url) {
+                        let old_pending = pending.borrow_mut().replace(object_url);
+                        if let Some(old) = old_pending {
                             let _ = web_sys::Url::revoke_object_url(&old);
                         }
                     } else {
-                        let prev = (*url).clone();
+                        let prev = applied.borrow().clone();
                         if !prev.is_empty() {
                             let _ = web_sys::Url::revoke_object_url(&prev);
                         }
+                        *applied.borrow_mut() = object_url.clone();
                         url.set(object_url);
                     }
                 }
@@ -119,6 +128,7 @@ fn app() -> Html {
         let playing = playing.clone();
         let pending = pending.clone();
         let url = url.clone();
+        let applied = applied.clone();
         use_effect_with((), move |_| {
             if let Some(el) = player_ref.cast::<web_sys::Element>() {
                 {
@@ -134,13 +144,16 @@ fn app() -> Html {
                     let playing = playing.clone();
                     let pending = pending.clone();
                     let url = url.clone();
+                    let applied = applied.clone();
                     let cb = Closure::<dyn FnMut()>::new(move || {
                         *playing.borrow_mut() = false;
-                        if let Some(next) = pending.borrow_mut().take() {
-                            let prev = (*url).clone();
+                        let next = pending.borrow_mut().take();
+                        if let Some(next) = next {
+                            let prev = applied.borrow().clone();
                             if !prev.is_empty() && prev != next {
                                 let _ = web_sys::Url::revoke_object_url(&prev);
                             }
+                            *applied.borrow_mut() = next.clone();
                             url.set(next);
                         }
                     });
