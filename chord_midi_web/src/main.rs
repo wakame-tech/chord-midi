@@ -1,10 +1,15 @@
 use chord_midi::{
+    edit::{set_scale, shift_key},
     export::{Exporter, MidiExporter},
     import::{Importer, RechordImporter},
+    model::scale::Scale,
 };
 use std::io::BufWriter;
-use web_sys::{Blob, HtmlInputElement, HtmlTextAreaElement};
+use std::str::FromStr;
+use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
+
+mod presets;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     let u8_arr = unsafe { web_sys::js_sys::Uint8Array::view(arr) };
@@ -114,6 +119,23 @@ fn app() -> Html {
             loop_on.set(el.checked());
         })
     };
+    let on_key_up = {
+        let input = input.clone();
+        Callback::from(move |_| input.set(shift_key(input.as_str(), 1)))
+    };
+    let on_key_down = {
+        let input = input.clone();
+        Callback::from(move |_| input.set(shift_key(input.as_str(), -1)))
+    };
+    let on_scale = {
+        let input = input.clone();
+        Callback::from(move |e: Event| {
+            let el: HtmlSelectElement = e.target_unchecked_into();
+            if let Ok(scale) = Scale::from_str(&el.value()) {
+                input.set(set_scale(input.as_str(), scale));
+            }
+        })
+    };
 
     html! {
         <div>
@@ -130,6 +152,30 @@ fn app() -> Html {
                     <input type="checkbox" checked={*loop_on} onchange={on_loop} />
                     {"loop"}
                 </label>
+            </div>
+            <div>
+                <button onclick={on_key_down}>{"♭ key"}</button>
+                <button onclick={on_key_up}>{"key ♯"}</button>
+            </div>
+            <div>
+                <label>{"scale: "}</label>
+                <select onchange={on_scale}>
+                    { for ["major","minor","dorian","phrygian","lydian","mixolydian","locrian"]
+                        .iter().map(|s| html!{ <option value={*s}>{*s}</option> }) }
+                </select>
+            </div>
+            <div>
+                { for presets::PRESETS.iter().map(|(name, degrees)| {
+                    let input = input.clone();
+                    let degrees = degrees.to_string();
+                    let onclick = Callback::from(move |_| {
+                        let cur = (*input).clone();
+                        let next = if cur.trim().is_empty() { degrees.clone() }
+                                   else { format!("{}\n{}", cur.trim_end(), degrees) };
+                        input.set(next);
+                    });
+                    html!{ <button {onclick}>{name}</button> }
+                }) }
             </div>
             <div>
                 {
