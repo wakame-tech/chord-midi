@@ -149,7 +149,7 @@ fn modifier_parser(s: Span) -> IResult<Span, Modifier> {
             tuple((accidental_parser, degree_number_parser)),
             |(a, d)| Modifier::Tension(Degree(d, a)),
         ),
-        map(degree_number_parser, Modifier::Major),
+        map(degree_number_parser, Modifier::Dominant),
     ))(s)
 }
 
@@ -182,6 +182,73 @@ mod tests {
 
     fn span<'a>(s: &'a str) -> LocatedSpan<&'a str, TracableInfo> {
         LocatedSpan::new_extra(s, TracableInfo::new())
+    }
+
+    /// parse a chord and return its (0-based, sorted) semitone set
+    fn semis(code: &str) -> Vec<u8> {
+        let (rest, node) = chord_node_parser(span(code)).unwrap();
+        assert_eq!(
+            rest.into_fragment(),
+            "",
+            "parser did not consume all of {:?}",
+            code
+        );
+        node.to_chord().unwrap().semitones.iter().cloned().collect()
+    }
+
+    #[test]
+    fn test_chord_semitones_table() {
+        // reference chord tones (root = 0). Verifies parser + Chord::modify together.
+        let cases: &[(&str, &[u8])] = &[
+            ("C", &[0, 4, 7]),
+            ("Cm", &[0, 3, 7]),
+            ("C7", &[0, 4, 7, 10]),       // dominant 7 (flat 7)
+            ("Cmaj7", &[0, 4, 7, 11]),    // major 7
+            ("CM7", &[0, 4, 7, 11]),      // M7 == maj7
+            ("Cm7", &[0, 3, 7, 10]),
+            ("C9", &[0, 4, 7, 10, 14]),   // dominant 9
+            ("Cmaj9", &[0, 4, 7, 11, 14]),
+            ("Cm9", &[0, 3, 7, 10, 14]),
+            ("C11", &[0, 4, 7, 10, 14, 17]),
+            ("C13", &[0, 4, 7, 10, 14, 17, 21]),
+            ("C6", &[0, 4, 7, 9]),
+            ("Csus2", &[0, 2, 7]),
+            ("Csus4", &[0, 5, 7]),
+            ("Cdim", &[0, 3, 6]),
+            ("Cdim7", &[0, 3, 6, 9]),  // fully diminished (bb7)
+            ("Caug", &[0, 4, 8]),
+            ("Caug7", &[0, 4, 8, 10]), // 7#5
+            ("CmM7", &[0, 3, 7, 11]),
+            ("Cadd9", &[0, 4, 7, 14]),
+            ("C7(b9)", &[0, 4, 7, 10, 13]),
+            ("C7(#9)", &[0, 4, 7, 10, 15]),
+            ("C7(b13)", &[0, 4, 7, 10, 20]),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(&semis(code), expected, "chord {:?}", code);
+        }
+    }
+
+    #[test]
+    fn test_chord_display_roundtrip() {
+        // parse -> Display -> parse must preserve the chord tones
+        for code in [
+            "C", "C7", "Cmaj7", "Cm7", "Csus2", "Csus4", "Cdim7", "Caug7", "C7(b9)", "C7(#9)",
+            "C7(b13)",
+        ] {
+            let (_r, node) = chord_node_parser(span(code)).unwrap();
+            let text = format!("{}", node);
+            let (_r2, node2) = chord_node_parser(span(&text)).unwrap_or_else(|_| {
+                panic!("re-parse of displayed {:?} (from {:?}) failed", text, code)
+            });
+            assert_eq!(
+                node.to_chord().unwrap().semitones,
+                node2.to_chord().unwrap().semitones,
+                "roundtrip {:?} -> {:?}",
+                code,
+                text
+            );
+        }
     }
 
     #[test]

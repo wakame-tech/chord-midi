@@ -131,6 +131,17 @@ fn app() -> Html {
                     {"loop"}
                 </label>
             </div>
+            <div>
+                {
+                    if (*url).is_empty() {
+                        html! { <button disabled=true>{"MIDIを保存"}</button> }
+                    } else {
+                        html! {
+                            <a href={(*url).clone()} download="chord.mid">{"MIDIを保存"}</a>
+                        }
+                    }
+                }
+            </div>
             <p style="color: red">{(*error).clone()}</p>
             <pre>{(*result).clone()}</pre>
 

@@ -80,18 +80,32 @@ mod tests {
 
     #[test]
     fn test_transpose() {
-        let i = Node::Chord(ChordNode::relative(1));
+        // Key::Relative stores SEMITONES above the key root, not a scale degree.
+        // I (root, 0 semitones) in key C == C
+        let i = Node::Chord(ChordNode::relative(0));
         let c = Node::Chord(ChordNode::absolute(Pitch::C));
         assert_eq!(
             Ast::Measure(vec![i], false).into_pitch(Pitch::C),
             Ast::Measure(vec![c], false)
         );
 
-        let iv = Node::Chord(ChordNode::relative(6));
+        // IV (perfect 4th, 5 semitones) in key C == F
+        let iv = Node::Chord(ChordNode::relative(5));
         let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
             Ast::Measure(vec![iv], false).into_pitch(Pitch::C),
             Ast::Measure(vec![f], false)
+        );
+    }
+
+    #[test]
+    fn test_into_degree_is_inverse() {
+        // absolute -> degree: V (G) in key C == 7 semitones
+        let g = Node::Chord(ChordNode::absolute(Pitch::G));
+        let v = Node::Chord(ChordNode::relative(7));
+        assert_eq!(
+            Ast::Measure(vec![g], false).into_degree(Pitch::C),
+            Ast::Measure(vec![v], false)
         );
     }
 }

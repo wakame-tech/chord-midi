@@ -43,7 +43,13 @@ fn comment_parser(s: Span) -> IResult<Span, Ast> {
 }
 
 fn measure_sep(s: Span) -> IResult<Span, bool> {
-    alt((value(false, tag("|")), value(true, line_ending)))(s)
+    // eof acts as an implicit separator so the final measure need not end
+    // with a trailing `|` or newline.
+    alt((
+        value(false, tag("|")),
+        value(true, line_ending),
+        value(false, eof),
+    ))(s)
 }
 
 fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
