@@ -71,21 +71,16 @@ impl Scale {
     }
 }
 
-fn to_roman_str(semitone: u8) -> &'static str {
-    match semitone {
-        0 => "I",
-        1 => "I#",
+fn degree_to_roman(n: u8) -> &'static str {
+    match n {
+        1 => "I",
         2 => "II",
-        3 => "II#",
-        4 => "III",
-        5 => "IV",
-        6 => "IV#",
-        7 => "V",
-        8 => "V#",
-        9 => "VI",
-        10 => "VI#",
-        11 => "VII",
-        _ => panic!("invalid semitone: {}", semitone),
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        7 => "VII",
+        _ => "?",
     }
 }
 
@@ -94,7 +89,7 @@ pub struct Degree(pub u8, pub Accidental);
 
 impl Display for Degree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", to_roman_str(self.0), self.1)
+        write!(f, "{}{}", self.1, degree_to_roman(self.0))
     }
 }
 
@@ -141,6 +136,16 @@ mod tests {
         assert_eq!(Scale::Dorian.semitone(7), 10);
         assert_eq!(Scale::Lydian.semitone(4), 6);
         assert_eq!(Scale::Phrygian.semitone(2), 1);
+    }
+
+    #[test]
+    fn test_degree_display() {
+        use crate::model::pitch::Accidental;
+        use crate::model::scale::Degree;
+        assert_eq!(format!("{}", Degree(1, Accidental::Natural)), "I");
+        assert_eq!(format!("{}", Degree(3, Accidental::Natural)), "III");
+        assert_eq!(format!("{}", Degree(2, Accidental::Sharp)), "#II");
+        assert_eq!(format!("{}", Degree(6, Accidental::Flat)), "bVI");
     }
 
     #[test]
