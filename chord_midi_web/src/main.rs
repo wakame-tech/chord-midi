@@ -6,6 +6,8 @@ use chord_midi::{
 };
 use std::io::BufWriter;
 use std::str::FromStr;
+use web_sys::wasm_bindgen::closure::Closure;
+use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
@@ -41,6 +43,12 @@ fn app() -> Html {
     let result = use_state(String::new);
     let error = use_state(String::new);
     let url = use_state(String::new);
+    let playing = use_mut_ref(|| false);
+    let pending = use_mut_ref(|| None::<String>);
+    // live mirror of the URL currently applied to the player src. Read this in
+    // the once-registered stop listener, whose captured `url` UseStateHandle would
+    // otherwise be a stale first-render snapshot (so its prev-URL revoke never ran).
+    let applied = use_mut_ref(|| String::new());
     let player_ref = use_node_ref();
 
     // input か bpm が変わるたびに再計算
@@ -48,15 +56,25 @@ fn app() -> Html {
         let result = result.clone();
         let error = error.clone();
         let url = url.clone();
+        let playing = playing.clone();
+        let pending = pending.clone();
+        let applied = applied.clone();
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
                 result.set(String::new());
-                let prev = (*url).clone();
-                if !prev.is_empty() {
-                    let _ = web_sys::Url::revoke_object_url(&prev);
+                let old_pending = pending.borrow_mut().take();
+                if let Some(old) = old_pending {
+                    let _ = web_sys::Url::revoke_object_url(&old);
                 }
-                url.set(String::new());
+                if !*playing.borrow() {
+                    let prev = applied.borrow().clone();
+                    if !prev.is_empty() {
+                        let _ = web_sys::Url::revoke_object_url(&prev);
+                    }
+                    *applied.borrow_mut() = String::new();
+                    url.set(String::new());
+                }
                 return;
             }
             match compile(input, *bpm) {
@@ -66,11 +84,19 @@ fn app() -> Html {
                     let blob = new_blob(&bytes, "audio/midi");
                     let object_url =
                         web_sys::Url::create_object_url_with_blob(&blob).unwrap();
-                    let prev = (*url).clone();
-                    if !prev.is_empty() {
-                        let _ = web_sys::Url::revoke_object_url(&prev);
+                    if *playing.borrow() {
+                        let old_pending = pending.borrow_mut().replace(object_url);
+                        if let Some(old) = old_pending {
+                            let _ = web_sys::Url::revoke_object_url(&old);
+                        }
+                    } else {
+                        let prev = applied.borrow().clone();
+                        if !prev.is_empty() {
+                            let _ = web_sys::Url::revoke_object_url(&prev);
+                        }
+                        *applied.borrow_mut() = object_url.clone();
+                        url.set(object_url);
                     }
-                    url.set(object_url);
                 }
                 Err(e) => error.set(e),
             }
@@ -93,6 +119,50 @@ fn app() -> Html {
                     let _ = el.remove_attribute("loop");
                 }
             }
+        });
+    }
+
+    // プレイヤーの start / stop を監視。再生中は src を差し替えず pending に退避し、停止時に反映する
+    {
+        let player_ref = player_ref.clone();
+        let playing = playing.clone();
+        let pending = pending.clone();
+        let url = url.clone();
+        let applied = applied.clone();
+        use_effect_with((), move |_| {
+            if let Some(el) = player_ref.cast::<web_sys::Element>() {
+                {
+                    let playing = playing.clone();
+                    let cb = Closure::<dyn FnMut()>::new(move || {
+                        *playing.borrow_mut() = true;
+                    });
+                    let _ = el
+                        .add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
+                    cb.forget();
+                }
+                {
+                    let playing = playing.clone();
+                    let pending = pending.clone();
+                    let url = url.clone();
+                    let applied = applied.clone();
+                    let cb = Closure::<dyn FnMut()>::new(move || {
+                        *playing.borrow_mut() = false;
+                        let next = pending.borrow_mut().take();
+                        if let Some(next) = next {
+                            let prev = applied.borrow().clone();
+                            if !prev.is_empty() && prev != next {
+                                let _ = web_sys::Url::revoke_object_url(&prev);
+                            }
+                            *applied.borrow_mut() = next.clone();
+                            url.set(next);
+                        }
+                    });
+                    let _ = el
+                        .add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
+                    cb.forget();
+                }
+            }
+            || ()
         });
     }
 
