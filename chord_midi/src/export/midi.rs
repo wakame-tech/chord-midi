@@ -268,6 +268,15 @@ mod tests {
     }
 
     #[test]
+    fn test_keyless_degree_progression_plays_in_c() {
+        // no key: directive -> resolve defaults to C, produces notes (must not panic)
+        let ast = RechordImporter.import("IVM7 | V7 | IIIm7 | VIm7 |\n").unwrap();
+        let mut score = Score::new();
+        score.interpret(ast.resolve()).unwrap();
+        assert!(!score.notes.is_empty());
+    }
+
+    #[test]
     fn test_degree_progression_midi() {
         let ast = RechordImporter.import("key: C\nI | IV | V | I |\n").unwrap();
         let mut score = Score::new();
