@@ -6,6 +6,8 @@ use chord_midi::{
 };
 use std::io::BufWriter;
 use std::str::FromStr;
+use web_sys::wasm_bindgen::closure::Closure;
+use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
@@ -41,6 +43,8 @@ fn app() -> Html {
     let result = use_state(String::new);
     let error = use_state(String::new);
     let url = use_state(String::new);
+    let playing = use_mut_ref(|| false);
+    let pending = use_mut_ref(|| None::<String>);
     let player_ref = use_node_ref();
 
     // input か bpm が変わるたびに再計算
@@ -48,15 +52,22 @@ fn app() -> Html {
         let result = result.clone();
         let error = error.clone();
         let url = url.clone();
+        let playing = playing.clone();
+        let pending = pending.clone();
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
                 result.set(String::new());
-                let prev = (*url).clone();
-                if !prev.is_empty() {
-                    let _ = web_sys::Url::revoke_object_url(&prev);
+                if let Some(old) = pending.borrow_mut().take() {
+                    let _ = web_sys::Url::revoke_object_url(&old);
                 }
-                url.set(String::new());
+                if !*playing.borrow() {
+                    let prev = (*url).clone();
+                    if !prev.is_empty() {
+                        let _ = web_sys::Url::revoke_object_url(&prev);
+                    }
+                    url.set(String::new());
+                }
                 return;
             }
             match compile(input, *bpm) {
@@ -66,11 +77,17 @@ fn app() -> Html {
                     let blob = new_blob(&bytes, "audio/midi");
                     let object_url =
                         web_sys::Url::create_object_url_with_blob(&blob).unwrap();
-                    let prev = (*url).clone();
-                    if !prev.is_empty() {
-                        let _ = web_sys::Url::revoke_object_url(&prev);
+                    if *playing.borrow() {
+                        if let Some(old) = pending.borrow_mut().replace(object_url) {
+                            let _ = web_sys::Url::revoke_object_url(&old);
+                        }
+                    } else {
+                        let prev = (*url).clone();
+                        if !prev.is_empty() {
+                            let _ = web_sys::Url::revoke_object_url(&prev);
+                        }
+                        url.set(object_url);
                     }
-                    url.set(object_url);
                 }
                 Err(e) => error.set(e),
             }
@@ -93,6 +110,46 @@ fn app() -> Html {
                     let _ = el.remove_attribute("loop");
                 }
             }
+        });
+    }
+
+    // プレイヤーの start / stop を監視。再生中は src を差し替えず pending に退避し、停止時に反映する
+    {
+        let player_ref = player_ref.clone();
+        let playing = playing.clone();
+        let pending = pending.clone();
+        let url = url.clone();
+        use_effect_with((), move |_| {
+            if let Some(el) = player_ref.cast::<web_sys::Element>() {
+                {
+                    let playing = playing.clone();
+                    let cb = Closure::<dyn FnMut()>::new(move || {
+                        *playing.borrow_mut() = true;
+                    });
+                    let _ = el
+                        .add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
+                    cb.forget();
+                }
+                {
+                    let playing = playing.clone();
+                    let pending = pending.clone();
+                    let url = url.clone();
+                    let cb = Closure::<dyn FnMut()>::new(move || {
+                        *playing.borrow_mut() = false;
+                        if let Some(next) = pending.borrow_mut().take() {
+                            let prev = (*url).clone();
+                            if !prev.is_empty() && prev != next {
+                                let _ = web_sys::Url::revoke_object_url(&prev);
+                            }
+                            url.set(next);
+                        }
+                    });
+                    let _ = el
+                        .add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
+                    cb.forget();
+                }
+            }
+            || ()
         });
     }
 
