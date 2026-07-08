@@ -31,6 +31,9 @@ impl Key {
         }
     }
 
+    /// Absolute -> degree. Deliberately chromatic (major/`from_semitone`-based),
+    /// so it is NOT a scale-aware inverse of `into_pitch` under non-major modes.
+    /// `scale` is accepted for signature symmetry but intentionally unused.
     pub fn into_degree(self, tonic: Pitch, _scale: Scale) -> Key {
         match self {
             Key::Absolute(p) => {
