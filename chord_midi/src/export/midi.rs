@@ -111,6 +111,19 @@ impl Score {
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
+            Node::Arpeggio(node) => {
+                let chord = node.to_chord()?;
+                let all = into_note_numbers(&chord)?;
+                // dur が音数より少ない密な小節では鳴らせる音数を dur に制限し、
+                // 総尺が dur を超えて後続ノードがずれるのを防ぐ（総尺は常に dur）
+                let k = (all.len() as u32).min(dur).max(1);
+                let each = dur / k;
+                let rem = dur % k;
+                for (i, n) in all.into_iter().take(k as usize).enumerate() {
+                    let d = each + if i as u32 == k - 1 { rem } else { 0 };
+                    self.notes.push(Note::new(Some(vec![n]), d));
+                }
+            }
             Node::Repeat => {
                 self.sustain = dur;
             }
@@ -212,4 +225,49 @@ fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
     mfile.push_track(track)?;
     mfile.write(f)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Note, Score};
+    use crate::import::{Importer, RechordImporter};
+
+    fn notes_of(code: &str) -> Vec<Note> {
+        let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
+        let mut score = Score::new();
+        score.interpret(ast).unwrap();
+        score.notes
+    }
+
+    #[test]
+    fn test_block_chord_is_simultaneous() {
+        let notes = notes_of("C");
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].chord.as_ref().unwrap().len(), 3); // C E G
+    }
+
+    #[test]
+    fn test_arpeggio_is_sequential() {
+        let notes = notes_of("arp(C)");
+        assert_eq!(notes.len(), 3); // 3音が順次
+        assert!(notes.iter().all(|n| n.chord.as_ref().unwrap().len() == 1));
+    }
+
+    #[test]
+    fn test_arpeggio_durations_sum_to_slot() {
+        // single-node measure: dur = MEASURE_LENGTH = 16, triad k=3
+        let notes = notes_of("arp(C)");
+        let durs: Vec<u32> = notes.iter().map(|n| n.duration).collect();
+        assert_eq!(durs, vec![5, 5, 6]); // each=5, remainder folded into last
+        assert_eq!(durs.iter().sum::<u32>(), 16);
+    }
+
+    #[test]
+    fn test_arpeggio_dense_measure_no_overrun() {
+        // 5 nodes -> dur = 2 each; triad capped to k=2, so 2 notes/arp, 2 units/arp
+        let notes = notes_of("arp(C) arp(C) arp(C) arp(C) arp(C)");
+        assert!(notes.iter().all(|n| n.chord.as_ref().unwrap().len() == 1));
+        // total duration must equal 5 nodes * dur(2) = 10 (old buggy code gave 25)
+        assert_eq!(notes.iter().map(|n| n.duration).sum::<u32>(), 10);
+    }
 }
