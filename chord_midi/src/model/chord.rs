@@ -91,6 +91,25 @@ impl Chord {
             Modifier::Minor(6) => modify_degree(self, Scale::Minor, &[1, 3, 5, 6]),
             Modifier::Minor(7) => modify_degree(self, Scale::Minor, &[1, 3, 5, 7]),
             Modifier::Minor(9) => modify_degree(self, Scale::Minor, &[1, 3, 5, 7, 9]),
+            // dominant: major triad stacked with a FLAT 7th (and 9/11/13 extensions)
+            Modifier::Dominant(n) => {
+                let degrees: &[u8] = match n {
+                    5 => &[1, 3, 5],
+                    6 => &[1, 3, 5, 6],
+                    7 => &[1, 3, 5],
+                    9 => &[1, 3, 5, 9],
+                    11 => &[1, 3, 5, 9, 11],
+                    13 => &[1, 3, 5, 9, 11, 13],
+                    _ => return Err(anyhow::anyhow!("unknown dominant: {}", n)),
+                };
+                modify_degree(self, Scale::Major, degrees)?;
+                if *n >= 7 {
+                    self.remove_degree(7);
+                    // flat 7th = major 7th - 1 semitone
+                    self.semitones.insert(Scale::Major.semitone(7) - 1);
+                }
+                Ok(())
+            }
             Modifier::MinorMajaor7 => {
                 for (s, d) in [
                     (Scale::Minor, 1),
@@ -105,7 +124,8 @@ impl Chord {
             }
             Modifier::Sus2 => {
                 self.semitones.remove(&self.scale().semitone(3));
-                self.semitones.insert(Scale::Major.semitone(3) - 1);
+                // major 2nd = major 3rd - 2 semitones
+                self.semitones.insert(Scale::Major.semitone(3) - 2);
                 Ok(())
             }
             Modifier::Sus4 => {
@@ -127,7 +147,8 @@ impl Chord {
                 self.semitones.remove(&self.scale().semitone(5));
                 self.semitones.insert(Scale::Major.semitone(5) + 1);
                 self.semitones.remove(&self.scale().semitone(7));
-                self.semitones.insert(Scale::Major.semitone(7) + 1);
+                // dominant (flat) 7th over the augmented triad: 7#5 chord
+                self.semitones.insert(Scale::Major.semitone(7) - 1);
                 Ok(())
             }
             Modifier::Dim => {
@@ -143,7 +164,8 @@ impl Chord {
                 self.semitones.remove(&self.scale().semitone(5));
                 self.semitones.insert(Scale::Major.semitone(5) - 1);
                 self.semitones.remove(&self.scale().semitone(7));
-                self.semitones.insert(Scale::Major.semitone(7) - 1);
+                // diminished 7th = major 7th - 2 semitones (bb7)
+                self.semitones.insert(Scale::Major.semitone(7) - 2);
                 Ok(())
             }
             Modifier::Omit(d) => {
@@ -155,8 +177,10 @@ impl Chord {
                 Ok(())
             }
             Modifier::Tension(Degree(d, a)) => {
-                self.semitones
-                    .insert(self.scale().semitone(*d) + a.clone() as u8);
+                // accidental: Flat = -1, Sharp = +1 (as i8); casting the enum
+                // discriminant with `as u8` would wrongly make Flat = +2
+                let semitone = self.scale().semitone(*d) as i8 + i8::from(a.clone());
+                self.semitones.insert(semitone as u8);
                 Ok(())
             }
             _ => Err(anyhow::anyhow!("unknown mod: {:?}", modifier)),

@@ -5,6 +5,8 @@ use std::fmt::Display;
 pub enum Modifier {
     Major(u8),
     Minor(u8),
+    /// dominant chord: bare number notation (e.g. `7`, `9`) → major triad + flat 7th
+    Dominant(u8),
     MinorMajaor7,
     Sus2,
     Sus4,
@@ -22,8 +24,9 @@ impl Display for Modifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Modifier::Major(5) => write!(f, ""),
-            Modifier::Major(d) => write!(f, "{}", d),
+            Modifier::Major(d) => write!(f, "maj{}", d),
             Modifier::Minor(d) => write!(f, "m{}", d),
+            Modifier::Dominant(d) => write!(f, "{}", d),
             Modifier::MinorMajaor7 => write!(f, "mM7"),
             Modifier::Sus2 => write!(f, "sus2"),
             Modifier::Sus4 => write!(f, "sus4"),
