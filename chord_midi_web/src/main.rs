@@ -46,6 +46,12 @@ fn app() -> Html {
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
+                result.set(String::new());
+                let prev = (*url).clone();
+                if !prev.is_empty() {
+                    let _ = web_sys::Url::revoke_object_url(&prev);
+                }
+                url.set(String::new());
                 return;
             }
             match compile(input, *bpm) {
@@ -71,7 +77,9 @@ fn app() -> Html {
         let player_ref = player_ref.clone();
         use_effect_with(((*url).clone(), *loop_on), move |(url, loop_on)| {
             if let Some(el) = player_ref.cast::<web_sys::Element>() {
-                if !url.is_empty() {
+                if url.is_empty() {
+                    let _ = el.remove_attribute("src");
+                } else {
                     let _ = el.set_attribute("src", url);
                 }
                 if *loop_on {
@@ -110,7 +118,7 @@ fn app() -> Html {
     html! {
         <div>
             <h1>{"chord_midi_web"}</h1>
-            <textarea rows=8 cols=50 id="input" oninput={on_input}
+            <textarea rows=8 cols=50 oninput={on_input}
                 value={(*input).clone()}></textarea>
             <div>
                 <label>{format!("BPM: {}", *bpm)}</label>
