@@ -6,7 +6,7 @@ use crate::model::{
     ast::{Ast, ChordNode, Node},
     key::Key,
     pitch::{Accidental, Pitch},
-    scale::Scale,
+    scale::{Degree, Scale},
 };
 use anyhow::Result;
 use std::{collections::BTreeSet, str::FromStr};
@@ -19,18 +19,16 @@ impl super::Importer for SexpImporter {
     }
 }
 
-fn degree_from_str(s: &str) -> Result<u8> {
-    match s {
-        s if s.ends_with("b") | s.ends_with("#") => {
-            let d = parser_roman_num(&s[..s.len() - 1])?;
-            let a = Accidental::from_str(&s[s.len() - 1..])?;
-            Ok((Scale::Major.semitone(d) as i8 + a as i8) as u8)
-        }
-        s => {
-            let d = parser_roman_num(s)?;
-            Ok(Scale::Major.semitone(d) as u8)
-        }
-    }
+fn degree_from_str(s: &str) -> Result<Degree> {
+    let (roman, acc) = if let Some(stripped) = s.strip_suffix('#') {
+        (stripped, Accidental::Sharp)
+    } else if let Some(stripped) = s.strip_suffix('b') {
+        (stripped, Accidental::Flat)
+    } else {
+        (s, Accidental::Natural)
+    };
+    let d = parser_roman_num(roman)?;
+    Ok(Degree(d, acc))
 }
 
 fn parse_key(key: &str) -> Result<Key> {
@@ -81,7 +79,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
             let Key::Absolute(pitch) = key else {
                 return Err(anyhow::anyhow!("pitch must be absolute: {:?}", key));
             };
-            let measure = parse_ast(&list[2])?.into_pitch(pitch);
+            let measure = parse_ast(&list[2])?.into_pitch(pitch, Scale::Major);
             Ok(measure)
         }
         // (...: Node): Measure
@@ -100,7 +98,8 @@ mod tests {
     use crate::{
         import::{Importer, SexpImporter},
         model::ast::{Ast, ChordNode, Node},
-        model::pitch::Pitch,
+        model::pitch::{Accidental, Pitch},
+        model::scale::Degree,
     };
     use anyhow::Result;
 
@@ -118,8 +117,9 @@ mod tests {
             ])
         );
 
-        let is = Node::Chord(ChordNode::relative(1));
-        let iv = Node::Chord(ChordNode::relative(5));
+        // I# parses to degree I with a sharp; IV parses to degree IV natural
+        let is = Node::Chord(ChordNode::relative(Degree(1, Accidental::Sharp)));
+        let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
         assert_eq!(
             SexpImporter.import("(score (I# IV))")?,
             Ast::Score(vec![Box::new(Ast::Measure(vec![is, iv], false))])

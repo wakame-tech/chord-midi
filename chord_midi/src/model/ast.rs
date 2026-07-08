@@ -3,6 +3,7 @@ use crate::model::{
     key::Key,
     modifier::Modifier,
     pitch::Pitch,
+    scale::Degree,
 };
 use anyhow::Result;
 use std::collections::BTreeSet;
@@ -40,9 +41,9 @@ impl ChordNode {
         }
     }
 
-    pub fn relative(semitone: u8) -> Self {
+    pub fn relative(degree: Degree) -> Self {
         ChordNode {
-            key: Key::Relative(semitone),
+            key: Key::Relative(degree),
             modifiers: BTreeSet::new(),
             on: None,
         }

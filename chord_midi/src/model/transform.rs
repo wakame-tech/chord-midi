@@ -1,42 +1,41 @@
 use crate::{
     model::ast::{Ast, ChordNode, Node},
     model::pitch::Pitch,
+    model::scale::Scale,
 };
 
-fn chordnode_into_degree(chord: ChordNode, key: Pitch) -> ChordNode {
+fn chordnode_into_degree(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
     ChordNode {
-        key: chord.key.into_degree(key),
+        key: chord.key.into_degree(tonic, scale),
         modifiers: chord.modifiers,
-        on: chord.on.map(|on| on.into_degree(key)),
+        on: chord.on.map(|on| on.into_degree(tonic, scale)),
     }
 }
 
-fn chordnode_into_pitch(chord: ChordNode, pitch: Pitch) -> ChordNode {
+fn chordnode_into_pitch(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
     ChordNode {
-        key: chord.key.into_pitch(pitch),
+        key: chord.key.into_pitch(tonic, scale),
         modifiers: chord.modifiers,
-        on: chord.on.map(|on| on.into_pitch(pitch)),
+        on: chord.on.map(|on| on.into_pitch(tonic, scale)),
     }
 }
 
 impl Ast {
-    pub fn into_degree(self, key: Pitch) -> Ast {
+    pub fn into_degree(self, tonic: Pitch, scale: Scale) -> Ast {
         match self {
             Ast::Score(nodes) => Ast::Score(
                 nodes
                     .into_iter()
-                    .map(|ast| Box::new(Ast::into_degree(*ast, key)))
+                    .map(|ast| Box::new((*ast).into_degree(tonic, scale)))
                     .collect::<Vec<_>>(),
             ),
             Ast::Measure(nodes, br) => Ast::Measure(
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(chord) => Node::Chord(chordnode_into_degree(chord, key)),
-                        Node::Arpeggio(chord) => {
-                            Node::Arpeggio(chordnode_into_degree(chord, key))
-                        }
-                        _ => node,
+                        Node::Chord(c) => Node::Chord(chordnode_into_degree(c, tonic, scale)),
+                        Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_degree(c, tonic, scale)),
+                        other => other,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -45,23 +44,21 @@ impl Ast {
         }
     }
 
-    pub fn into_pitch(self, pitch: Pitch) -> Ast {
+    pub fn into_pitch(self, tonic: Pitch, scale: Scale) -> Ast {
         match self {
             Ast::Score(nodes) => Ast::Score(
                 nodes
                     .into_iter()
-                    .map(|ast| Box::new(Ast::into_pitch(*ast, pitch)))
+                    .map(|ast| Box::new((*ast).into_pitch(tonic, scale)))
                     .collect::<Vec<_>>(),
             ),
             Ast::Measure(nodes, br) => Ast::Measure(
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(chord) => Node::Chord(chordnode_into_pitch(chord, pitch)),
-                        Node::Arpeggio(chord) => {
-                            Node::Arpeggio(chordnode_into_pitch(chord, pitch))
-                        }
-                        _ => node,
+                        Node::Chord(c) => Node::Chord(chordnode_into_pitch(c, tonic, scale)),
+                        Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_pitch(c, tonic, scale)),
+                        other => other,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -80,31 +77,30 @@ mod tests {
 
     #[test]
     fn test_transpose() {
-        // Key::Relative stores SEMITONES above the key root, not a scale degree.
-        // I (root, 0 semitones) in key C == C
-        let i = Node::Chord(ChordNode::relative(0));
+        use crate::model::pitch::Accidental;
+        use crate::model::scale::{Degree, Scale};
+        let i = Node::Chord(ChordNode::relative(Degree(1, Accidental::Natural)));
         let c = Node::Chord(ChordNode::absolute(Pitch::C));
         assert_eq!(
-            Ast::Measure(vec![i], false).into_pitch(Pitch::C),
+            Ast::Measure(vec![i], false).into_pitch(Pitch::C, Scale::Major),
             Ast::Measure(vec![c], false)
         );
-
-        // IV (perfect 4th, 5 semitones) in key C == F
-        let iv = Node::Chord(ChordNode::relative(5));
+        let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
         let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
-            Ast::Measure(vec![iv], false).into_pitch(Pitch::C),
+            Ast::Measure(vec![iv], false).into_pitch(Pitch::C, Scale::Major),
             Ast::Measure(vec![f], false)
         );
     }
 
     #[test]
     fn test_into_degree_is_inverse() {
-        // absolute -> degree: V (G) in key C == 7 semitones
+        use crate::model::pitch::Accidental;
+        use crate::model::scale::{Degree, Scale};
         let g = Node::Chord(ChordNode::absolute(Pitch::G));
-        let v = Node::Chord(ChordNode::relative(7));
+        let v = Node::Chord(ChordNode::relative(Degree(5, Accidental::Natural)));
         assert_eq!(
-            Ast::Measure(vec![g], false).into_degree(Pitch::C),
+            Ast::Measure(vec![g], false).into_degree(Pitch::C, Scale::Major),
             Ast::Measure(vec![v], false)
         );
     }

@@ -3,7 +3,7 @@ use crate::model::ast::{ChordNode, Node};
 use crate::model::key::Key;
 use crate::model::modifier::Modifier;
 use crate::model::pitch::{Accidental, Pitch};
-use crate::model::scale::{Degree, Scale};
+use crate::model::scale::Degree;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
@@ -58,8 +58,8 @@ pub fn node_parser(s: Span) -> IResult<Span, Node> {
 #[tracable_parser]
 fn key_parser(s: Span) -> IResult<Span, Key> {
     alt((
-        map(pitch_parser, |p| Key::Absolute(p)),
-        map(degree_parser, |d| Key::Relative(d)),
+        map(pitch_parser, Key::Absolute),
+        map(degree_parser, Key::Relative),
     ))(s)
 }
 
@@ -107,10 +107,11 @@ fn accidental_parser(s: Span) -> IResult<Span, Accidental> {
 }
 
 #[tracable_parser]
-fn degree_parser(s: Span) -> IResult<Span, u8> {
-    map(tuple((accidental_parser, degree_name_parser)), |(a, d)| {
-        (Scale::Major.semitone(d) as i8 + a as i8) as u8
-    })(s)
+fn degree_parser(s: Span) -> IResult<Span, Degree> {
+    map(
+        tuple((opt(accidental_parser), degree_name_parser)),
+        |(a, d)| Degree(d, a.unwrap_or(Accidental::Natural)),
+    )(s)
 }
 
 #[tracable_parser]
