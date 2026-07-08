@@ -2,10 +2,46 @@ use std::fmt::Display;
 
 use super::pitch::{Accidental, Pitch};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Scale {
     Major,
     Minor,
+    Dorian,
+    Phrygian,
+    Lydian,
+    Mixolydian,
+    Locrian,
+}
+
+impl std::str::FromStr for Scale {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s.to_lowercase().as_str() {
+            "major" | "ionian" => Ok(Scale::Major),
+            "minor" | "aeolian" => Ok(Scale::Minor),
+            "dorian" => Ok(Scale::Dorian),
+            "phrygian" => Ok(Scale::Phrygian),
+            "lydian" => Ok(Scale::Lydian),
+            "mixolydian" => Ok(Scale::Mixolydian),
+            "locrian" => Ok(Scale::Locrian),
+            _ => Err(anyhow::anyhow!("invalid scale: {}", s)),
+        }
+    }
+}
+
+impl Display for Scale {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Scale::Major => "major",
+            Scale::Minor => "minor",
+            Scale::Dorian => "dorian",
+            Scale::Phrygian => "phrygian",
+            Scale::Lydian => "lydian",
+            Scale::Mixolydian => "mixolydian",
+            Scale::Locrian => "locrian",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 impl Scale {
@@ -13,6 +49,11 @@ impl Scale {
         match self {
             Scale::Major => vec![2, 2, 1, 2, 2, 2, 1],
             Scale::Minor => vec![2, 1, 2, 2, 1, 2, 2],
+            Scale::Dorian => vec![2, 1, 2, 2, 2, 1, 2],
+            Scale::Phrygian => vec![1, 2, 2, 2, 1, 2, 2],
+            Scale::Lydian => vec![2, 2, 2, 1, 2, 2, 1],
+            Scale::Mixolydian => vec![2, 2, 1, 2, 2, 1, 2],
+            Scale::Locrian => vec![1, 2, 2, 1, 2, 2, 2],
         }
     }
 
@@ -92,5 +133,23 @@ mod tests {
         assert_eq!(Scale::Major.semitone(2), 2);
         assert_eq!(Scale::Major.semitone(3), 4);
         assert_eq!(Scale::Major.semitone(4), 5);
+    }
+
+    #[test]
+    fn test_modes() {
+        assert_eq!(Scale::Dorian.semitone(3), 3);
+        assert_eq!(Scale::Dorian.semitone(7), 10);
+        assert_eq!(Scale::Lydian.semitone(4), 6);
+        assert_eq!(Scale::Phrygian.semitone(2), 1);
+    }
+
+    #[test]
+    fn test_scale_fromstr_display() {
+        use std::str::FromStr;
+        assert_eq!(Scale::from_str("dorian").unwrap(), Scale::Dorian);
+        assert_eq!(Scale::from_str("MAJOR").unwrap(), Scale::Major);
+        assert_eq!(Scale::from_str("aeolian").unwrap(), Scale::Minor);
+        assert_eq!(format!("{}", Scale::Dorian), "dorian");
+        assert_eq!(format!("{}", Scale::Major), "major");
     }
 }
