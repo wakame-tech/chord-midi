@@ -1,5 +1,5 @@
 use crate::{
-    model::ast::{Ast, ChordNode, Node},
+    model::ast::{Ast, ChordNode, Directive, Node},
     model::pitch::Pitch,
     model::scale::Scale,
 };
@@ -66,6 +66,36 @@ impl Ast {
             other => other,
         }
     }
+
+    /// Apply key/scale directives: transpose degrees to pitches and strip
+    /// Directive/Comment nodes, yielding a playback-ready AST.
+    /// (Phase 2 will add Transform-node expansion here.)
+    pub fn resolve(self) -> Ast {
+        let mut tonic: Option<Pitch> = None;
+        let mut scale = Scale::Major;
+        if let Ast::Score(items) = &self {
+            for it in items {
+                match it.as_ref() {
+                    Ast::Directive(Directive::Key(p)) => tonic = Some(*p),
+                    Ast::Directive(Directive::Scale(s)) => scale = *s,
+                    _ => {}
+                }
+            }
+        }
+        let transposed = match tonic {
+            Some(t) => self.into_pitch(t, scale),
+            None => self,
+        };
+        match transposed {
+            Ast::Score(items) => Ast::Score(
+                items
+                    .into_iter()
+                    .filter(|it| !matches!(it.as_ref(), Ast::Directive(_) | Ast::Comment(_)))
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -91,6 +121,29 @@ mod tests {
             Ast::Measure(vec![iv], false).into_pitch(Pitch::C, Scale::Major),
             Ast::Measure(vec![f], false)
         );
+    }
+
+    #[test]
+    fn test_resolve_transposes_degrees() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Node};
+        let ast = RechordImporter.import("key: C\nV7 |\n").unwrap();
+        let resolved = ast.resolve();
+        let Ast::Score(items) = &resolved else { panic!() };
+        let mut found = false;
+        for it in items {
+            // directives stripped: only Measure should remain
+            assert!(!matches!(it.as_ref(), Ast::Directive(_)));
+            if let Ast::Measure(nodes, _) = it.as_ref() {
+                for n in nodes {
+                    if let Node::Chord(c) = n {
+                        assert!(matches!(c.key, crate::model::key::Key::Absolute(_)));
+                        found = true;
+                    }
+                }
+            }
+        }
+        assert!(found);
     }
 
     #[test]

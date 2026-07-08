@@ -198,6 +198,7 @@ fn write_notes(track: &mut Track, ch: Channel, notes: &[NoteNumber], dur: u32, s
 
 impl Exporter for MidiExporter {
     fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+        let ast = ast.resolve();
         let mut score = Score::new();
         score.interpret(ast)?;
         dump_notes(f, &score.notes, self.bpm)
@@ -238,6 +239,14 @@ mod tests {
         let mut score = Score::new();
         score.interpret(ast).unwrap();
         score.notes
+    }
+
+    #[test]
+    fn test_degree_progression_midi() {
+        let ast = RechordImporter.import("key: C\nI | IV | V | I |\n").unwrap();
+        let mut score = Score::new();
+        score.interpret(ast.resolve()).unwrap();
+        assert!(!score.notes.is_empty());
     }
 
     #[test]
