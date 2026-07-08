@@ -3,6 +3,22 @@ use crate::{
     model::pitch::Pitch,
 };
 
+fn chordnode_into_degree(chord: ChordNode, key: Pitch) -> ChordNode {
+    ChordNode {
+        key: chord.key.into_degree(key),
+        modifiers: chord.modifiers,
+        on: chord.on.map(|on| on.into_degree(key)),
+    }
+}
+
+fn chordnode_into_pitch(chord: ChordNode, pitch: Pitch) -> ChordNode {
+    ChordNode {
+        key: chord.key.into_pitch(pitch),
+        modifiers: chord.modifiers,
+        on: chord.on.map(|on| on.into_pitch(pitch)),
+    }
+}
+
 impl Ast {
     pub fn into_degree(self, key: Pitch) -> Ast {
         match self {
@@ -16,11 +32,10 @@ impl Ast {
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(chord) => Node::Chord(ChordNode {
-                            key: chord.key.into_degree(key),
-                            modifiers: chord.modifiers,
-                            on: chord.on.map(|on| on.into_degree(key)),
-                        }),
+                        Node::Chord(chord) => Node::Chord(chordnode_into_degree(chord, key)),
+                        Node::Arpeggio(chord) => {
+                            Node::Arpeggio(chordnode_into_degree(chord, key))
+                        }
                         _ => node,
                     })
                     .collect::<Vec<_>>(),
@@ -42,11 +57,10 @@ impl Ast {
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(chord) => Node::Chord(ChordNode {
-                            key: chord.key.into_pitch(pitch),
-                            modifiers: chord.modifiers,
-                            on: chord.on.map(|on| on.into_pitch(pitch)),
-                        }),
+                        Node::Chord(chord) => Node::Chord(chordnode_into_pitch(chord, pitch)),
+                        Node::Arpeggio(chord) => {
+                            Node::Arpeggio(chordnode_into_pitch(chord, pitch))
+                        }
                         _ => node,
                     })
                     .collect::<Vec<_>>(),

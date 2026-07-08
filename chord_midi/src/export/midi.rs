@@ -111,6 +111,12 @@ impl Score {
                 self.pre = Some(chord.clone());
                 self.sustain = dur;
             }
+            Node::Arpeggio(node) => {
+                // 暫定: block と同じ。Task 2 で順次発音に置換
+                let chord = node.to_chord()?;
+                self.pre = Some(chord.clone());
+                self.sustain = dur;
+            }
             Node::Repeat => {
                 self.sustain = dur;
             }

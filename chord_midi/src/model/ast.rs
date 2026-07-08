@@ -18,6 +18,7 @@ pub enum Ast {
 #[derive(Debug, PartialEq)]
 pub enum Node {
     Chord(ChordNode),
+    Arpeggio(ChordNode),
     Rest,
     Sustain,
     Repeat,

@@ -45,6 +45,7 @@ impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Node::Chord(chord) => write!(f, "{}", chord),
+            Node::Arpeggio(chord) => write!(f, "arp({})", chord),
             Node::Rest => write!(f, "N.C."),
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
@@ -66,5 +67,17 @@ impl Display for ChordNode {
             .map(|p| format!("/{}", p))
             .unwrap_or("".to_string());
         write!(f, "{}{}{}", self.key, mods, on)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::import::{Importer, RechordImporter};
+
+    #[test]
+    fn test_arpeggio_roundtrip() {
+        let ast = RechordImporter.import("arp(C) |\n").unwrap();
+        let s = format!("{}", ast);
+        assert!(s.contains("arp(C)"));
     }
 }

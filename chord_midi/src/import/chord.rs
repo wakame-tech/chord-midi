@@ -47,6 +47,10 @@ pub fn node_parser(s: Span) -> IResult<Span, Node> {
         map(tag("_"), |_| Node::Rest),
         map(tag("%"), |_| Node::Repeat),
         map(tag("N.C."), |_| Node::Rest),
+        map(
+            delimited(tag("arp("), chord_node_parser, tag(")")),
+            Node::Arpeggio,
+        ),
         map(chord_node_parser, Node::Chord),
     ))(s)
 }
@@ -186,6 +190,17 @@ mod tests {
             let span = span(tension);
             let (res, _ast) = super::tensions_parser(span)?;
             assert_eq!(res.into_fragment(), "");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_arpeggio_parser() -> Result<()> {
+        for code in ["arp(C)", "arp(Cm7)", "arp(C/E)"] {
+            let span = span(code);
+            let (res, node) = super::node_parser(span)?;
+            assert_eq!(res.into_fragment(), "");
+            assert!(matches!(node, crate::model::ast::Node::Arpeggio(_)));
         }
         Ok(())
     }
