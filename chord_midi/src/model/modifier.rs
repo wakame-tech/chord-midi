@@ -37,7 +37,8 @@ impl Display for Modifier {
             Modifier::Dim7 => write!(f, "dim7"),
             Modifier::Omit(d) => write!(f, "omit{}", d),
             Modifier::Add(d) => write!(f, "add{}", d),
-            Modifier::Tension(Degree(a, d)) => write!(f, "{}{}", a, d),
+            // Degree(number, accidental): notation writes the accidental first (e.g. "b9")
+            Modifier::Tension(Degree(number, accidental)) => write!(f, "{}{}", accidental, number),
         }
     }
 }

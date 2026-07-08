@@ -230,6 +230,28 @@ mod tests {
     }
 
     #[test]
+    fn test_chord_display_roundtrip() {
+        // parse -> Display -> parse must preserve the chord tones
+        for code in [
+            "C", "C7", "Cmaj7", "Cm7", "Csus2", "Csus4", "Cdim7", "Caug7", "C7(b9)", "C7(#9)",
+            "C7(b13)",
+        ] {
+            let (_r, node) = chord_node_parser(span(code)).unwrap();
+            let text = format!("{}", node);
+            let (_r2, node2) = chord_node_parser(span(&text)).unwrap_or_else(|_| {
+                panic!("re-parse of displayed {:?} (from {:?}) failed", text, code)
+            });
+            assert_eq!(
+                node.to_chord().unwrap().semitones,
+                node2.to_chord().unwrap().semitones,
+                "roundtrip {:?} -> {:?}",
+                code,
+                text
+            );
+        }
+    }
+
+    #[test]
     fn test_tentions_parser() -> Result<()> {
         for tension in ["(b9)", "(#9)", "(b5)", "(#5)", "(b13)", "(b9,#11)"] {
             let span = span(tension);
