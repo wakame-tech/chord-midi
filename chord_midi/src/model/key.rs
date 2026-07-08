@@ -31,6 +31,19 @@ impl Key {
         }
     }
 
+    pub fn shift(self, semitones: i8, _tonic: Pitch, scale: Scale) -> Key {
+        match self {
+            Key::Absolute(p) => {
+                let n = (p as i8 + semitones).rem_euclid(12) as u8;
+                Key::Absolute(Pitch::try_from(n).unwrap())
+            }
+            Key::Relative(Degree(d, acc)) => {
+                let s = (scale.semitone(d) as i8 + i8::from(acc) + semitones).rem_euclid(12) as u8;
+                Key::Relative(Degree::from_semitone(s))
+            }
+        }
+    }
+
     /// Absolute -> degree. Deliberately chromatic (major/`from_semitone`-based),
     /// so it is NOT a scale-aware inverse of `into_pitch` under non-major modes.
     /// `scale` is accepted for signature symmetry but intentionally unused.

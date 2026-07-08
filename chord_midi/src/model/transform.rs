@@ -35,6 +35,9 @@ impl Ast {
                     .map(|node| match node {
                         Node::Chord(c) => Node::Chord(chordnode_into_degree(c, tonic, scale)),
                         Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_degree(c, tonic, scale)),
+                        Node::Transform(t, c) => {
+                            Node::Transform(t, chordnode_into_degree(c, tonic, scale))
+                        }
                         other => other,
                     })
                     .collect::<Vec<_>>(),
@@ -58,6 +61,9 @@ impl Ast {
                     .map(|node| match node {
                         Node::Chord(c) => Node::Chord(chordnode_into_pitch(c, tonic, scale)),
                         Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_pitch(c, tonic, scale)),
+                        Node::Transform(t, c) => {
+                            Node::Transform(t, chordnode_into_pitch(c, tonic, scale))
+                        }
                         other => other,
                     })
                     .collect::<Vec<_>>(),

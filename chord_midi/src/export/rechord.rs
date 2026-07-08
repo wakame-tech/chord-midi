@@ -48,10 +48,21 @@ impl Display for Node {
         match self {
             Node::Chord(chord) => write!(f, "{}", chord),
             Node::Arpeggio(chord) => write!(f, "arp({})", chord),
+            Node::Transform(t, c) => write!(f, "{}({})", transform_prefix(t), c),
             Node::Rest => write!(f, "N.C."),
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
         }
+    }
+}
+
+fn transform_prefix(t: &crate::model::ast::Transform) -> &'static str {
+    use crate::model::ast::Transform::*;
+    match t {
+        S25 => "s25",
+        Sub => "sub",
+        Dom => "dom",
+        Blk => "blk",
     }
 }
 

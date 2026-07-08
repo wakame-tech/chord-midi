@@ -124,6 +124,18 @@ impl Score {
                     self.notes.push(Note::new(Some(vec![n]), d));
                 }
             }
+            Node::Transform(t, c) => {
+                let nodes = t.expand(
+                    c,
+                    crate::model::pitch::Pitch::C,
+                    crate::model::scale::Scale::Major,
+                );
+                let k = nodes.len().max(1) as u32;
+                let each = (dur / k).max(1);
+                for n in nodes {
+                    self.interpret_node(n, each)?;
+                }
+            }
             Node::Repeat => {
                 self.sustain = dur;
             }
