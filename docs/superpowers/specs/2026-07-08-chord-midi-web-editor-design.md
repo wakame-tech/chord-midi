@@ -51,8 +51,8 @@ block（同時発音）が既定、`arp(...)` で囲んだノードのみ順次�
 - `arp(chord)` は独自に発音列を作る:
   - `into_note_numbers(&chord)` で音番号列（昇順）を取得。
   - 総尺 = `dur`（`measure_unit_size` 由来のノード尺）。
-  - 音数 `k` で `dur` を等分（`dur / k`）。端数は最後の音か先頭に寄せる。`dur < k`（1未満になる）場合は各音 duration 最小 1 とし総尺超過を許容（丸め）。
-  - 各音を単音の `Note`（`Some(vec![n])`, 分割 duration）として順に push。
+  - 発音数 `k = min(音数, dur)` に制限（`.max(1)` で下限保証）。`dur / k` を各音に割り当て、端数は最後の音に寄せる。これにより総尺は常に `dur` に一致し、密な小節（`dur < 音数`）でも持ち尺超過で後続ノードがずれない。`dur < 音数` のときは上位の音を落とす。
+  - 各音を単音の `Note`（`Some(vec![n])`, 分割 duration）として昇順に push。
 - arpeggio ノードは `pre`/`sustain` を汚さない（`=` サステインの対象にしない）。直後の `=` は arpeggio を延長せず、それ以前の block chord に作用する既存挙動を維持。
 
 ### テスト（core, `cargo test -p chord_midi`）
