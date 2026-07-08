@@ -112,10 +112,15 @@ impl Score {
                 self.sustain = dur;
             }
             Node::Arpeggio(node) => {
-                // 暫定: block と同じ。Task 2 で順次発音に置換
                 let chord = node.to_chord()?;
-                self.pre = Some(chord.clone());
-                self.sustain = dur;
+                let notes = into_note_numbers(&chord)?;
+                let k = notes.len().max(1) as u32;
+                let each = (dur / k).max(1);
+                let rem = dur % k;
+                for (i, n) in notes.into_iter().enumerate() {
+                    let d = each + if i as u32 == k - 1 { rem } else { 0 };
+                    self.notes.push(Note::new(Some(vec![n]), d));
+                }
             }
             Node::Repeat => {
                 self.sustain = dur;
@@ -218,4 +223,31 @@ fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
     mfile.push_track(track)?;
     mfile.write(f)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Note, Score};
+    use crate::import::{Importer, RechordImporter};
+
+    fn notes_of(code: &str) -> Vec<Note> {
+        let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
+        let mut score = Score::new();
+        score.interpret(ast).unwrap();
+        score.notes
+    }
+
+    #[test]
+    fn test_block_chord_is_simultaneous() {
+        let notes = notes_of("C");
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].chord.as_ref().unwrap().len(), 3); // C E G
+    }
+
+    #[test]
+    fn test_arpeggio_is_sequential() {
+        let notes = notes_of("arp(C)");
+        assert_eq!(notes.len(), 3); // 3音が順次
+        assert!(notes.iter().all(|n| n.chord.as_ref().unwrap().len() == 1));
+    }
 }
