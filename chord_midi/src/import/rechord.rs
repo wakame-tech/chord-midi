@@ -2,7 +2,11 @@ use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
 use crate::model::ast::Ast;
+use crate::model::ast::Directive;
+use crate::model::pitch::Pitch;
+use crate::model::scale::Scale;
 use anyhow::Result;
+use std::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, not_line_ending, space0};
@@ -29,9 +33,27 @@ impl super::Importer for RechordImporter {
 #[tracable_parser]
 fn ast_parser(s: Span) -> IResult<Span, Ast> {
     map(
-        tuple((many1(alt((comment_parser, measure_parser))), eof)),
+        tuple((many1(alt((directive_parser, comment_parser, measure_parser))), eof)),
         |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
     )(s)
+}
+
+#[tracable_parser]
+fn directive_parser(s: Span) -> IResult<Span, Ast> {
+    alt((
+        map(
+            tuple((tag("key:"), space0, not_line_ending, line_ending)),
+            |(_, _, val, _): (Span, Span, Span, Span)| {
+                Ast::Directive(Directive::Key(Pitch::from_str(val.fragment().trim()).unwrap()))
+            },
+        ),
+        map(
+            tuple((tag("scale:"), space0, not_line_ending, line_ending)),
+            |(_, _, val, _): (Span, Span, Span, Span)| {
+                Ast::Directive(Directive::Scale(Scale::from_str(val.fragment().trim()).unwrap()))
+            },
+        ),
+    ))(s)
 }
 
 #[tracable_parser]
@@ -97,5 +119,17 @@ mod tests {
             assert_eq!(res.into_fragment(), "");
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_directive_parser() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Directive};
+        use crate::model::pitch::Pitch;
+        use crate::model::scale::Scale;
+        let ast = RechordImporter.import("key: C\nscale: dorian\nC |\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!() };
+        assert!(matches!(items[0].as_ref(), Ast::Directive(Directive::Key(Pitch::C))));
+        assert!(matches!(items[1].as_ref(), Ast::Directive(Directive::Scale(Scale::Dorian))));
     }
 }

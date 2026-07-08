@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Ast, ChordNode, Node};
+use crate::model::ast::{Ast, ChordNode, Directive, Node};
 use std::{fmt::Display, io::Write};
 
 impl Exporter for RechordExporter {
@@ -21,6 +21,8 @@ impl Display for Ast {
             Ast::Comment(comment) => {
                 writeln!(f, "# {}", comment)
             }
+            Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
+            Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
             Ast::Measure(nodes, br) => {
                 write!(
                     f,

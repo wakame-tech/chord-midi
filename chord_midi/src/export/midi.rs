@@ -154,6 +154,7 @@ impl Score {
     fn interpret(&mut self, ast: Ast) -> Result<()> {
         match ast {
             Ast::Comment(_) => Ok(()),
+            Ast::Directive(_) => Ok(()),
             Ast::Score(score) => {
                 for node in score.into_iter() {
                     self.interpret(*node)?

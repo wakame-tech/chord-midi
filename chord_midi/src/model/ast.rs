@@ -3,14 +3,21 @@ use crate::model::{
     key::Key,
     modifier::Modifier,
     pitch::Pitch,
-    scale::Degree,
+    scale::{Degree, Scale},
 };
 use anyhow::Result;
 use std::collections::BTreeSet;
 
 #[derive(Debug, PartialEq)]
+pub enum Directive {
+    Key(Pitch),
+    Scale(Scale),
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Ast {
     Comment(String),
+    Directive(Directive),
     // nodes, br?
     Measure(Vec<Node>, bool),
     Score(Vec<Box<Ast>>),
