@@ -292,4 +292,30 @@ mod tests {
         // total duration must equal 5 nodes * dur(2) = 10 (old buggy code gave 25)
         assert_eq!(notes.iter().map(|n| n.duration).sum::<u32>(), 10);
     }
+
+    #[test]
+    fn test_s25_produces_two_chords() {
+        let notes = notes_of("s25(G7)");
+        let chord_notes: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 2);
+    }
+
+    #[test]
+    fn test_blk_produces_one_four_note_chord() {
+        let notes = notes_of("blk(F)");
+        let chord_notes: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 1);
+        // Baug/F = F(bass) + B D# G = 4 notes
+        assert_eq!(chord_notes[0].chord.as_ref().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn test_transform_with_key_directive() {
+        // degree + key + transform: key C, s25(V7) -> Dm7 G7 (2 chords)
+        let ast = RechordImporter.import("key: C\ns25(V7) |\n").unwrap();
+        let mut score = Score::new();
+        score.interpret(ast.resolve()).unwrap();
+        let chord_notes: Vec<_> = score.notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 2);
+    }
 }

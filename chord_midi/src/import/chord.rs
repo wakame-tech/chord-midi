@@ -322,4 +322,19 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn test_transform_display_roundtrip() {
+        for code in ["blk(F)", "s25(G7)", "sub(G7)", "dom(Dm7)"] {
+            let (_r, node) = super::node_parser(span(code)).unwrap();
+            let text = format!("{}", node);
+            let (_r2, node2) = super::node_parser(span(&text)).unwrap();
+            assert!(
+                matches!(node2, crate::model::ast::Node::Transform(_, _)),
+                "{} -> {}",
+                code,
+                text
+            );
+        }
+    }
 }
