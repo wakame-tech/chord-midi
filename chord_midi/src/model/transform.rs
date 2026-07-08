@@ -35,6 +35,9 @@ impl Ast {
                     .map(|node| match node {
                         Node::Chord(c) => Node::Chord(chordnode_into_degree(c, tonic, scale)),
                         Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_degree(c, tonic, scale)),
+                        Node::Transform(t, c) => {
+                            Node::Transform(t, chordnode_into_degree(c, tonic, scale))
+                        }
                         other => other,
                     })
                     .collect::<Vec<_>>(),
@@ -58,6 +61,9 @@ impl Ast {
                     .map(|node| match node {
                         Node::Chord(c) => Node::Chord(chordnode_into_pitch(c, tonic, scale)),
                         Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_pitch(c, tonic, scale)),
+                        Node::Transform(t, c) => {
+                            Node::Transform(t, chordnode_into_pitch(c, tonic, scale))
+                        }
                         other => other,
                     })
                     .collect::<Vec<_>>(),
@@ -67,9 +73,10 @@ impl Ast {
         }
     }
 
-    /// Apply key/scale directives: transpose degrees to pitches and strip
-    /// Directive/Comment nodes, yielding a playback-ready AST.
-    /// (Phase 2 will add Transform-node expansion here.)
+    /// Apply key/scale directives: transpose degrees to pitches (including the
+    /// inner chord of Transform/Arpeggio nodes) and strip Directive/Comment nodes,
+    /// yielding a playback-ready AST. Transform nodes are expanded later, at
+    /// MIDI interpret time (`Score::interpret_node`).
     pub fn resolve(self) -> Ast {
         let mut tonic: Option<Pitch> = None;
         let mut scale = Scale::Major;

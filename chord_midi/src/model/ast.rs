@@ -27,9 +27,61 @@ pub enum Ast {
 pub enum Node {
     Chord(ChordNode),
     Arpeggio(ChordNode),
+    Transform(Transform, ChordNode),
     Rest,
     Sustain,
     Repeat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Transform {
+    S25,
+    Sub,
+    Dom,
+    Blk,
+}
+
+fn transform_chord(key: Key, extra: &[Modifier], on: Option<Key>) -> ChordNode {
+    let mut modifiers = BTreeSet::new();
+    modifiers.insert(Modifier::Major(5));
+    for m in extra {
+        modifiers.insert(m.clone());
+    }
+    ChordNode { key, modifiers, on }
+}
+
+impl Transform {
+    /// Expand into standard nodes. tonic/scale are for Relative-key shift math
+    /// (usually called after into_pitch so keys are Absolute and tonic/scale are ignored).
+    pub fn expand(self, c: ChordNode, tonic: Pitch, scale: Scale) -> Vec<Node> {
+        match self {
+            Transform::S25 => {
+                let ii = transform_chord(
+                    c.key.clone().shift(7, tonic, scale),
+                    &[Modifier::Minor(7)],
+                    None,
+                );
+                vec![Node::Chord(ii), Node::Chord(c)]
+            }
+            // sub/dom produce a fresh dominant chord; the source chord's slash bass
+            // (`on`) is intentionally discarded.
+            Transform::Sub => vec![Node::Chord(transform_chord(
+                c.key.shift(6, tonic, scale),
+                &[Modifier::Dominant(7)],
+                None,
+            ))],
+            Transform::Dom => vec![Node::Chord(transform_chord(
+                c.key,
+                &[Modifier::Dominant(7)],
+                None,
+            ))],
+            Transform::Blk => vec![Node::Chord(transform_chord(
+                c.key.clone().shift(6, tonic, scale),
+                &[Modifier::Aug],
+                Some(c.key),
+            ))],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,5 +118,74 @@ impl ChordNode {
         chord.octave = octave;
         chord.inversion = inversion;
         Ok(chord)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::pitch::Pitch;
+    use crate::model::scale::Scale;
+
+    fn semis(node: &Node) -> Vec<u8> {
+        match node {
+            Node::Chord(c) => c.to_chord().unwrap().semitones.into_iter().collect(),
+            _ => panic!("not a chord"),
+        }
+    }
+
+    #[test]
+    fn test_blk_expand() {
+        // blk(F) = Baug/F. The chord's own semitones are the aug triad rooted at B
+        // ({0,4,8}, root-relative, bass excluded); the F bass is carried in `on` and
+        // is appended below at MIDI export. Full 4-note output {F,B,D#,G} is checked
+        // e2e in test_blk_produces_one_chord.
+        let f = ChordNode::absolute(Pitch::F);
+        let nodes = Transform::Blk.expand(f, Pitch::C, Scale::Major);
+        assert_eq!(nodes.len(), 1);
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
+        assert_eq!(c.key, Key::Absolute(Pitch::B));
+        assert_eq!(c.on, Some(Key::Absolute(Pitch::F)));
+        assert_eq!(semis(&nodes[0]), vec![0, 4, 8]);
+    }
+
+    #[test]
+    fn test_sub_dom_expand() {
+        use std::collections::BTreeSet;
+        let g = ChordNode {
+            key: Key::Absolute(Pitch::G),
+            modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Dominant(7)]),
+            on: None,
+        };
+        let subbed = Transform::Sub.expand(g.clone(), Pitch::C, Scale::Major);
+        assert_eq!(subbed.len(), 1);
+        assert!(matches!(&subbed[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::Cs)));
+        assert_eq!(semis(&subbed[0]), vec![0, 4, 7, 10]);
+
+        let dm7 = ChordNode {
+            key: Key::Absolute(Pitch::D),
+            modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Minor(7)]),
+            on: None,
+        };
+        let dommed = Transform::Dom.expand(dm7, Pitch::C, Scale::Major);
+        assert!(matches!(&dommed[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
+        assert_eq!(semis(&dommed[0]), vec![0, 4, 7, 10]);
+    }
+
+    #[test]
+    fn test_s25_expand() {
+        use std::collections::BTreeSet;
+        let g = ChordNode {
+            key: Key::Absolute(Pitch::G),
+            modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Dominant(7)]),
+            on: None,
+        };
+        let nodes = Transform::S25.expand(g, Pitch::C, Scale::Major);
+        assert_eq!(nodes.len(), 2);
+        assert!(matches!(&nodes[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
+        assert_eq!(semis(&nodes[0]), vec![0, 3, 7, 10]);
+        assert!(matches!(&nodes[1], Node::Chord(c) if c.key == Key::Absolute(Pitch::G)));
     }
 }

@@ -1,5 +1,5 @@
 use super::parser_util::{capture, Span};
-use crate::model::ast::{ChordNode, Node};
+use crate::model::ast::{ChordNode, Node, Transform};
 use crate::model::key::Key;
 use crate::model::modifier::Modifier;
 use crate::model::pitch::{Accidental, Pitch};
@@ -51,6 +51,18 @@ pub fn node_parser(s: Span) -> IResult<Span, Node> {
             delimited(tag("arp("), chord_node_parser, tag(")")),
             Node::Arpeggio,
         ),
+        map(delimited(tag("blk("), chord_node_parser, tag(")")), |c| {
+            Node::Transform(Transform::Blk, c)
+        }),
+        map(delimited(tag("s25("), chord_node_parser, tag(")")), |c| {
+            Node::Transform(Transform::S25, c)
+        }),
+        map(delimited(tag("sub("), chord_node_parser, tag(")")), |c| {
+            Node::Transform(Transform::Sub, c)
+        }),
+        map(delimited(tag("dom("), chord_node_parser, tag(")")), |c| {
+            Node::Transform(Transform::Dom, c)
+        }),
         map(chord_node_parser, Node::Chord),
     ))(s)
 }
@@ -263,6 +275,19 @@ mod tests {
     }
 
     #[test]
+    fn test_transform_parser() {
+        for code in ["blk(F)", "s25(G7)", "sub(G7)", "dom(Dm7)"] {
+            let (rest, node) = super::node_parser(span(code)).unwrap();
+            assert_eq!(rest.into_fragment(), "", "{}", code);
+            assert!(
+                matches!(node, crate::model::ast::Node::Transform(_, _)),
+                "{}",
+                code
+            );
+        }
+    }
+
+    #[test]
     fn test_arpeggio_parser() -> Result<()> {
         for code in ["arp(C)", "arp(Cm7)", "arp(C/E)"] {
             let span = span(code);
@@ -296,5 +321,20 @@ mod tests {
             assert_eq!(res.into_fragment(), "");
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_transform_display_roundtrip() {
+        for code in ["blk(F)", "s25(G7)", "sub(G7)", "dom(Dm7)"] {
+            let (_r, node) = super::node_parser(span(code)).unwrap();
+            let text = format!("{}", node);
+            let (_r2, node2) = super::node_parser(span(&text)).unwrap();
+            assert!(
+                matches!(node2, crate::model::ast::Node::Transform(_, _)),
+                "{} -> {}",
+                code,
+                text
+            );
+        }
     }
 }

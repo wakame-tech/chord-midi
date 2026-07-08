@@ -124,6 +124,23 @@ impl Score {
                     self.notes.push(Note::new(Some(vec![n]), d));
                 }
             }
+            Node::Transform(t, c) => {
+                // keys are already Absolute after resolve(); Absolute shift ignores tonic/scale
+                let nodes = t.expand(
+                    c,
+                    crate::model::pitch::Pitch::C,
+                    crate::model::scale::Scale::Major,
+                );
+                // cap the expanded-node count to the slot so a dense measure can't overrun
+                // (mirrors the arpeggio guard); each sub-chord gets an equal share of dur
+                let k = (nodes.len() as u32).min(dur).max(1);
+                let each = dur / k;
+                let rem = dur % k;
+                for (i, n) in nodes.into_iter().take(k as usize).enumerate() {
+                    let d = each + if i as u32 == k - 1 { rem } else { 0 };
+                    self.interpret_node(n, d)?;
+                }
+            }
             Node::Repeat => {
                 self.sustain = dur;
             }
@@ -242,6 +259,15 @@ mod tests {
     }
 
     #[test]
+    fn test_transform_dense_measure_no_overrun() {
+        // 9 nodes -> dur 1 each; each s25 (2 chords) is capped to 1 chord/slot,
+        // so total duration stays 9 (un-capped it would overrun to 18)
+        let notes =
+            notes_of("s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7)");
+        assert_eq!(notes.iter().map(|n| n.duration).sum::<u32>(), 9);
+    }
+
+    #[test]
     fn test_degree_progression_midi() {
         let ast = RechordImporter.import("key: C\nI | IV | V | I |\n").unwrap();
         let mut score = Score::new();
@@ -279,5 +305,31 @@ mod tests {
         assert!(notes.iter().all(|n| n.chord.as_ref().unwrap().len() == 1));
         // total duration must equal 5 nodes * dur(2) = 10 (old buggy code gave 25)
         assert_eq!(notes.iter().map(|n| n.duration).sum::<u32>(), 10);
+    }
+
+    #[test]
+    fn test_s25_produces_two_chords() {
+        let notes = notes_of("s25(G7)");
+        let chord_notes: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 2);
+    }
+
+    #[test]
+    fn test_blk_produces_one_four_note_chord() {
+        let notes = notes_of("blk(F)");
+        let chord_notes: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 1);
+        // Baug/F = F(bass) + B D# G = 4 notes
+        assert_eq!(chord_notes[0].chord.as_ref().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn test_transform_with_key_directive() {
+        // degree + key + transform: key C, s25(V7) -> Dm7 G7 (2 chords)
+        let ast = RechordImporter.import("key: C\ns25(V7) |\n").unwrap();
+        let mut score = Score::new();
+        score.interpret(ast.resolve()).unwrap();
+        let chord_notes: Vec<_> = score.notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(chord_notes.len(), 2);
     }
 }
