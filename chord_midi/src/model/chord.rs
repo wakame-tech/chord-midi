@@ -203,10 +203,12 @@ impl Chord {
                 let b = other.octave * 12 + bp.clone() as u8;
                 Ok::<_, anyhow::Error>(a.abs_diff(b))
             }
-            (Key::Relative(sa), Key::Relative(sb)) => {
-                let a = self.octave * 12 + *sa;
-                let b = other.octave * 12 + *sb;
-                Ok(a.abs_diff(b))
+            (Key::Relative(da), Key::Relative(db)) => {
+                let sa = Scale::Major.semitone(da.0) as i8 + i8::from(da.1.clone());
+                let sb = Scale::Major.semitone(db.0) as i8 + i8::from(db.1.clone());
+                let a = self.octave as i8 * 12 + sa;
+                let b = other.octave as i8 * 12 + sb;
+                Ok::<_, anyhow::Error>(a.abs_diff(b) as u8)
             }
             _ => return Err(anyhow::anyhow!("key type mismatch")),
         }?;

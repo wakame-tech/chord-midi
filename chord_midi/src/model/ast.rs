@@ -3,13 +3,21 @@ use crate::model::{
     key::Key,
     modifier::Modifier,
     pitch::Pitch,
+    scale::{Degree, Scale},
 };
 use anyhow::Result;
 use std::collections::BTreeSet;
 
 #[derive(Debug, PartialEq)]
+pub enum Directive {
+    Key(Pitch),
+    Scale(Scale),
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Ast {
     Comment(String),
+    Directive(Directive),
     // nodes, br?
     Measure(Vec<Node>, bool),
     Score(Vec<Box<Ast>>),
@@ -40,9 +48,9 @@ impl ChordNode {
         }
     }
 
-    pub fn relative(semitone: u8) -> Self {
+    pub fn relative(degree: Degree) -> Self {
         ChordNode {
-            key: Key::Relative(semitone),
+            key: Key::Relative(degree),
             modifiers: BTreeSet::new(),
             on: None,
         }

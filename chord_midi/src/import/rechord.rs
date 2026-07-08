@@ -2,11 +2,15 @@ use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
 use crate::model::ast::Ast;
+use crate::model::ast::Directive;
+use crate::model::pitch::Pitch;
+use crate::model::scale::Scale;
 use anyhow::Result;
+use std::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, not_line_ending, space0};
-use nom::combinator::{eof, map, value};
+use nom::combinator::{eof, map, map_res, value};
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
@@ -29,9 +33,30 @@ impl super::Importer for RechordImporter {
 #[tracable_parser]
 fn ast_parser(s: Span) -> IResult<Span, Ast> {
     map(
-        tuple((many1(alt((comment_parser, measure_parser))), eof)),
+        tuple((many1(alt((directive_parser, comment_parser, measure_parser))), eof)),
         |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
     )(s)
+}
+
+#[tracable_parser]
+fn directive_parser(s: Span) -> IResult<Span, Ast> {
+    // a bad value (e.g. `key: H`) fails the parse gracefully (map_res) rather
+    // than panicking — important for the realtime web editor while typing.
+    // The terminator accepts eof so a trailing directive without a newline parses.
+    alt((
+        map_res(
+            tuple((tag("key:"), space0, not_line_ending, alt((line_ending, eof)))),
+            |(_, _, val, _): (Span, Span, Span, Span)| {
+                Pitch::from_str(val.fragment().trim()).map(|p| Ast::Directive(Directive::Key(p)))
+            },
+        ),
+        map_res(
+            tuple((tag("scale:"), space0, not_line_ending, alt((line_ending, eof)))),
+            |(_, _, val, _): (Span, Span, Span, Span)| {
+                Scale::from_str(val.fragment().trim()).map(|s| Ast::Directive(Directive::Scale(s)))
+            },
+        ),
+    ))(s)
 }
 
 #[tracable_parser]
@@ -97,5 +122,52 @@ mod tests {
             assert_eq!(res.into_fragment(), "");
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_directive_parser() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Directive};
+        use crate::model::pitch::Pitch;
+        use crate::model::scale::Scale;
+        let ast = RechordImporter.import("key: C\nscale: dorian\nC |\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!() };
+        assert!(matches!(items[0].as_ref(), Ast::Directive(Directive::Key(Pitch::C))));
+        assert!(matches!(items[1].as_ref(), Ast::Directive(Directive::Scale(Scale::Dorian))));
+    }
+
+    #[test]
+    fn test_bad_directive_errors_not_panics() {
+        use crate::import::{Importer, RechordImporter};
+        // invalid pitch / scale must yield an Err (graceful), never panic
+        assert!(RechordImporter.import("key: H\nC |\n").is_err());
+        assert!(RechordImporter.import("scale: bogus\nC |\n").is_err());
+    }
+
+    #[test]
+    fn test_scale_directive_changes_pitch() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Node};
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+        // III resolves differently per scale: Major -> E, Dorian -> D#/Ds
+        let major = RechordImporter.import("key: C\nIII |\n").unwrap().resolve();
+        let dorian = RechordImporter
+            .import("key: C\nscale: dorian\nIII |\n")
+            .unwrap()
+            .resolve();
+        let first_key = |ast: &Ast| -> Key {
+            let Ast::Score(items) = ast else { panic!() };
+            for it in items {
+                if let Ast::Measure(nodes, _) = it.as_ref() {
+                    if let Some(Node::Chord(c)) = nodes.first() {
+                        return c.key.clone();
+                    }
+                }
+            }
+            panic!("no chord")
+        };
+        assert_eq!(first_key(&major), Key::Absolute(Pitch::E));
+        assert_eq!(first_key(&dorian), Key::Absolute(Pitch::Ds));
     }
 }
