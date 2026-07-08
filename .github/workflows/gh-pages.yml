@@ -12,9 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add wasm32-unknown-unknown
-      - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall -y trunk
-      - run: cd chord_midi_web && trunk build --release --public-url chord-midi
+      - name: Install trunk
+        run: |
+          curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
+            | tar -xzf - -C "$HOME/.cargo/bin"
+      - run: cd chord_midi_web && trunk build --release --public-url /chord-midi/
       - run: cp -r ./chord_midi_web/dist/ ./public/
       - uses: actions/upload-pages-artifact@v3
         with:
