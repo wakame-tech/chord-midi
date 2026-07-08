@@ -77,22 +77,23 @@ impl Ast {
     /// inner chord of Transform/Arpeggio nodes) and strip Directive/Comment nodes,
     /// yielding a playback-ready AST. Transform nodes are expanded later, at
     /// MIDI interpret time (`Score::interpret_node`).
+    ///
+    /// When no `key:` directive is present the tonic defaults to C, so a
+    /// degree-notation progression (e.g. a preset) always resolves to concrete
+    /// pitches and plays, rather than leaving unplayable relative keys.
     pub fn resolve(self) -> Ast {
-        let mut tonic: Option<Pitch> = None;
+        let mut tonic = Pitch::C;
         let mut scale = Scale::Major;
         if let Ast::Score(items) = &self {
             for it in items {
                 match it.as_ref() {
-                    Ast::Directive(Directive::Key(p)) => tonic = Some(*p),
+                    Ast::Directive(Directive::Key(p)) => tonic = *p,
                     Ast::Directive(Directive::Scale(s)) => scale = *s,
                     _ => {}
                 }
             }
         }
-        let transposed = match tonic {
-            Some(t) => self.into_pitch(t, scale),
-            None => self,
-        };
+        let transposed = self.into_pitch(tonic, scale);
         match transposed {
             Ast::Score(items) => Ast::Score(
                 items

@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 yew = { version = "0.21", features = ["csr"] }
-web-sys = "0.3.66"
+web-sys = { version = "0.3.66", features = ["HtmlSelectElement"] }
 chord_midi = { path = "../chord_midi" }

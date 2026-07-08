@@ -23,7 +23,7 @@ pub fn match_pitches(base: u8, chord: &Chord) -> Result<(u8, u8)> {
         for inversion in 0..chord.semitones.len() as u8 {
             chord.octave = octave;
             chord.inversion = inversion;
-            let chord_root = chord.root_pitch().unwrap();
+            let chord_root = chord.root_pitch()?;
             let d = base.abs_diff(chord_root);
             if d < diff {
                 diff = d;
