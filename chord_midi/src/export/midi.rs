@@ -125,15 +125,20 @@ impl Score {
                 }
             }
             Node::Transform(t, c) => {
+                // keys are already Absolute after resolve(); Absolute shift ignores tonic/scale
                 let nodes = t.expand(
                     c,
                     crate::model::pitch::Pitch::C,
                     crate::model::scale::Scale::Major,
                 );
-                let k = nodes.len().max(1) as u32;
-                let each = (dur / k).max(1);
-                for n in nodes {
-                    self.interpret_node(n, each)?;
+                // cap the expanded-node count to the slot so a dense measure can't overrun
+                // (mirrors the arpeggio guard); each sub-chord gets an equal share of dur
+                let k = (nodes.len() as u32).min(dur).max(1);
+                let each = dur / k;
+                let rem = dur % k;
+                for (i, n) in nodes.into_iter().take(k as usize).enumerate() {
+                    let d = each + if i as u32 == k - 1 { rem } else { 0 };
+                    self.interpret_node(n, d)?;
                 }
             }
             Node::Repeat => {
@@ -251,6 +256,15 @@ mod tests {
         let mut score = Score::new();
         score.interpret(ast).unwrap();
         score.notes
+    }
+
+    #[test]
+    fn test_transform_dense_measure_no_overrun() {
+        // 9 nodes -> dur 1 each; each s25 (2 chords) is capped to 1 chord/slot,
+        // so total duration stays 9 (un-capped it would overrun to 18)
+        let notes =
+            notes_of("s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7) s25(G7)");
+        assert_eq!(notes.iter().map(|n| n.duration).sum::<u32>(), 9);
     }
 
     #[test]

@@ -63,6 +63,8 @@ impl Transform {
                 );
                 vec![Node::Chord(ii), Node::Chord(c)]
             }
+            // sub/dom produce a fresh dominant chord; the source chord's slash bass
+            // (`on`) is intentionally discarded.
             Transform::Sub => vec![Node::Chord(transform_chord(
                 c.key.shift(6, tonic, scale),
                 &[Modifier::Dominant(7)],
