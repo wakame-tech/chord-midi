@@ -1,14 +1,313 @@
-body {
-    font-family: sans-serif;
-    margin: 16px;
+:root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1c2024;
+    --muted: #6b7280;
+    --line: #d9dde3;
+    --accent: #1f618d;
+    --danger: #c0392b;
+    --radius: 8px;
 }
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+        "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* ---- ヘッダ ---- */
+
+.app-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.app-name {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.app-tagline {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.player {
+    flex: 1 1 320px;
+    max-width: 460px;
+}
+
+midi-player {
+    display: block;
+    width: 100%;
+}
+
+midi-visualizer {
+    display: block;
+    height: 72px;
+    transition: height 0.15s ease;
+    /* ピアノロールは長くなるので横スクロールで見られるようにする */
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+midi-visualizer.is-empty {
+    height: 0;
+    border-bottom: none;
+}
+
+/* ---- タブ ---- */
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+.tab {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 14px;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+
+.tab:hover {
+    color: var(--ink);
+}
+
+.tab.is-active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--danger);
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+/* ---- パネル ---- */
+
+.panel {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.editor {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--panel);
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    resize: vertical;
+}
+
+.editor:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.error {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    background: #fdecea;
+    border-left: 3px solid var(--danger);
+    border-radius: 0 4px 4px 0;
+    color: var(--danger);
+    font-size: 13px;
+    white-space: pre-wrap;
+}
+
+/* ---- コントロール ---- */
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.field > label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.field-value {
+    min-width: 3ch;
+    font-variant-numeric: tabular-nums;
+}
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.block {
+    margin-top: 16px;
+}
+
+.block-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.btn {
+    appearance: none;
+    padding: 5px 12px;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.btn:disabled {
+    color: var(--muted);
+    opacity: 0.6;
+    cursor: default;
+}
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: #17496b;
+    border-color: #17496b;
+    color: #fff;
+}
+
+select {
+    padding: 4px 8px;
+    background: var(--panel);
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+}
+
+input[type="range"] {
+    width: 160px;
+}
+
+.ast {
+    margin-top: 20px;
+    padding: 8px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.ast > summary {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ast > pre {
+    margin: 8px 0 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: pre-wrap;
+}
+
+.empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 48px 0;
+}
+
+/* ---- 押さえ方ダイアグラム ---- */
 
 .fingerings {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: 10px 0;
-    margin: 12px 0;
+    gap: 14px 0;
 }
 
 /* 1小節分のカードをまとめ、右端に小節線を引く */
@@ -16,8 +315,8 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    padding: 0 10px;
-    border-right: 2px solid #bbb;
+    padding: 0 12px;
+    border-right: 2px solid var(--line);
 }
 
 /* 入力の改行位置でカードの並びを折り返す */
@@ -27,29 +326,28 @@ body {
 }
 
 .chord-card {
-    border: 2px solid var(--chord-color, #333);
-    border-radius: 6px;
-    padding: 6px;
-    background: #fff;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--chord-color, var(--ink));
+    border-radius: var(--radius);
+    padding: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .chord-name {
-    background: var(--chord-color, #333);
-    color: #fff;
-    font-weight: bold;
-    font-size: 13px;
+    color: var(--chord-color, var(--ink));
+    font-weight: 700;
+    font-size: 14px;
     line-height: 1.3;
     text-align: center;
-    border-radius: 3px;
-    padding: 2px 6px;
     /* 別名が付いて長くなったら折り返す。カード幅は図に合わせて揃える */
     max-width: 124px;
 }
 
 .chord-alias {
+    color: var(--muted);
     font-size: 10px;
-    font-weight: normal;
-    opacity: 0.85;
+    font-weight: 400;
 }
 
 .diagram {
@@ -69,6 +367,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--muted);
     font-size: 11px;
     line-height: 1;
 }
@@ -76,17 +375,17 @@ body {
 /* 弦はセルの中央を横切る線、フレットはセルの右の縦線 */
 .cell {
     position: relative;
-    border-right: 1px solid #666;
-    background: linear-gradient(#666, #666) 0 50% / 100% 1px no-repeat;
+    border-right: 1px solid #8a9099;
+    background: linear-gradient(#8a9099, #8a9099) 0 50% / 100% 1px no-repeat;
 }
 
 .cell.nut {
-    border-left: 3px solid #000;
+    border-left: 3px solid var(--ink);
 }
 
 /* ナットより先から描き始めるときの左端はただのフレット線 */
 .cell.edge {
-    border-left: 1px solid #666;
+    border-left: 1px solid #8a9099;
 }
 
 .dot {
@@ -97,7 +396,7 @@ body {
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: #000;
+    background: var(--ink);
     color: #fff;
     font-size: 9px;
     line-height: 14px;
@@ -105,8 +404,8 @@ body {
 }
 
 .fret-label {
+    color: var(--muted);
     font-size: 10px;
-    color: #333;
     margin-top: 2px;
 }
 
@@ -118,7 +417,26 @@ body {
     width: 124px;
     height: 96px;
     margin-top: 6px;
-    color: #999;
+    color: var(--muted);
     font-size: 11px;
-    border: 1px dashed #bbb;
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+    .app-header {
+        padding: 10px 14px;
+    }
+
+    .app-tagline {
+        display: none;
+    }
+
+    .tabs {
+        padding: 0 14px;
+    }
+
+    .panel {
+        padding: 14px;
+    }
 }
