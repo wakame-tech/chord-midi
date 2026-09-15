@@ -46,8 +46,6 @@ pub struct Fingering {
     pub name: &'static str,
     /// 原典のセクション名 ("Cコード系" など)
     pub group: &'static str,
-    /// "x3201x" 形式
-    pub tab: &'static str,
     /// None = ミュート、Some(0) = 開放
     pub frets: [Option<u8>; 6],
     /// 押さえる弦だけ Some。開放弦とミュート弦は None
@@ -369,16 +367,6 @@ mod tests {
     fn data_is_consistent() {
         assert_eq!(FINGERINGS.len(), 67);
         for f in FINGERINGS {
-            let tab: String = f
-                .frets
-                .iter()
-                .map(|v| match v {
-                    None => "x".to_string(),
-                    Some(n) => n.to_string(),
-                })
-                .collect();
-            assert_eq!(tab, f.tab, "tab mismatch: {}", f.name);
-
             let mut pcs = 0u16;
             for (i, v) in f.frets.iter().enumerate() {
                 if let Some(n) = *v {
@@ -421,65 +409,83 @@ mod tests {
 
     #[test]
     fn known_fingerings() {
-        // C = x3201x。人=2弦1F / 中=4弦2F / 薬=5弦3F
-        let c = FINGERINGS.iter().find(|f| f.tab == "x3201x").unwrap();
+        // C = x-3-2-0-1-x。人=2弦1F / 中=4弦2F / 薬=5弦3F
+        let c = shape([None, Some(3), Some(2), Some(0), Some(1), None]);
         assert_eq!(c.fingers[4], Some(Finger::Index));
         assert_eq!(c.fingers[2], Some(Finger::Middle));
         assert_eq!(c.fingers[1], Some(Finger::Ring));
 
-        // F#m7-5 = 2x221x。6弦は親指、2弦1F が人差し指
-        let fsm = FINGERINGS.iter().find(|f| f.tab == "2x221x").unwrap();
+        // F#m7-5 = 2-x-2-2-1-x。6弦は親指、2弦1F が人差し指
+        let fsm = shape([Some(2), None, Some(2), Some(2), Some(1), None]);
         assert_eq!(fsm.fingers[0], Some(Finger::Thumb));
         assert_eq!(fsm.fingers[4], Some(Finger::Index));
 
-        // G = 3x000x。1本指のときは中指
-        let g = FINGERINGS.iter().find(|f| f.tab == "3x000x").unwrap();
+        // G = 3-x-0-0-0-x。1本指のときは中指
+        let g = shape([Some(3), None, Some(0), Some(0), Some(0), None]);
         assert_eq!(g.fingers[0], Some(Finger::Middle));
     }
 
-    fn tab_of(input: &str) -> &'static str {
+    /// テスト用。押さえ方を "x-3-2-0-1-x" の形にする。
+    /// 10フレット以上でも読めるよう区切る
+    fn tab(f: &Fingering) -> String {
+        f.frets
+            .iter()
+            .map(|v| v.map_or("x".to_string(), |n| n.to_string()))
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
+    /// 押さえ方をフレットの配列で引く
+    fn shape(frets: [Option<u8>; 6]) -> &'static Fingering {
+        FINGERINGS
+            .iter()
+            .find(|f| f.frets == frets)
+            .unwrap_or_else(|| panic!("no fingering with frets {:?}", frets))
+    }
+
+    fn tab_of(input: &str) -> String {
         let r = refs(input);
-        find(&r[0]).expect("no fingering found").tab
+        tab(find(&r[0]).expect("no fingering found"))
     }
 
     #[test]
     fn find_picks_the_matching_shape() {
-        assert_eq!(tab_of("C |\n"), "x3201x");
-        assert_eq!(tab_of("D |\n"), "xx0232");
-        assert_eq!(tab_of("E |\n"), "022100");
-        assert_eq!(tab_of("F |\n"), "xx321x");
-        assert_eq!(tab_of("G |\n"), "3x000x");
-        assert_eq!(tab_of("A |\n"), "x0222x");
-        assert_eq!(tab_of("Am7 |\n"), "x0201x");
-        assert_eq!(tab_of("Em7 |\n"), "020000");
-        assert_eq!(tab_of("Dm7 |\n"), "xx0211");
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("D |\n"), "x-x-0-2-3-2");
+        assert_eq!(tab_of("E |\n"), "0-2-2-1-0-0");
+        assert_eq!(tab_of("F |\n"), "x-x-3-2-1-x");
+        assert_eq!(tab_of("G |\n"), "3-x-0-0-0-x");
+        assert_eq!(tab_of("A |\n"), "x-0-2-2-2-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("Em7 |\n"), "0-2-0-0-0-0");
+        assert_eq!(tab_of("Dm7 |\n"), "x-x-0-2-1-1");
     }
 
     #[test]
     fn find_prefers_the_fuller_chord() {
-        // CM7 には C の形 (x3201x) ではなく C△7 の形が選ばれる
-        assert_eq!(tab_of("CM7 |\n"), "x3x000");
+        // CM7 には C の形ではなく C△7 の形が選ばれる
+        assert_eq!(tab_of("CM7 |\n"), "x-3-x-0-0-0");
     }
 
     #[test]
     fn find_falls_back_to_the_substitute_shape() {
         // 原典は B を B7、F#m を F#m7 で代用させる構成になっている
-        assert_eq!(tab_of("B |\n"), "x2120x");
-        assert_eq!(tab_of("Am |\n"), "x0201x");
-        assert_eq!(tab_of("Em |\n"), "020000");
-        assert_eq!(tab_of("F#m |\n"), "2x22xx");
-        assert_eq!(tab_of("C#m |\n"), "x4x400");
+        assert_eq!(tab_of("B |\n"), "x-2-1-2-0-x");
+        assert_eq!(tab_of("Am |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("Em |\n"), "0-2-0-0-0-0");
+        assert_eq!(tab_of("F#m |\n"), "2-x-2-2-x-x");
+        assert_eq!(tab_of("C#m |\n"), "x-4-x-4-0-0");
     }
 
     #[test]
     fn find_rejects_two_extra_notes() {
-        // Cm7 (x3x34x) は C に対して Eb と Bb の2音が余分なので候補に入らない
-        assert_ne!(tab_of("C |\n"), "x3x34x");
+        // Cm7 (x-3-x-3-4-x) は C に対して Eb と Bb の2音が余分なので候補に入らない
+        assert_ne!(tab_of("C |\n"), "x-3-x-3-4-x");
     }
 
     #[test]
     fn find_honors_slash_bass() {
-        assert_eq!(tab_of("D/F# |\n"), "2x023x");
+        assert_eq!(tab_of("D/F# |\n"), "2-x-0-2-3-x");
     }
 
     #[test]

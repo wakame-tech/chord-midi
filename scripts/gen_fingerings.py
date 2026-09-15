@@ -168,7 +168,6 @@ def build_rust(data):
             lines.append("    Fingering {")
             lines.append(f'        name: "{c["name"]}",')
             lines.append(f'        group: "{group["name"]}",')
-            lines.append(f'        tab: "{c["tab"]}",')
             lines.append("        frets: [" + ", ".join(opt_u8(v) for v in fr) + "],")
             lines.append(
                 "        fingers: [" + ", ".join(opt_finger(v) for v in c["fingers"]) + "],"

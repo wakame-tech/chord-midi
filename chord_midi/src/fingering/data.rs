@@ -6,7 +6,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C",
         group: "Cコード系",
-        tab: "x3201x",
         frets: [None, Some(3), Some(2), Some(0), Some(1), None],
         fingers: [
             None,
@@ -22,7 +21,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C",
         group: "Cコード系",
-        tab: "x3x01x",
         frets: [None, Some(3), None, Some(0), Some(1), None],
         fingers: [
             None,
@@ -38,7 +36,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C△7",
         group: "Cコード系",
-        tab: "x3x000",
         frets: [None, Some(3), None, Some(0), Some(0), Some(0)],
         fingers: [None, Some(Finger::Middle), None, None, None, None],
         pitch_classes: 0b100010010001, // C, G, B, E
@@ -47,7 +44,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Cadd9",
         group: "Cコード系",
-        tab: "x3x03x",
         frets: [None, Some(3), None, Some(0), Some(3), None],
         fingers: [
             None,
@@ -63,7 +59,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Csus4",
         group: "Cコード系",
-        tab: "x3301x",
         frets: [None, Some(3), Some(3), Some(0), Some(1), None],
         fingers: [
             None,
@@ -79,7 +74,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C/E",
         group: "Cコード系",
-        tab: "03201x",
         frets: [Some(0), Some(3), Some(2), Some(0), Some(1), None],
         fingers: [
             None,
@@ -95,7 +89,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C/E",
         group: "Cコード系",
-        tab: "xx201x",
         frets: [None, None, Some(2), Some(0), Some(1), None],
         fingers: [
             None,
@@ -111,7 +104,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Cm7",
         group: "Cコード系",
-        tab: "x3x34x",
         frets: [None, Some(3), None, Some(3), Some(4), None],
         fingers: [
             None,
@@ -127,7 +119,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C#△7",
         group: "Cコード系",
-        tab: "x4x56x",
         frets: [None, Some(4), None, Some(5), Some(6), None],
         fingers: [
             None,
@@ -143,7 +134,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C#m7",
         group: "Cコード系",
-        tab: "x4x400",
         frets: [None, Some(4), None, Some(4), Some(0), Some(0)],
         fingers: [
             None,
@@ -159,7 +149,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "C#m7-5",
         group: "Cコード系",
-        tab: "x4x000",
         frets: [None, Some(4), None, Some(0), Some(0), Some(0)],
         fingers: [None, Some(Finger::Middle), None, None, None, None],
         pitch_classes: 0b100010010010, // C#, G, B, E
@@ -168,7 +157,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "F",
         group: "Fコード系",
-        tab: "xx321x",
         frets: [None, None, Some(3), Some(2), Some(1), None],
         fingers: [
             None,
@@ -184,7 +172,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Fadd9",
         group: "Fコード系",
-        tab: "xx301x",
         frets: [None, None, Some(3), Some(0), Some(1), None],
         fingers: [
             None,
@@ -200,7 +187,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Fsus4",
         group: "Fコード系",
-        tab: "xx331x",
         frets: [None, None, Some(3), Some(3), Some(1), None],
         fingers: [
             None,
@@ -216,7 +202,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Fm",
         group: "Fコード系",
-        tab: "xx311x",
         frets: [None, None, Some(3), Some(1), Some(1), None],
         fingers: [
             None,
@@ -232,7 +217,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Fm7",
         group: "Fコード系",
-        tab: "1x11xx",
         frets: [Some(1), None, Some(1), Some(1), None, None],
         fingers: [
             Some(Finger::Index),
@@ -248,7 +232,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "F#7",
         group: "Fコード系",
-        tab: "2x23xx",
         frets: [Some(2), None, Some(2), Some(3), None, None],
         fingers: [
             Some(Finger::Index),
@@ -264,7 +247,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "F#m7",
         group: "Fコード系",
-        tab: "2x22xx",
         frets: [Some(2), None, Some(2), Some(2), None, None],
         fingers: [
             Some(Finger::Index),
@@ -280,7 +262,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "F#m7(11)",
         group: "Fコード系",
-        tab: "2x2200",
         frets: [Some(2), None, Some(2), Some(2), Some(0), Some(0)],
         fingers: [
             Some(Finger::Index),
@@ -296,7 +277,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "F#m7-5",
         group: "Fコード系",
-        tab: "2x221x",
         frets: [Some(2), None, Some(2), Some(2), Some(1), None],
         fingers: [
             Some(Finger::Thumb),
@@ -312,7 +292,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G",
         group: "Gコード系",
-        tab: "3x000x",
         frets: [Some(3), None, Some(0), Some(0), Some(0), None],
         fingers: [Some(Finger::Middle), None, None, None, None, None],
         pitch_classes: 0b100010000100, // G, D, G, B
@@ -321,7 +300,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G",
         group: "Gコード系",
-        tab: "3x003x",
         frets: [Some(3), None, Some(0), Some(0), Some(3), None],
         fingers: [
             Some(Finger::Index),
@@ -337,7 +315,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G△7",
         group: "Gコード系",
-        tab: "3x44xx",
         frets: [Some(3), None, Some(4), Some(4), None, None],
         fingers: [
             Some(Finger::Index),
@@ -353,7 +330,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Gadd9",
         group: "Gコード系",
-        tab: "3x023x",
         frets: [Some(3), None, Some(0), Some(2), Some(3), None],
         fingers: [
             Some(Finger::Middle),
@@ -369,7 +345,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G6(9)",
         group: "Gコード系",
-        tab: "3x0230",
         frets: [Some(3), None, Some(0), Some(2), Some(3), Some(0)],
         fingers: [
             Some(Finger::Middle),
@@ -385,7 +360,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Gsus4",
         group: "Gコード系",
-        tab: "3x001x",
         frets: [Some(3), None, Some(0), Some(0), Some(1), None],
         fingers: [
             Some(Finger::Middle),
@@ -401,7 +375,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G/B",
         group: "Gコード系",
-        tab: "x2000x",
         frets: [None, Some(2), Some(0), Some(0), Some(0), None],
         fingers: [None, Some(Finger::Middle), None, None, None, None],
         pitch_classes: 0b100010000100, // B, D, G, B
@@ -410,7 +383,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G/A",
         group: "Gコード系",
-        tab: "x0000x",
         frets: [None, Some(0), Some(0), Some(0), Some(0), None],
         fingers: [None, None, None, None, None, None],
         pitch_classes: 0b101010000100, // A, D, G, B
@@ -419,7 +391,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Gm",
         group: "Gコード系",
-        tab: "3x033x",
         frets: [Some(3), None, Some(0), Some(3), Some(3), None],
         fingers: [
             Some(Finger::Index),
@@ -435,7 +406,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G#7",
         group: "Gコード系",
-        tab: "4x45xx",
         frets: [Some(4), None, Some(4), Some(5), None, None],
         fingers: [
             Some(Finger::Index),
@@ -451,7 +421,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "G#m7-5",
         group: "Gコード系",
-        tab: "4x443x",
         frets: [Some(4), None, Some(4), Some(4), Some(3), None],
         fingers: [
             Some(Finger::Thumb),
@@ -467,7 +436,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "A",
         group: "Aコード系",
-        tab: "x0222x",
         frets: [None, Some(0), Some(2), Some(2), Some(2), None],
         fingers: [
             None,
@@ -483,7 +451,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Aadd9",
         group: "Aコード系",
-        tab: "x02200",
         frets: [None, Some(0), Some(2), Some(2), Some(0), Some(0)],
         fingers: [
             None,
@@ -499,7 +466,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Asus4",
         group: "Aコード系",
-        tab: "x0223x",
         frets: [None, Some(0), Some(2), Some(2), Some(3), None],
         fingers: [
             None,
@@ -515,7 +481,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "A7/D",
         group: "Aコード系",
-        tab: "xx0020",
         frets: [None, None, Some(0), Some(0), Some(2), Some(0)],
         fingers: [None, None, None, None, Some(Finger::Middle), None],
         pitch_classes: 0b000010010110, // D, G, C#, E
@@ -524,7 +489,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "A/B",
         group: "Aコード系",
-        tab: "x2x22x",
         frets: [None, Some(2), None, Some(2), Some(2), None],
         fingers: [
             None,
@@ -540,7 +504,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Am7",
         group: "Aコード系",
-        tab: "x0201x",
         frets: [None, Some(0), Some(2), Some(0), Some(1), None],
         fingers: [
             None,
@@ -556,7 +519,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Am7/G",
         group: "Aコード系",
-        tab: "3x201x",
         frets: [Some(3), None, Some(2), Some(0), Some(1), None],
         fingers: [
             Some(Finger::Ring),
@@ -572,7 +534,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Am7/D",
         group: "Aコード系",
-        tab: "xx0010",
         frets: [None, None, Some(0), Some(0), Some(1), Some(0)],
         fingers: [None, None, None, None, Some(Finger::Middle), None],
         pitch_classes: 0b000010010101, // D, G, C, E
@@ -581,7 +542,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Am/D",
         group: "Aコード系",
-        tab: "xx0210",
         frets: [None, None, Some(0), Some(2), Some(1), Some(0)],
         fingers: [
             None,
@@ -597,7 +557,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Am7-5",
         group: "Aコード系",
-        tab: "x0101x",
         frets: [None, Some(0), Some(1), Some(0), Some(1), None],
         fingers: [
             None,
@@ -613,7 +572,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "A#dim",
         group: "Aコード系",
-        tab: "x1202x",
         frets: [None, Some(1), Some(2), Some(0), Some(2), None],
         fingers: [
             None,
@@ -629,7 +587,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "A♭△7",
         group: "Aコード系",
-        tab: "4x55xx",
         frets: [Some(4), None, Some(5), Some(5), None, None],
         fingers: [
             Some(Finger::Index),
@@ -645,7 +602,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "E",
         group: "Eコード系",
-        tab: "022100",
         frets: [Some(0), Some(2), Some(2), Some(1), Some(0), Some(0)],
         fingers: [
             None,
@@ -661,7 +617,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "E7",
         group: "Eコード系",
-        tab: "020100",
         frets: [Some(0), Some(2), Some(0), Some(1), Some(0), Some(0)],
         fingers: [
             None,
@@ -677,7 +632,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "E7/G#",
         group: "Eコード系",
-        tab: "4x045x",
         frets: [Some(4), None, Some(0), Some(4), Some(5), None],
         fingers: [
             Some(Finger::Index),
@@ -693,7 +647,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Eadd9/G#",
         group: "Eコード系",
-        tab: "4x4400",
         frets: [Some(4), None, Some(4), Some(4), Some(0), Some(0)],
         fingers: [
             Some(Finger::Index),
@@ -709,7 +662,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Em7",
         group: "Eコード系",
-        tab: "020000",
         frets: [Some(0), Some(2), Some(0), Some(0), Some(0), Some(0)],
         fingers: [None, Some(Finger::Middle), None, None, None, None],
         pitch_classes: 0b100010010100, // E, B, D, G, B, E
@@ -718,7 +670,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Em7",
         group: "Eコード系",
-        tab: "02003x",
         frets: [Some(0), Some(2), Some(0), Some(0), Some(3), None],
         fingers: [
             None,
@@ -734,7 +685,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Em7/A",
         group: "Eコード系",
-        tab: "x00000",
         frets: [None, Some(0), Some(0), Some(0), Some(0), Some(0)],
         fingers: [None, None, None, None, None, None],
         pitch_classes: 0b101010010100, // A, D, G, B, E
@@ -743,7 +693,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "E♭△7",
         group: "Eコード系",
-        tab: "xx1x33",
         frets: [None, None, Some(1), None, Some(3), Some(3)],
         fingers: [
             None,
@@ -759,7 +708,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D",
         group: "Dコード系",
-        tab: "xx0232",
         frets: [None, None, Some(0), Some(2), Some(3), Some(2)],
         fingers: [
             None,
@@ -775,7 +723,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D",
         group: "Dコード系",
-        tab: "xx023x",
         frets: [None, None, Some(0), Some(2), Some(3), None],
         fingers: [
             None,
@@ -791,7 +738,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Dsus4",
         group: "Dコード系",
-        tab: "xx003x",
         frets: [None, None, Some(0), Some(0), Some(3), None],
         fingers: [None, None, None, None, Some(Finger::Middle), None],
         pitch_classes: 0b000010000100, // D, G, D
@@ -800,7 +746,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D△7(9)",
         group: "Dコード系",
-        tab: "xx0220",
         frets: [None, None, Some(0), Some(2), Some(2), Some(0)],
         fingers: [
             None,
@@ -816,7 +761,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D7(9)",
         group: "Dコード系",
-        tab: "xx0210",
         frets: [None, None, Some(0), Some(2), Some(1), Some(0)],
         fingers: [
             None,
@@ -832,7 +776,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D/F#",
         group: "Dコード系",
-        tab: "2x023x",
         frets: [Some(2), None, Some(0), Some(2), Some(3), None],
         fingers: [
             Some(Finger::Index),
@@ -848,7 +791,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Dm7",
         group: "Dコード系",
-        tab: "xx0211",
         frets: [None, None, Some(0), Some(2), Some(1), Some(1)],
         fingers: [
             None,
@@ -864,7 +806,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Dm/F",
         group: "Dコード系",
-        tab: "1x023x",
         frets: [Some(1), None, Some(0), Some(2), Some(3), None],
         fingers: [
             Some(Finger::Index),
@@ -880,7 +821,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "D#dim",
         group: "Dコード系",
-        tab: "xx12x2",
         frets: [None, None, Some(1), Some(2), None, Some(2)],
         fingers: [
             None,
@@ -896,7 +836,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "B7",
         group: "Bコード系",
-        tab: "x2120x",
         frets: [None, Some(2), Some(1), Some(2), Some(0), None],
         fingers: [
             None,
@@ -912,7 +851,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Bm7",
         group: "Bコード系",
-        tab: "x2x23x",
         frets: [None, Some(2), None, Some(2), Some(3), None],
         fingers: [
             None,
@@ -928,7 +866,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "Bdim",
         group: "Bコード系",
-        tab: "x234xx",
         frets: [None, Some(2), Some(3), Some(4), None, None],
         fingers: [
             None,
@@ -944,7 +881,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "B♭△7",
         group: "Bコード系",
-        tab: "x132xx",
         frets: [None, Some(1), Some(3), Some(2), None, None],
         fingers: [
             None,
@@ -960,7 +896,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "B♭/D",
         group: "Bコード系",
-        tab: "xx0331",
         frets: [None, None, Some(0), Some(3), Some(3), Some(1)],
         fingers: [
             None,
@@ -976,7 +911,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "B♭add9/D",
         group: "Bコード系",
-        tab: "xx0311",
         frets: [None, None, Some(0), Some(3), Some(1), Some(1)],
         fingers: [
             None,
@@ -992,7 +926,6 @@ pub static FINGERINGS: &[Fingering] = &[
     Fingering {
         name: "B♭m7",
         group: "Bコード系",
-        tab: "x1x12x",
         frets: [None, Some(1), None, Some(1), Some(2), None],
         fingers: [
             None,
