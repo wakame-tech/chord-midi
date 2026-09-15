@@ -173,7 +173,14 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
 }
 
 fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
-    let label = node.to_string();
+    // ラベルに `@N` は含めない。弦の指定は押さえ方への指示であって
+    // コード名の一部ではなく、どの弦で取ったかは図を見れば分かる。
+    // 含めると押さえ方の名前と食い違い、「≒」の併記まで誤って出る
+    let label = {
+        let mut named = node.clone();
+        named.root_string = None;
+        named.to_string()
+    };
     let chord = node.to_chord()?;
     let root = pitch_class(&chord.key)?;
     let mut pitch_classes = 0u16;
@@ -594,6 +601,15 @@ mod tests {
                 .expect("no sounding string") as u8;
             assert_eq!(f.lowest_string, expected, "{} {}", f.name, tab(f));
         }
+    }
+
+    #[test]
+    fn chord_ref_label_omits_the_string_hint() {
+        // @N はコード名の一部ではないのでラベルに出さない
+        assert_eq!(refs("A@6 |\n")[0].label, "A");
+        assert_eq!(refs("pow(A@6)\n")[0].label, "A5");
+        // 指定が無いときと同じラベルになる
+        assert_eq!(refs("A |\n")[0].label, refs("A@6 |\n")[0].label);
     }
 
     #[test]
