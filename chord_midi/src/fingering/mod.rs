@@ -143,6 +143,11 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
                 line_break: *line_break,
             });
         }
+        Ast::Apply(_, items) => {
+            for item in items {
+                collect_ast(item, out)?;
+            }
+        }
         Ast::Comment(_) | Ast::Directive(_) => {}
     }
     Ok(())
@@ -150,7 +155,7 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
 
 fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) => out.push(chord_ref(c)?),
+        Node::Chord(c) | Node::Arpeggio(c) | Node::Brush(c) => out.push(chord_ref(c)?),
         Node::Transform(t, c) => {
             // resolve() 済みなら key は Absolute なので tonic/scale は無視される。
             // export/midi.rs の Node::Transform の扱いと同じ。

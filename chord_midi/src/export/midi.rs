@@ -141,6 +141,11 @@ impl Score {
                     self.interpret_node(n, d)?;
                 }
             }
+            Node::Brush(node) => {
+                let chord = node.to_chord()?;
+                self.pre = Some(chord);
+                self.sustain = dur;
+            }
             Node::Repeat => {
                 self.sustain = dur;
             }
@@ -184,6 +189,12 @@ impl Score {
                     };
                     self.notes.push(Note::new(notes, self.sustain));
                     self.sustain = 0;
+                }
+                Ok(())
+            }
+            Ast::Apply(_, items) => {
+                for item in items {
+                    self.interpret(*item)?;
                 }
                 Ok(())
             }

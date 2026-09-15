@@ -24,6 +24,7 @@ impl Display for Ast {
             }
             Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
             Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
+            Ast::Apply(_, _) => Ok(()),
             Ast::Measure(nodes, br) => {
                 write!(
                     f,
@@ -48,6 +49,7 @@ impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Node::Chord(chord) => write!(f, "{}", chord),
+            Node::Brush(chord) => write!(f, "{}", chord),
             Node::Arpeggio(chord) => write!(f, "arp({})", chord),
             Node::Transform(t, c) => write!(f, "{}({})", transform_prefix(t), c),
             Node::Rest => write!(f, "N.C."),

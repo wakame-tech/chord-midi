@@ -65,13 +65,18 @@ fn shift_ast(ast: &mut Ast, delta: i8, seen: &mut Seen) {
                 shift_node(node, delta, seen);
             }
         }
+        Ast::Apply(_, items) => {
+            for item in items {
+                shift_ast(item, delta, seen);
+            }
+        }
         Ast::Directive(Directive::Scale(_)) | Ast::Comment(_) => {}
     }
 }
 
 fn shift_node(node: &mut Node, delta: i8, seen: &mut Seen) {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) | Node::Transform(_, c) => {
+        Node::Chord(c) | Node::Arpeggio(c) | Node::Transform(_, c) | Node::Brush(c) => {
             shift_chord(c, delta, seen)
         }
         Node::Rest | Node::Sustain | Node::Repeat => {}

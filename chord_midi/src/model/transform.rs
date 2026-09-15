@@ -38,10 +38,18 @@ impl Ast {
                         Node::Transform(t, c) => {
                             Node::Transform(t, chordnode_into_degree(c, tonic, scale))
                         }
+                        Node::Brush(c) => Node::Brush(chordnode_into_degree(c, tonic, scale)),
                         other => other,
                     })
                     .collect::<Vec<_>>(),
                 br,
+            ),
+            Ast::Apply(func, items) => Ast::Apply(
+                func,
+                items
+                    .into_iter()
+                    .map(|ast| Box::new((*ast).into_degree(tonic, scale)))
+                    .collect(),
             ),
             other => other,
         }
@@ -64,10 +72,18 @@ impl Ast {
                         Node::Transform(t, c) => {
                             Node::Transform(t, chordnode_into_pitch(c, tonic, scale))
                         }
+                        Node::Brush(c) => Node::Brush(chordnode_into_pitch(c, tonic, scale)),
                         other => other,
                     })
                     .collect::<Vec<_>>(),
                 br,
+            ),
+            Ast::Apply(func, items) => Ast::Apply(
+                func,
+                items
+                    .into_iter()
+                    .map(|ast| Box::new((*ast).into_pitch(tonic, scale)))
+                    .collect(),
             ),
             other => other,
         }

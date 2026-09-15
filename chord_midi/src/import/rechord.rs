@@ -1,8 +1,7 @@
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
-use crate::model::ast::Ast;
-use crate::model::ast::Directive;
+use crate::model::ast::{Ast, Beat, Directive, Func, Pattern};
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
 use anyhow::Result;
@@ -33,7 +32,15 @@ impl super::Importer for RechordImporter {
 #[tracable_parser]
 fn ast_parser(s: Span) -> IResult<Span, Ast> {
     map(
-        tuple((many1(alt((directive_parser, comment_parser, measure_parser))), eof)),
+        tuple((
+            many1(alt((
+                directive_parser,
+                comment_parser,
+                apply_parser,
+                measure_parser,
+            ))),
+            eof,
+        )),
         |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
     )(s)
 }
@@ -77,8 +84,65 @@ fn measure_sep(s: Span) -> IResult<Span, bool> {
         value(true, tuple((tag("|"), space0, peek(line_ending)))),
         value(false, tag("|")),
         value(true, line_ending),
+        // 関数の閉じ括弧の直前も区切りとして扱う。`)` は消費しない
+        value(false, peek(tag(")"))),
         value(false, eof),
     ))(s)
+}
+
+/// `"o.ox"` のようなリズムパターン。長さは 1/2/4/8/16 のみ
+#[tracable_parser]
+fn pattern_parser(s: Span) -> IResult<Span, Pattern> {
+    map_res(
+        delimited(
+            tag("\""),
+            many1(alt((
+                value(Beat::Hit, tag("o")),
+                value(Beat::Rest, tag(".")),
+                value(Beat::Brush, tag("x")),
+            ))),
+            tag("\""),
+        ),
+        |beats: Vec<Beat>| {
+            // MEASURE_LENGTH = 16 を割り切れる長さだけ許す
+            if matches!(beats.len(), 1 | 2 | 4 | 8 | 16) {
+                Ok(Pattern(beats))
+            } else {
+                Err(anyhow::anyhow!(
+                    "pattern length must be 1/2/4/8/16, got {}",
+                    beats.len()
+                ))
+            }
+        },
+    )(s)
+}
+
+/// `pow( <小節列> )` と `pat( "<パターン>", <小節列> )`
+#[tracable_parser]
+fn apply_parser(s: Span) -> IResult<Span, Ast> {
+    map(
+        tuple((
+            alt((
+                map(tuple((tag("pow("), space0)), |_| Func::Pow),
+                map(
+                    tuple((
+                        tag("pat("),
+                        space0,
+                        pattern_parser,
+                        space0,
+                        tag(","),
+                        space0,
+                    )),
+                    |(_, _, pattern, _, _, _)| Func::Pat(pattern),
+                ),
+            )),
+            many1(alt((apply_parser, measure_parser))),
+            space0,
+            tag(")"),
+            space_or_line_ending_many0,
+        )),
+        |(func, items, _, _, _)| Ast::Apply(func, items.into_iter().map(Box::new).collect()),
+    )(s)
 }
 
 fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
@@ -173,5 +237,76 @@ mod tests {
         };
         assert_eq!(first_key(&major), Key::Absolute(Pitch::E));
         assert_eq!(first_key(&dorian), Key::Absolute(Pitch::Ds));
+    }
+
+    #[test]
+    fn test_pow_parser() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Func};
+        let ast = RechordImporter.import("pow(C | E D)\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        assert_eq!(items.len(), 1);
+        let Ast::Apply(Func::Pow, inner) = items[0].as_ref() else {
+            panic!("not a pow apply: {:?}", items[0])
+        };
+        // C の小節と E D の小節
+        assert_eq!(inner.len(), 2);
+        let Ast::Measure(nodes, _) = inner[0].as_ref() else { panic!("not a measure") };
+        assert_eq!(nodes.len(), 1);
+        let Ast::Measure(nodes, _) = inner[1].as_ref() else { panic!("not a measure") };
+        assert_eq!(nodes.len(), 2);
+    }
+
+    #[test]
+    fn test_pat_parser() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Beat, Func};
+        let ast = RechordImporter.import("pat(\"o.ox\", C | E D)\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Apply(Func::Pat(pattern), inner) = items[0].as_ref() else {
+            panic!("not a pat apply: {:?}", items[0])
+        };
+        assert_eq!(
+            pattern.0,
+            vec![Beat::Hit, Beat::Rest, Beat::Hit, Beat::Brush]
+        );
+        assert_eq!(inner.len(), 2);
+    }
+
+    #[test]
+    fn test_pat_nested_in_pow() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Ast, Func};
+        let ast = RechordImporter.import("pat(\"oxox\", pow(C))\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Apply(Func::Pat(_), inner) = items[0].as_ref() else {
+            panic!("not a pat apply")
+        };
+        assert!(matches!(inner[0].as_ref(), Ast::Apply(Func::Pow, _)));
+    }
+
+    #[test]
+    fn test_apply_followed_by_measure() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Ast;
+        let ast = RechordImporter.import("pow(C) F |\n").unwrap();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        assert_eq!(items.len(), 2);
+        assert!(matches!(items[0].as_ref(), Ast::Apply(_, _)));
+        assert!(matches!(items[1].as_ref(), Ast::Measure(_, _)));
+    }
+
+    #[test]
+    fn test_pattern_length_must_be_power_of_two() {
+        use crate::import::{Importer, RechordImporter};
+        // 3 文字は 16 を割り切れないので受け付けない
+        assert!(RechordImporter.import("pat(\"o.o\", C)\n").is_err());
+        assert!(RechordImporter.import("pat(\"o.o.o\", C)\n").is_err());
+    }
+
+    #[test]
+    fn test_pattern_rejects_unknown_char() {
+        use crate::import::{Importer, RechordImporter};
+        assert!(RechordImporter.import("pat(\"o.oz\", C)\n").is_err());
     }
 }
