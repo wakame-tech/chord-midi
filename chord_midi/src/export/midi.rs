@@ -544,9 +544,7 @@ mod tests {
     fn test_falls_back_when_no_fingering_matches() {
         // ルート1音だけの和音に合う押さえ方は無い (どの押さえ方も2音以上鳴る)
         // ので、従来の声部配置に落ちる
-        // `omit` は modifier_parser の alt 順で tag("o") (dim) に先に食われて
-        // 解析できないので、同義の `no` 表記を使う
-        let p = pitches_of("C#no3no5 |");
+        let p = pitches_of("C#omit3omit5 |");
         assert_eq!(p.len(), 1, "{:?}", p);
     }
 
