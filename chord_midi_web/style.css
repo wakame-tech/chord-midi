@@ -11,6 +11,9 @@
     --active: #e8ecf1;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono", monospace;
     --danger: #c0392b;
+    /* lint の警告。赤 (--danger) はエラー用に取ってあるので、
+       「入力は受け付けた上での助言」と分かる黄/橙にする */
+    --warning: #b7791f;
     --radius: 8px;
     /* 指板/コード図で弦とフレットの線に使う灰色。2つの図が別々に持つと
        ずれるので1箇所にまとめる */
@@ -232,6 +235,19 @@ midi-visualizer.is-empty {
     border-left: 3px solid var(--danger);
     border-radius: 0 4px 4px 0;
     color: var(--danger);
+    font-size: 13px;
+    white-space: pre-wrap;
+}
+
+/* .error と同じ形だが、色だけ変えて「エラーではなく助言」に見せる。
+   警告が出ていても再生は止まらない */
+.warning {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    background: #fdf6e3;
+    border-left: 3px solid var(--warning);
+    border-radius: 0 4px 4px 0;
+    color: var(--warning);
     font-size: 13px;
     white-space: pre-wrap;
 }

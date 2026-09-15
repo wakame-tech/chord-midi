@@ -170,6 +170,16 @@ fn main() -> Result<()> {
         importer.import(code.as_str())
     };
 
+    // どのモード (--print-ast / --fingering / -o / 素通し) でも入力は同じなので、
+    // 一律に lint する。標準出力には混ぜない (--print-ast の JSON をパイプで
+    // 繋げなくなる) ので eprintln! で標準エラーに出す。パース自体が失敗する
+    // 場合は、この後の `parse()?` がちゃんとしたエラーを出すのでここでは黙る
+    if let Ok(ast) = parse() {
+        for warning in chord_midi::lint::lint(&ast) {
+            eprintln!("warning: {}", warning);
+        }
+    }
+
     if let Some(form) = args.print_ast {
         let ast = parse()?;
         match form {
