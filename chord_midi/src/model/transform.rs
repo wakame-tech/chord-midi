@@ -1,5 +1,6 @@
 use crate::{
-    model::ast::{Ast, ChordNode, Directive, Node},
+    model::ast::{Ast, ChordNode, Directive, Func, Node},
+    model::modifier::Modifier,
     model::pitch::Pitch,
     model::scale::Scale,
 };
@@ -110,7 +111,12 @@ impl Ast {
             }
         }
         let transposed = self.into_pitch(tonic, scale);
-        match transposed {
+        // pow は音程の話なのでここで潰す。pat はリズムの話なので残す
+        let desugared = desugar_pow(transposed)
+            .into_iter()
+            .next()
+            .expect("desugar_pow always yields at least one node for a Score");
+        match desugared {
             Ast::Score(items) => Ast::Score(
                 items
                     .into_iter()
@@ -120,6 +126,67 @@ impl Ast {
             other => other,
         }
     }
+}
+
+/// `Apply(Func::Pow, ..)` を潰し、中の全コードに `Modifier::Power` を足す。
+///
+/// `Apply` は親のリストの中で複数の要素に展開されるので `Vec` を返す。
+fn desugar_pow(ast: Ast) -> Vec<Ast> {
+    match ast {
+        Ast::Score(items) => vec![Ast::Score(
+            items
+                .into_iter()
+                .flat_map(|item| desugar_pow(*item))
+                .map(Box::new)
+                .collect(),
+        )],
+        Ast::Apply(Func::Pow, items) => items
+            .into_iter()
+            .flat_map(|item| desugar_pow(*item))
+            .map(mark_power)
+            .collect(),
+        Ast::Apply(func, items) => vec![Ast::Apply(
+            func,
+            items
+                .into_iter()
+                .flat_map(|item| desugar_pow(*item))
+                .map(Box::new)
+                .collect(),
+        )],
+        other => vec![other],
+    }
+}
+
+/// AST に含まれる全コードに `Modifier::Power` を足す
+fn mark_power(ast: Ast) -> Ast {
+    match ast {
+        Ast::Measure(nodes, br) => {
+            Ast::Measure(nodes.into_iter().map(mark_power_node).collect(), br)
+        }
+        Ast::Apply(func, items) => Ast::Apply(
+            func,
+            items
+                .into_iter()
+                .map(|item| Box::new(mark_power(*item)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+fn mark_power_node(node: Node) -> Node {
+    match node {
+        Node::Chord(c) => Node::Chord(mark_power_chord(c)),
+        Node::Arpeggio(c) => Node::Arpeggio(mark_power_chord(c)),
+        Node::Brush(c) => Node::Brush(mark_power_chord(c)),
+        Node::Transform(t, c) => Node::Transform(t, mark_power_chord(c)),
+        other => other,
+    }
+}
+
+fn mark_power_chord(mut chord: ChordNode) -> ChordNode {
+    chord.modifiers.insert(Modifier::Power);
+    chord
 }
 
 #[cfg(test)]
@@ -179,6 +246,85 @@ mod tests {
         assert_eq!(
             Ast::Measure(vec![g], false).into_degree(Pitch::C, Scale::Major),
             Ast::Measure(vec![v], false)
+        );
+    }
+
+    #[test]
+    fn test_pow_becomes_root_and_fifth() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Node;
+
+        fn semitones(code: &str) -> Vec<u8> {
+            let ast = RechordImporter.import(code).unwrap().resolve();
+            let Ast::Score(items) = &ast else { panic!("not a score") };
+            let Ast::Measure(nodes, _) = items[0].as_ref() else {
+                panic!("pow should be desugared into a measure: {:?}", items[0])
+            };
+            let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+            c.to_chord().unwrap().semitones.into_iter().collect()
+        }
+
+        // ルートと5thだけになる
+        assert_eq!(semitones("pow(C)\n"), vec![0, 7]);
+        // 元の修飾を上書きする
+        assert_eq!(semitones("pow(Cm7)\n"), vec![0, 7]);
+        assert_eq!(semitones("pow(CM7)\n"), vec![0, 7]);
+    }
+
+    #[test]
+    fn test_pow_keeps_slash_bass() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Node;
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        let ast = RechordImporter.import("pow(C/E)\n").unwrap().resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Measure(nodes, _) = items[0].as_ref() else { panic!("not a measure") };
+        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
+    }
+
+    #[test]
+    fn test_pow_flattens_all_measures() {
+        use crate::import::{Importer, RechordImporter};
+
+        let ast = RechordImporter.import("pow(C | E D)\n").unwrap().resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        // Apply は消えて2つの Measure になる
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|i| matches!(i.as_ref(), Ast::Measure(_, _))));
+    }
+
+    #[test]
+    fn test_pat_survives_resolve() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Func;
+
+        let ast = RechordImporter.import("pat(\"oxox\", C)\n").unwrap().resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        // リズムは MIDI の関心なので resolve では展開しない
+        assert!(matches!(items[0].as_ref(), Ast::Apply(Func::Pat(_), _)));
+    }
+
+    #[test]
+    fn test_pow_inside_pat_is_desugared() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Func, Node};
+
+        let ast = RechordImporter
+            .import("pat(\"oxox\", pow(C))\n")
+            .unwrap()
+            .resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Apply(Func::Pat(_), inner) = items[0].as_ref() else { panic!("not a pat") };
+        let Ast::Measure(nodes, _) = inner[0].as_ref() else {
+            panic!("pow should be desugared inside pat: {:?}", inner[0])
+        };
+        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        assert_eq!(
+            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            vec![0, 7]
         );
     }
 }
