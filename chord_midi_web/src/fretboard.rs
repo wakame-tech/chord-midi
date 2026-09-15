@@ -57,7 +57,11 @@ fn board(props: &FretboardProps) -> Html {
                         Callback::from(move |_| {
                             let mut next = frets;
                             // 同じところをもう一度押したらその弦をミュートにする
-                            next[s] = if next[s] == Some(fret) { None } else { Some(fret) };
+                            next[s] = if next[s] == Some(fret) {
+                                None
+                            } else {
+                                Some(fret)
+                            };
                             on_change.emit(next);
                         })
                     };
