@@ -20,18 +20,17 @@ pub fn chord_diagram(props: &ChordDiagramProps) -> Html {
         Some(f) => diagram(f),
         None => html! { <div class="diagram-empty">{"データなし"}</div> },
     };
-    // 代替の押さえ方が選ばれたときだけ原典での名前を出す
+    // 代替の押さえ方が選ばれたときだけ、コード名の直後に原典での名前を出す
     let alias = props.fingering.and_then(|f| {
         if f.name == props.label {
             None
         } else {
-            Some(html! { <div class="chord-alias">{format!("≈ {}", f.name)}</div> })
+            Some(html! { <span class="chord-alias">{format!(" (≒ {})", f.name)}</span> })
         }
     });
     html! {
         <div class="chord-card" style={format!("--chord-color: {}", props.color)}>
-            <div class="chord-name">{&props.label}</div>
-            {alias}
+            <div class="chord-name">{&props.label}{alias}</div>
             {body}
         </div>
     }

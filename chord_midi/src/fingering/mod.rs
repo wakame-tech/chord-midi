@@ -103,22 +103,45 @@ pub struct ChordRef {
 /// 呼ぶ前に [`Ast::resolve`] を通しておくこと。度数表記のままだと
 /// ピッチクラスが決まらずエラーになる。
 pub fn chord_refs(ast: &Ast) -> Result<Vec<ChordRef>> {
+    Ok(measure_refs(ast)?
+        .into_iter()
+        .flat_map(|m| m.chords)
+        .collect())
+}
+
+/// 入力の1小節分。コードを含まない小節（休符だけなど）は `chords` が空になる
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasureRef {
+    pub chords: Vec<ChordRef>,
+    /// この小節の後ろで入力が改行されている
+    pub line_break: bool,
+}
+
+/// AST に現れるコードを小節ごとにまとめて取り出す。
+///
+/// 呼ぶ前に [`Ast::resolve`] を通しておくこと。
+pub fn measure_refs(ast: &Ast) -> Result<Vec<MeasureRef>> {
     let mut out = Vec::new();
     collect_ast(ast, &mut out)?;
     Ok(out)
 }
 
-fn collect_ast(ast: &Ast, out: &mut Vec<ChordRef>) -> Result<()> {
+fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
     match ast {
         Ast::Score(items) => {
             for item in items {
                 collect_ast(item, out)?;
             }
         }
-        Ast::Measure(nodes, _) => {
+        Ast::Measure(nodes, line_break) => {
+            let mut chords = Vec::new();
             for node in nodes {
-                collect_node(node, out)?;
+                collect_node(node, &mut chords)?;
             }
+            out.push(MeasureRef {
+                chords,
+                line_break: *line_break,
+            });
         }
         Ast::Comment(_) | Ast::Directive(_) => {}
     }
@@ -287,6 +310,46 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].root, 2);
         assert_eq!(r[1].root, 7);
+    }
+
+    fn measures(input: &str) -> Vec<MeasureRef> {
+        use crate::import::{Importer, RechordImporter};
+        let ast = RechordImporter.import(input).unwrap().resolve();
+        measure_refs(&ast).unwrap()
+    }
+
+    #[test]
+    fn measure_refs_groups_chords_by_measure() {
+        let ms = measures("C | Am F |\n");
+        assert_eq!(ms.len(), 2);
+        assert_eq!(ms[0].chords.len(), 1);
+        assert_eq!(ms[1].chords.len(), 2);
+        assert_eq!(ms[1].chords[0].label, "Am");
+        assert_eq!(ms[1].chords[1].label, "F");
+    }
+
+    #[test]
+    fn measure_refs_records_line_breaks() {
+        // 1行に2小節。改行は2小節目の後ろだけ
+        let one_line = measures("C | F |\n");
+        assert_eq!(
+            one_line.iter().map(|m| m.line_break).collect::<Vec<_>>(),
+            vec![false, true]
+        );
+        // 1行1小節。両方の後ろで改行される
+        let two_lines = measures("C |\nF |\n");
+        assert_eq!(
+            two_lines.iter().map(|m| m.line_break).collect::<Vec<_>>(),
+            vec![true, true]
+        );
+    }
+
+    #[test]
+    fn measure_refs_keeps_chordless_measures() {
+        // 休符だけの小節も小節数を保つために残す
+        let ms = measures("C | N.C. |\n");
+        assert_eq!(ms.len(), 2);
+        assert!(ms[1].chords.is_empty());
     }
 
     #[test]

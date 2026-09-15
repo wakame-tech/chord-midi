@@ -1,7 +1,7 @@
 use chord_midi::{
     edit::{set_scale, shift_key},
     export::{Exporter, MidiExporter},
-    fingering::{self, ChordRef},
+    fingering::{self, MeasureRef},
     import::{Importer, RechordImporter},
     model::scale::Scale,
 };
@@ -25,7 +25,7 @@ fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     Blob::new_with_blob_sequence_and_options(&parts, &options).unwrap()
 }
 
-fn compile(input: &str, bpm: u8) -> Result<(String, Vec<ChordRef>, Vec<u8>), String> {
+fn compile(input: &str, bpm: u8) -> Result<(String, Vec<MeasureRef>, Vec<u8>), String> {
     let ast = RechordImporter
         .import(&format!("{}\n", input))
         .map_err(|e| e.to_string())?;
@@ -34,13 +34,13 @@ fn compile(input: &str, bpm: u8) -> Result<(String, Vec<ChordRef>, Vec<u8>), Str
     // resolve() も export() も self を consume するので、解決済みの AST を
     // 使い回す。MidiExporter は内部でもう一度 resolve() を呼ぶが冪等。
     let resolved = ast.resolve();
-    let chords = fingering::chord_refs(&resolved).map_err(|e| e.to_string())?;
+    let measures = fingering::measure_refs(&resolved).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(Vec::new());
     MidiExporter { bpm }
         .export(&mut writer, resolved)
         .map_err(|e| e.to_string())?;
     let bytes = writer.into_inner().map_err(|e| e.to_string())?;
-    Ok((ast_str, chords, bytes))
+    Ok((ast_str, measures, bytes))
 }
 
 #[function_component(App)]
@@ -49,7 +49,7 @@ fn app() -> Html {
     let bpm = use_state(|| 120u8);
     let loop_on = use_state(|| false);
     let result = use_state(String::new);
-    let chords = use_state(Vec::<ChordRef>::new);
+    let measures = use_state(Vec::<MeasureRef>::new);
     let error = use_state(String::new);
     let url = use_state(String::new);
     let playing = use_mut_ref(|| false);
@@ -63,7 +63,7 @@ fn app() -> Html {
     // input か bpm が変わるたびに再計算
     {
         let result = result.clone();
-        let chords = chords.clone();
+        let measures = measures.clone();
         let error = error.clone();
         let url = url.clone();
         let playing = playing.clone();
@@ -73,7 +73,7 @@ fn app() -> Html {
             if input.trim().is_empty() {
                 error.set(String::new());
                 result.set(String::new());
-                chords.set(Vec::new());
+                measures.set(Vec::new());
                 let old_pending = pending.borrow_mut().take();
                 if let Some(old) = old_pending {
                     let _ = web_sys::Url::revoke_object_url(&old);
@@ -89,10 +89,10 @@ fn app() -> Html {
                 return;
             }
             match compile(input, *bpm) {
-                Ok((ast_str, cs, bytes)) => {
+                Ok((ast_str, ms, bytes)) => {
                     error.set(String::new());
                     result.set(ast_str);
-                    chords.set(cs);
+                    measures.set(ms);
                     let blob = new_blob(&bytes, "audio/midi");
                     let object_url =
                         web_sys::Url::create_object_url_with_blob(&blob).unwrap();
@@ -112,7 +112,7 @@ fn app() -> Html {
                 }
                 Err(e) => {
                     error.set(e);
-                    chords.set(Vec::new());
+                    measures.set(Vec::new());
                 }
             }
         });
@@ -229,24 +229,32 @@ fn app() -> Html {
             "#117864",
         ];
         let mut labels: Vec<String> = Vec::new();
-        let mut cards: Vec<Html> = Vec::new();
-        for c in chords.iter() {
-            let index = match labels.iter().position(|l| l == &c.label) {
-                Some(i) => i,
-                None => {
-                    labels.push(c.label.clone());
-                    labels.len() - 1
-                }
-            };
-            cards.push(html! {
-                <ChordDiagram
-                    label={c.label.clone()}
-                    fingering={fingering::find(c)}
-                    color={PALETTE[index % PALETTE.len()].to_string()}
-                />
-            });
+        let mut rows: Vec<Html> = Vec::new();
+        for measure in measures.iter() {
+            let mut cards: Vec<Html> = Vec::new();
+            for c in measure.chords.iter() {
+                let index = match labels.iter().position(|l| l == &c.label) {
+                    Some(i) => i,
+                    None => {
+                        labels.push(c.label.clone());
+                        labels.len() - 1
+                    }
+                };
+                cards.push(html! {
+                    <ChordDiagram
+                        label={c.label.clone()}
+                        fingering={fingering::find(c)}
+                        color={PALETTE[index % PALETTE.len()].to_string()}
+                    />
+                });
+            }
+            rows.push(html! { <div class="measure">{cards}</div> });
+            // 入力が改行されている小節の後ろで、カードの並びも折り返す
+            if measure.line_break {
+                rows.push(html! { <div class="line-break"></div> });
+            }
         }
-        cards
+        rows
     };
 
     html! {

@@ -119,8 +119,21 @@ pub struct ChordRef {
     pub bass: Option<u8>,
 }
 
-pub fn chord_refs(ast: &Ast) -> Vec<ChordRef>;
+pub struct MeasureRef {
+    pub chords: Vec<ChordRef>,
+    /// この小節の後ろで入力が改行されている
+    pub line_break: bool,
+}
+
+pub fn measure_refs(ast: &Ast) -> Result<Vec<MeasureRef>>;
+pub fn chord_refs(ast: &Ast) -> Result<Vec<ChordRef>>;  // measure_refs を平坦化したもの
 ```
+
+`Ast::Measure(nodes, br)` の `br` を `line_break` に持ち上げる。ただし `br` は
+`measure_sep` が `|` を読んだときに常に `false` を返していたため、`C | F |` のような
+普通の記法では行末情報が落ちていた。`|` の直後が行末なら `true` を返すよう
+`chord_midi/src/import/rechord.rs` の `measure_sep` を直す。これは
+`RechordExporter` が行構造を潰して出力していた既存のバグも同時に直す。
 
 - 呼び出し側が `Ast::resolve()` 済みの AST を渡す。`resolve()` は既存 API で、degree 表記を絶対音に直し、ディレクティブとコメントを落とす。
 - `Ast` は `Clone` を持たず `resolve()` も `export()` も self を consume するので、web の `compile()` は
@@ -166,7 +179,7 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering>;
 
 ### 代替が選ばれたことの表示
 
-選ばれた `Fingering.name` が入力のコード名と違う場合がある（`Cadd9` に `Am7/D` の形、`Bm` に `G#m7-5` の形など）。この場合はカードに小さく `≈ Am7/D` と原典での名前を併記する。名前が一致する場合は併記しない。
+選ばれた `Fingering.name` が入力のコード名と違う場合がある（`Cadd9` に `Am7/D` の形、`Bm` に `G#m7-5` の形など）。この場合はコード名の直後に `Am (≒ Am7)` のように原典での名前を併記する。名前が一致する場合は併記しない。
 
 ### テスト (host, `cargo test -p chord_midi`)
 
@@ -204,7 +217,7 @@ pub fn chord_diagram(props: &ChordDiagramProps) -> Html;
   ドット径に対して文字が詰まらないよう `font-size` はドット径の約 0.6 倍にし、`line-height: 1` で中央に置く。
 - 各行の左外側にミュート `×` / 開放 `○` のマーカー列を置く。押さえる弦は空欄。
 - **表示フレット窓**: 押さえるフレットの最大値が 5 以下なら 1〜5フレットを描く。超える場合は最小フレットから5フレット分を描き、窓の開始フレット番号（`4fr` など）をダイアグラム脇に出す。
-- `fingering.name` が入力のコード名と違うときは、コード名の下に小さく `≈ {name}` を出す。一致するときは出さない。
+- `fingering.name` が入力のコード名と違うときは、コード名の直後に小さく `(≒ {name})` を出す。一致するときは出さない。
 - `fingering` が `None` のときは同じ寸法の空の枠を描き、本体に「データなし」と出す。カードの幅が揃うので並びが崩れない。
 
 ### 色分け
@@ -216,6 +229,8 @@ pub fn chord_diagram(props: &ChordDiagramProps) -> Html;
 ### 配置と CSS
 
 - `App` の描画に `<div class="fingerings">` を追加し、プリセットボタン群と `<pre>`（AST 表示）の間に置く。
+- カードは**小節ごと**に `<div class="measure">` でまとめ、小節の右端に小節線（`border-right`）を引く。
+- 入力が改行されている小節の後ろに `<div class="line-break">`（`flex-basis: 100%`）を挟み、カードの並びも同じ位置で折り返す。譜面の行と画面の行が1対1になる。
 - `display: flex; flex-wrap: wrap;` で入力順に横並び、幅が足りなければ折り返す。
 - CSS は `chord_midi_web/style.css` に新規作成し、`index.html` に `<link data-trunk rel="css" href="style.css" />` を足して Trunk のアセットパイプラインに乗せる。
 - カードごとの色は `style="--chord-color: ..."` でインライン指定し、CSS 側は `var(--chord-color)` を参照する。
