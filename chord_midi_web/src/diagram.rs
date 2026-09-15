@@ -5,7 +5,7 @@ use yew::prelude::*;
 const FRET_COUNT: u8 = 5;
 
 /// 実ギターのポジションマークが入るフレット。指板の下に番号を出す
-const POSITION_MARKS: [u8; 8] = [3, 5, 7, 9, 12, 15, 17, 19];
+pub(crate) const POSITION_MARKS: [u8; 8] = [3, 5, 7, 9, 12, 15, 17, 19];
 
 #[derive(Properties, PartialEq)]
 pub struct ChordDiagramProps {

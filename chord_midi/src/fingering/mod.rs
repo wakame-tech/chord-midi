@@ -4,8 +4,10 @@
 //! <https://daichan-easyguitar.com/easychord-list/>
 
 mod data;
+mod identify;
 
 pub use data::FINGERINGS;
+pub use identify::{identify, Candidate, Source};
 
 use crate::model::modifier::Modifier;
 use crate::model::{
@@ -18,6 +20,10 @@ use anyhow::Result;
 
 /// 標準チューニングの開放弦のピッチクラス。6弦→1弦の順
 pub const OPEN_STRINGS: [u8; 6] = [4, 9, 2, 7, 11, 4];
+
+/// 標準チューニングの開放弦の MIDI ノート番号。6弦→1弦の順。
+/// ピッチクラスだけでは弦をまたいだ音の高低が比べられないので併せて持つ
+pub const OPEN_STRING_PITCHES: [u8; 6] = [40, 45, 50, 55, 59, 64];
 
 /// 押さえる指。原典が「小指は使わない」を条件にしているので小指は無い
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,14 +257,14 @@ fn pitch_class(key: &Key) -> Result<u8> {
 }
 
 /// ビット集合に立っているピッチクラスを、root からの半音数にして返す
-fn relative_semitones(mask: u16, root: u8) -> impl Iterator<Item = u8> {
+pub(crate) fn relative_semitones(mask: u16, root: u8) -> impl Iterator<Item = u8> {
     (0..12u8)
         .filter(move |p| ((mask >> *p) & 1) == 1)
         .map(move |p| (p + 12 - root) % 12)
 }
 
 /// 構成音にあるのに押さえ方に無い音のコスト。ルートからの半音数で引く
-fn missing_cost(semitone: u8) -> u32 {
+pub(crate) fn missing_cost(semitone: u8) -> u32 {
     match semitone {
         0 => 4,       // ルート
         3 | 4 => 3,   // 3rd
@@ -268,7 +274,7 @@ fn missing_cost(semitone: u8) -> u32 {
 }
 
 /// 押さえ方にあるのに構成音に無い音のコスト。ルートからの半音数で引く
-fn extra_cost(semitone: u8) -> u32 {
+pub(crate) fn extra_cost(semitone: u8) -> u32 {
     match semitone {
         10 | 11 | 2 | 5 | 9 => 1, // b7 / M7 / 9th / 11th / 13th は自然に足せる
         0 | 7 => 2,               // ルート / 5th
@@ -321,9 +327,6 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 開放弦の MIDI ノート番号。6弦→1弦
-    const OPEN_STRING_PITCHES: [u8; 6] = [40, 45, 50, 55, 59, 64];
 
     fn refs(input: &str) -> Vec<ChordRef> {
         use crate::import::{Importer, RechordImporter};
