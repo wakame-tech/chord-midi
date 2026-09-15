@@ -208,6 +208,11 @@ fn desugar_shapes(ast: Expr) -> Vec<Expr> {
             );
             vec![Expr::Apply(func, Box::new(inner), br)]
         }
+        Expr::Section(name, inner) => desugar_shapes(*inner)
+            .into_iter()
+            .flat_map(splice)
+            .map(|it| Expr::Section(name.clone(), Box::new(it)))
+            .collect(),
         other => vec![other],
     }
 }
@@ -564,6 +569,12 @@ mod tests {
         assert_eq!(semitones("$a = C\npow($a)\n"), vec![0, 7]);
         assert_eq!(semitones("oct(A)\n"), vec![0]);
         assert_eq!(semitones("$b = A\noct($b)\n"), vec![0]);
+
+        // 入れ子の向きが逆の場合。定義の本体が pow(...) で、参照がその外側にある。
+        // `Section(Apply(Pow, ..))` になるので、desugar_shapes に Section の腕が
+        // 無いと Apply が潰されず三和音のまま鳴る
+        assert_eq!(semitones("$c = pow(C)\n$c\n"), vec![0, 7]);
+        assert_eq!(semitones("$d = oct(A)\n$d\n"), vec![0]);
     }
 
     #[test]
