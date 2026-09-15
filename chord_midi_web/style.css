@@ -12,6 +12,12 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono", monospace;
     --danger: #c0392b;
     --radius: 8px;
+    /* 指板/コード図で弦とフレットの線に使う灰色。2つの図が別々に持つと
+       ずれるので1箇所にまとめる */
+    --string: #8a9099;
+    /* 運指タブの指板の列。fretboard.rs の MAX_FRET + 1 (弦名の列 + 0-12fr の
+       13列) と噛み合わせる必要がある */
+    --fretboard-cols: 56px repeat(13, 34px);
 }
 
 * {
@@ -683,8 +689,8 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 /* 弦はセルの中央を横切る線、フレットはセルの右の縦線 */
 .cell {
     position: relative;
-    border-right: 1px solid #8a9099;
-    background: linear-gradient(#8a9099, #8a9099) 0 50% / 100% 1px no-repeat;
+    border-right: 1px solid var(--string);
+    background: linear-gradient(var(--string), var(--string)) 0 50% / 100% 1px no-repeat;
 }
 
 .cell.nut {
@@ -693,7 +699,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 
 /* ナットより先から描き始めるときの左端はただのフレット線 */
 .cell.edge {
-    border-left: 1px solid #8a9099;
+    border-left: 1px solid var(--string);
 }
 
 .dot {
@@ -738,6 +744,174 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     font-size: 11px;
     border: 1px dashed var(--line);
     border-radius: 4px;
+}
+
+/* ---- 運指タブ（逆引き） ---- */
+
+.fretboard-help {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0 0 12px;
+}
+
+/* 12フレットぶんは横に長いので、狭い画面では横スクロールさせる */
+.fretboard-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.fretboard-grid {
+    display: grid;
+    grid-template-columns: var(--fretboard-cols);
+    grid-auto-rows: 28px;
+    width: max-content;
+}
+
+/* 横スクロールしても弦名の列だけは見えたままにする */
+.fretboard-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 8px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+}
+
+/* fretboard-numbers 側の左端スペーサ。fretboard-label と同じ幅ぶんを固定する */
+.fretboard-numbers-spacer {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+}
+
+.fretboard-value {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+}
+
+/* 弦はセルの中央を横切る線、フレットはセルの右の縦線。
+   実体は <button> なので、地の見た目を消して線の描画だけ残す */
+.fretboard-cell {
+    position: relative;
+    cursor: pointer;
+    appearance: none;
+    padding: 0;
+    font: inherit;
+    border-top: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    border-right: 1px solid var(--string);
+    background: linear-gradient(var(--string), var(--string)) 0 50% / 100% 1px no-repeat;
+}
+
+.fretboard-cell:hover {
+    background-color: var(--hover);
+}
+
+/* 0列は開放弦。ナットの左なのでフレット線は引かない */
+.fretboard-cell.is-open {
+    border-right: none;
+}
+
+.fretboard-cell.is-nut {
+    border-left: 3px solid var(--ink);
+}
+
+.fretboard-dot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.fretboard-numbers {
+    display: grid;
+    grid-template-columns: var(--fretboard-cols);
+    width: max-content;
+    margin-top: 3px;
+}
+
+.fretboard-number {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.fretboard-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.fretboard-card {
+    min-width: 200px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.fretboard-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.fretboard-card-name {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.fretboard-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--active);
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.fretboard-badge.is-data {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.fretboard-alias {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.fretboard-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.fretboard-notation {
+    font-family: var(--mono);
+    font-size: 13px;
+}
+
+.fretboard-note {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
 }
 
 @media (max-width: 640px) {
