@@ -166,14 +166,12 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
                 pattern: pattern.cloned(),
             });
         }
-        Expr::Apply(func, items, _) => {
-            let inner = match func {
+        Expr::Apply(func, inner, _) => {
+            let next = match func {
                 Func::Pat(p) => Some(p),
                 _ => pattern,
             };
-            for item in items {
-                collect_ast(item, inner, out)?;
-            }
+            collect_ast(inner, next, out)?;
         }
         Expr::Comment(_) | Expr::Directive(_) => {}
     }

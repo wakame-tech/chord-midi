@@ -146,7 +146,7 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             space_or_line_ending_many0,
         )),
         |(func, items, _, _, _, br, _)| {
-            Expr::Apply(func, items, br.is_some())
+            Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some())
         },
     )(s)
 }
@@ -250,16 +250,18 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pow(C | E D)\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
         assert_eq!(items.len(), 1);
         let Expr::Apply(Func::Pow, inner, _) = &items[0] else {
             panic!("not a pow apply: {:?}", items[0])
         };
+        // 中身は Seq 1つ
+        let Expr::Seq(measures) = inner.as_ref() else { panic!("apply の中身は Seq") };
         // C の小節と E D の小節
-        assert_eq!(inner.len(), 2);
-        let Expr::Measure(nodes, _) = &inner[0] else { panic!("not a measure") };
+        assert_eq!(measures.len(), 2);
+        let Expr::Measure(nodes, _) = &measures[0] else { panic!("not a measure") };
         assert_eq!(nodes.len(), 1);
-        let Expr::Measure(nodes, _) = &inner[1] else { panic!("not a measure") };
+        let Expr::Measure(nodes, _) = &measures[1] else { panic!("not a measure") };
         assert_eq!(nodes.len(), 2);
     }
 
@@ -276,6 +278,7 @@ mod tests {
             pattern.0,
             vec![Beat::Hit, Beat::Rest, Beat::Hit, Beat::Brush]
         );
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
         assert_eq!(inner.len(), 2);
     }
 
@@ -288,6 +291,7 @@ mod tests {
         let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
             panic!("not a pat apply")
         };
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
         assert!(matches!(&inner[0], Expr::Apply(Func::Pow, _, _)));
     }
 

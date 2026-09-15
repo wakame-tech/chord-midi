@@ -65,11 +65,7 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
                 shift_node(node, delta, seen);
             }
         }
-        Expr::Apply(_, items, _) => {
-            for item in items {
-                shift_ast(item, delta, seen);
-            }
-        }
+        Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
         Expr::Directive(Directive::Scale(_)) | Expr::Comment(_) => {}
     }
 }

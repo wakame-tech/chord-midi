@@ -21,8 +21,9 @@ pub enum Expr {
     Directive(Directive),
     /// 小節。2つ目は「この小節の後ろで入力が改行されている」
     Measure(Vec<Node>, bool),
-    /// 小節列に関数を適用する。3つ目は「この関数の後ろで入力が改行されている」
-    Apply(Func, Vec<Expr>, bool),
+    /// 小節列に関数を適用する。中身は必ず `Seq`。
+    /// 3つ目は「この関数の後ろで入力が改行されている」
+    Apply(Func, Box<Expr>, bool),
     /// `|` / 改行で連結した式の列。ファイル全体もこれ
     Seq(Vec<Expr>),
 }

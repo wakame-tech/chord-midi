@@ -215,19 +215,11 @@ impl Score {
                 }
                 Ok(())
             }
-            Expr::Apply(Func::Pat(pattern), items, _) => {
-                for item in items {
-                    self.interpret_with_pattern(item, &pattern)?;
-                }
-                Ok(())
+            Expr::Apply(Func::Pat(pattern), inner, _) => {
+                let pattern = pattern.clone();
+                self.interpret_with_pattern(*inner, &pattern)
             }
-            Expr::Apply(_, items, _) => {
-                // pow は resolve() で消えているが、素の AST を渡された場合に備える
-                for item in items {
-                    self.interpret(item)?;
-                }
-                Ok(())
-            }
+            Expr::Apply(_, inner, _) => self.interpret(*inner),
             Expr::Measure(measure, _) => {
                 let dur = Self::measure_unit_size(measure.len()).unwrap();
                 for node in measure {
@@ -243,19 +235,19 @@ impl Score {
     fn interpret_with_pattern(&mut self, ast: Expr, pattern: &Pattern) -> Result<()> {
         match ast {
             Expr::Measure(nodes, _) => self.interpret_patterned_measure(nodes, pattern),
-            // 内側の pat が優先される
-            Expr::Apply(Func::Pat(inner), items, _) => {
-                for item in items {
-                    self.interpret_with_pattern(item, &inner)?;
-                }
-                Ok(())
-            }
-            Expr::Apply(_, items, _) => {
+            // `Apply` の中身は常に `Seq` なので、その中の各小節へパターンを配り直す
+            Expr::Seq(items) => {
                 for item in items {
                     self.interpret_with_pattern(item, pattern)?;
                 }
                 Ok(())
             }
+            // 内側の pat が優先される
+            Expr::Apply(Func::Pat(inner_pattern), items, _) => {
+                let inner_pattern = inner_pattern.clone();
+                self.interpret_with_pattern(*items, &inner_pattern)
+            }
+            Expr::Apply(_, items, _) => self.interpret_with_pattern(*items, pattern),
             other => self.interpret(other),
         }
     }

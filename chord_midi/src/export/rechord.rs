@@ -24,12 +24,8 @@ impl Display for Expr {
             }
             Expr::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
             Expr::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
-            Expr::Apply(func, items, br) => {
-                let inner = items
-                    .iter()
-                    .map(|item| item.to_string())
-                    .collect::<Vec<_>>()
-                    .join("");
+            Expr::Apply(func, inner, br) => {
+                let inner = inner.to_string();
                 // 小節の Display は末尾に " | " を出すので、関数の中では
                 // 最後の区切りを落として `pow(C | E D)` の形に揃える
                 let inner = inner.trim_end();

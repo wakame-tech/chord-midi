@@ -47,12 +47,9 @@ impl Expr {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Expr::Apply(func, items, br) => Expr::Apply(
+            Expr::Apply(func, inner, br) => Expr::Apply(
                 func,
-                items
-                    .into_iter()
-                    .map(|ast| ast.into_degree(tonic, scale))
-                    .collect(),
+                Box::new(inner.into_degree(tonic, scale)),
                 br,
             ),
             other => other,
@@ -82,12 +79,9 @@ impl Expr {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Expr::Apply(func, items, br) => Expr::Apply(
+            Expr::Apply(func, inner, br) => Expr::Apply(
                 func,
-                items
-                    .into_iter()
-                    .map(|ast| ast.into_pitch(tonic, scale))
-                    .collect(),
+                Box::new(inner.into_pitch(tonic, scale)),
                 br,
             ),
             other => other,
@@ -132,6 +126,15 @@ impl Expr {
     }
 }
 
+/// `Seq` を親のリストへ差し込む。`Apply` の中身は常に `Seq` なので、
+/// `pow(C | E D)` を潰したときに `Seq` が入れ子で残らないようにする
+fn splice(expr: Expr) -> Vec<Expr> {
+    match expr {
+        Expr::Seq(items) => items,
+        other => vec![other],
+    }
+}
+
 /// `Apply(Func::Pow, ..)` と `Apply(Func::Oct, ..)` を潰し、
 /// 中の全コードに対応する修飾を足す。
 ///
@@ -144,21 +147,25 @@ fn desugar_shapes(ast: Expr) -> Vec<Expr> {
                 .flat_map(desugar_shapes)
                 .collect(),
         )],
-        Expr::Apply(Func::Pow, items, _) => items
+        Expr::Apply(Func::Pow, inner, _) => desugar_shapes(*inner)
             .into_iter()
-            .flat_map(desugar_shapes)
+            .flat_map(splice)
             .map(|item| mark(item, Modifier::Power))
             .collect(),
-        Expr::Apply(Func::Oct, items, _) => items
+        Expr::Apply(Func::Oct, inner, _) => desugar_shapes(*inner)
             .into_iter()
-            .flat_map(desugar_shapes)
+            .flat_map(splice)
             .map(|item| mark(item, Modifier::Octave))
             .collect(),
-        Expr::Apply(func, items, br) => vec![Expr::Apply(
-            func,
-            items.into_iter().flat_map(desugar_shapes).collect(),
-            br,
-        )],
+        Expr::Apply(func, inner, br) => {
+            let inner = Expr::Seq(
+                desugar_shapes(*inner)
+                    .into_iter()
+                    .flat_map(splice)
+                    .collect(),
+            );
+            vec![Expr::Apply(func, Box::new(inner), br)]
+        }
         other => vec![other],
     }
 }
@@ -173,12 +180,16 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
                 .collect(),
             br,
         ),
-        Expr::Apply(func, items, br) => Expr::Apply(
-            func,
+        // `Apply` の中身は常に `Seq` なので、その中の各要素へ潜って印を付け直す
+        Expr::Seq(items) => Expr::Seq(
             items
                 .into_iter()
                 .map(|item| mark(item, modifier.clone()))
                 .collect(),
+        ),
+        Expr::Apply(func, inner, br) => Expr::Apply(
+            func,
+            Box::new(mark(*inner, modifier)),
             br,
         ),
         other => other,
@@ -329,8 +340,33 @@ mod tests {
             .resolve();
         let Expr::Seq(items) = &ast else { panic!("not a score") };
         let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
         let Expr::Measure(nodes, _) = &inner[0] else {
             panic!("pow should be desugared inside pat: {:?}", inner[0])
+        };
+        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        assert_eq!(
+            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            vec![0, 7]
+        );
+    }
+
+    #[test]
+    fn test_pat_inside_pow_is_marked() {
+        // pow が外側にあるとき、内側の pat が包む Seq の向こうまで
+        // Power 修飾が届くことを確認する (mark の Seq 対応の回帰テスト)
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Func, Node};
+
+        let ast = RechordImporter
+            .import("pow(pat(\"oxox\", C))\n")
+            .unwrap()
+            .resolve();
+        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Measure(nodes, _) = &inner[0] else {
+            panic!("not a measure: {:?}", inner[0])
         };
         let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
         assert_eq!(
@@ -386,6 +422,7 @@ mod tests {
             .resolve();
         let Expr::Seq(items) = &ast else { panic!("not a score") };
         let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
         let Expr::Measure(nodes, _) = &inner[0] else {
             panic!("oct should be desugared inside pat: {:?}", inner[0])
         };
