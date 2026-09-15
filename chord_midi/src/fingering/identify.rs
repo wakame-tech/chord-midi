@@ -652,6 +652,114 @@ mod tests {
         }
     }
 
+    /// 決まった種から押さえ方を作る線形合同法。`rand` を足さずに済ませるためと、
+    /// 落ちたときに同じ形をもう一度出せるようにするため
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            self.0 >> 33
+        }
+
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+
+        /// 適当な押さえ方。1/4 でミュート、それ以外は 0〜12フレット。
+        /// 1本しか鳴らない形は名前の付けようがないので引き直す
+        fn shape(&mut self) -> [Option<u8>; 6] {
+            loop {
+                let mut out = [None; 6];
+                for slot in out.iter_mut() {
+                    *slot = if self.below(4) == 0 {
+                        None
+                    } else {
+                        Some(self.below(13) as u8)
+                    };
+                }
+                if out.iter().filter(|v| v.is_some()).count() >= 2 {
+                    return out;
+                }
+            }
+        }
+    }
+
+    /// 指板は自由に押さえられるので、原典の115形だけ見ていても本番の入力を
+    /// 覆えない。むしろ載っている形のほうが通り続けやすく、自由に押さえた形
+    /// こそがこの機能の入力なので、そちらにも同じ不変条件をかけておく。
+    ///
+    /// ここでしか見ていない条件が1つある: 記法を読み直した `label` が
+    /// `name` と一致すること（記法と名前が食い違っていないこと）。
+    ///
+    /// 100形で候補は約500件。`reparse` はパーサを丸ごと通すので件数がそのまま
+    /// 時間になる。これ以上増やしてもテストの重さに見合わない
+    #[test]
+    fn arbitrary_shapes_keep_the_invariants() {
+        let expected = pitch_classes_by_name();
+        let mut rng = Lcg(0x5eed_1234_abcd_0001);
+        for _ in 0..100 {
+            let frets = rng.shape();
+            let got = identify(frets);
+            assert!(
+                got.len() <= MAX_CANDIDATES,
+                "{} で {} 件返った",
+                tab(frets),
+                got.len()
+            );
+            let mut seen: Vec<&str> = Vec::new();
+            for c in &got {
+                assert!(
+                    !seen.contains(&c.name.as_str()),
+                    "{} で名前が重複した: {}",
+                    tab(frets),
+                    c.name
+                );
+                seen.push(c.name.as_str());
+
+                let refs = reparse(&c.notation);
+                assert_eq!(
+                    refs.len(),
+                    1,
+                    "{} の記法 {} が1コードにならない",
+                    tab(frets),
+                    c.notation
+                );
+                assert_eq!(
+                    refs[0].label,
+                    c.name,
+                    "{} の記法 {} を読み直すと名前が {} に変わる",
+                    tab(frets),
+                    c.notation,
+                    refs[0].label
+                );
+                let want = expected.get(&c.name).unwrap_or_else(|| {
+                    panic!(
+                        "候補名 {} が品質テーブルから引けない ({}, {})",
+                        c.name,
+                        c.notation,
+                        tab(frets)
+                    )
+                });
+                assert_eq!(
+                    refs[0].pitch_classes,
+                    *want,
+                    "{} の候補 {} の記法 {} が別のコードに読まれる: \
+                     読み直すと {{{}}}、{} が指すのは {{{}}}",
+                    tab(frets),
+                    c.name,
+                    c.notation,
+                    notes(refs[0].pitch_classes),
+                    c.name,
+                    notes(*want)
+                );
+            }
+        }
+    }
+
     /// データの全要素について、逆引きが1件は返し、Data と印が付いた候補の記法を
     /// 読み直して find() に流すと元の形が戻る
     #[test]
