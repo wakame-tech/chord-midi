@@ -7,6 +7,7 @@ use chord_midi::{
     presets,
 };
 use diagram::ChordDiagram;
+use fretboard::Fretboard;
 use std::io::BufWriter;
 use std::str::FromStr;
 use web_sys::wasm_bindgen::closure::Closure;
@@ -15,6 +16,7 @@ use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 mod diagram;
+mod fretboard;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     let u8_arr = unsafe { web_sys::js_sys::Uint8Array::view(arr) };
@@ -48,6 +50,7 @@ fn compile(input: &str, bpm: u8) -> Result<(String, Vec<MeasureRef>, Vec<u8>), S
 enum Tab {
     Editor,
     Preview,
+    Fretboard,
 }
 
 #[function_component(App)]
@@ -58,6 +61,8 @@ fn app() -> Html {
     let result = use_state(String::new);
     let measures = use_state(Vec::<MeasureRef>::new);
     let tab = use_state(|| Tab::Editor);
+    // 運指タブで押さえた形。タブを離れても消さないので App が持つ
+    let picked = use_state(|| [None; 6] as [Option<u8>; 6]);
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
@@ -303,6 +308,27 @@ fn app() -> Html {
         let tab = tab.clone();
         Callback::from(move |_| tab.set(Tab::Preview))
     };
+    let on_fretboard_tab = {
+        let tab = tab.clone();
+        Callback::from(move |_| tab.set(Tab::Fretboard))
+    };
+    let on_pick = {
+        let picked = picked.clone();
+        Callback::from(move |next: [Option<u8>; 6]| picked.set(next))
+    };
+    // 記法をエディタ末尾に足す。進行プリセットのボタンと同じ挙動
+    let on_insert = {
+        let input = input.clone();
+        Callback::from(move |notation: String| {
+            let cur = (*input).clone();
+            let next = if cur.trim().is_empty() {
+                format!("{} |", notation)
+            } else {
+                format!("{} {} |", cur.trim_end(), notation)
+            };
+            input.set(next);
+        })
+    };
 
     let has_error = !(*error).is_empty();
 
@@ -412,6 +438,10 @@ fn app() -> Html {
         html! { <div class="fingerings">{cards}</div> }
     };
 
+    let fretboard = html! {
+        <Fretboard frets={*picked} on_change={on_pick} on_insert={on_insert} />
+    };
+
     html! {
         <>
             <header class="app-header">
@@ -437,10 +467,22 @@ fn app() -> Html {
                 >
                     {"プレビュー"}
                 </button>
+                <button
+                    class={classes!("tab", (*tab == Tab::Fretboard).then_some("is-active"))}
+                    onclick={on_fretboard_tab}
+                >
+                    {"運指"}
+                </button>
             </nav>
 
             <main class="panel">
-                if *tab == Tab::Editor { {editor} } else { {preview} }
+                {
+                    match *tab {
+                        Tab::Editor => editor,
+                        Tab::Preview => preview,
+                        Tab::Fretboard => fretboard,
+                    }
+                }
             </main>
 
             // プレイヤーはタブの外に固定で置く。タブを切り替えても再生は止まらない
