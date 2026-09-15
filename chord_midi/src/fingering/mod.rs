@@ -7,6 +7,14 @@ mod data;
 
 pub use data::FINGERINGS;
 
+use crate::model::{
+    ast::{Ast, ChordNode, Node},
+    key::Key,
+    pitch::Pitch,
+    scale::Scale,
+};
+use anyhow::Result;
+
 /// 標準チューニングの開放弦のピッチクラス。6弦→1弦の順
 pub const OPEN_STRINGS: [u8; 6] = [4, 9, 2, 7, 11, 4];
 
@@ -77,9 +85,162 @@ impl Fingering {
     }
 }
 
+/// 入力に現れた1つのコード。押さえ方を引くための情報だけを持つ
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChordRef {
+    /// 表示用のコード名
+    pub label: String,
+    /// ルートのピッチクラス。重み付けの基準にする
+    pub root: u8,
+    /// 構成音（スラッシュのベースを含む）のピッチクラス集合
+    pub pitch_classes: u16,
+    /// スラッシュコードのベース。無ければ None
+    pub bass: Option<u8>,
+}
+
+/// AST に現れるコードを出現順に取り出す。
+///
+/// 呼ぶ前に [`Ast::resolve`] を通しておくこと。度数表記のままだと
+/// ピッチクラスが決まらずエラーになる。
+pub fn chord_refs(ast: &Ast) -> Result<Vec<ChordRef>> {
+    let mut out = Vec::new();
+    collect_ast(ast, &mut out)?;
+    Ok(out)
+}
+
+fn collect_ast(ast: &Ast, out: &mut Vec<ChordRef>) -> Result<()> {
+    match ast {
+        Ast::Score(items) => {
+            for item in items {
+                collect_ast(item, out)?;
+            }
+        }
+        Ast::Measure(nodes, _) => {
+            for node in nodes {
+                collect_node(node, out)?;
+            }
+        }
+        Ast::Comment(_) | Ast::Directive(_) => {}
+    }
+    Ok(())
+}
+
+fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
+    match node {
+        Node::Chord(c) | Node::Arpeggio(c) => out.push(chord_ref(c)?),
+        Node::Transform(t, c) => {
+            // resolve() 済みなら key は Absolute なので tonic/scale は無視される。
+            // export/midi.rs の Node::Transform の扱いと同じ。
+            for expanded in t.expand(c.clone(), Pitch::C, Scale::Major) {
+                collect_node(&expanded, out)?;
+            }
+        }
+        Node::Rest | Node::Sustain | Node::Repeat => {}
+    }
+    Ok(())
+}
+
+fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
+    let label = node.to_string();
+    let chord = node.to_chord()?;
+    let root = pitch_class(&chord.key)?;
+    let mut pitch_classes = 0u16;
+    for semitone in &chord.semitones {
+        pitch_classes |= 1u16 << ((root as u16 + *semitone as u16) % 12);
+    }
+    let bass = match &chord.on {
+        Some(on) => {
+            let b = pitch_class(on)?;
+            pitch_classes |= 1u16 << b;
+            Some(b)
+        }
+        None => None,
+    };
+    Ok(ChordRef {
+        label,
+        root,
+        pitch_classes,
+        bass,
+    })
+}
+
+fn pitch_class(key: &Key) -> Result<u8> {
+    match key {
+        Key::Absolute(p) => Ok(*p as u8),
+        Key::Relative(d) => Err(anyhow::anyhow!(
+            "relative key {} is not resolved; call Ast::resolve() first",
+            d
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn refs(input: &str) -> Vec<ChordRef> {
+        use crate::import::{Importer, RechordImporter};
+        let ast = RechordImporter.import(input).unwrap().resolve();
+        chord_refs(&ast).unwrap()
+    }
+
+    /// ピッチクラスの集合をビットマスクにする
+    fn mask(pcs: &[u8]) -> u16 {
+        pcs.iter().fold(0u16, |acc, p| acc | (1u16 << p))
+    }
+
+    #[test]
+    fn chord_refs_extracts_pitch_classes() {
+        let r = refs("C |\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].label, "C");
+        assert_eq!(r[0].root, 0);
+        assert_eq!(r[0].pitch_classes, mask(&[0, 4, 7]));
+        assert_eq!(r[0].bass, None);
+    }
+
+    #[test]
+    fn chord_refs_resolves_degrees() {
+        // key: C なので IV は F
+        let r = refs("key: C\nIVM7 |\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].root, 5);
+        assert_eq!(r[0].pitch_classes, mask(&[5, 9, 0, 4]));
+    }
+
+    #[test]
+    fn chord_refs_keeps_slash_bass() {
+        // Am7 = A C E G、ベースは D
+        let r = refs("Am7/D |\n");
+        assert_eq!(r[0].root, 9);
+        assert_eq!(r[0].bass, Some(2));
+        assert_eq!(r[0].pitch_classes, mask(&[9, 0, 4, 7, 2]));
+    }
+
+    #[test]
+    fn chord_refs_skips_non_chord_nodes() {
+        // = は sustain、N.C. は rest、% は repeat
+        let r = refs("C = N.C. % |\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].label, "C");
+    }
+
+    #[test]
+    fn chord_refs_expands_transforms() {
+        // s25(G7) は Dm7 G7 の2コードに展開される
+        let r = refs("s25(G7) |\n");
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].root, 2);
+        assert_eq!(r[1].root, 7);
+    }
+
+    #[test]
+    fn chord_refs_reads_all_measures() {
+        let r = refs("C | F |\n");
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].root, 0);
+        assert_eq!(r[1].root, 5);
+    }
 
     #[test]
     fn data_is_consistent() {
