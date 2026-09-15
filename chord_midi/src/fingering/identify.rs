@@ -326,6 +326,7 @@ mod tests {
 
     /// "x3201x" のような文字列を frets に直す。x = ミュート、それ以外は1桁の16進
     fn frets(s: &str) -> [Option<u8>; 6] {
+        assert_eq!(s.chars().count(), 6, "6弦ぶん書くこと: {}", s);
         let mut out = [None; 6];
         for (i, c) in s.chars().enumerate() {
             out[i] = match c {
@@ -349,9 +350,18 @@ mod tests {
     }
 
     #[test]
-    fn identify_names_an_open_c() {
-        let c = identify(frets("x3201x"));
-        assert_eq!(c[0].name, "C");
+    fn identify_names_a_high_position_shape() {
+        // 8aa988 = 8フレットの C（E フォームのバレー）。原典は簡易コードしか
+        // 載せていないのでデータに無く、理論だけで名前が出る。
+        // ハイポジションを見るのはこのテストだけ
+        let c = identify(frets("8aa988"));
+        assert_eq!(
+            c[0].name,
+            "C",
+            "候補の並び: {:?}",
+            c.iter().map(|x| &x.name).collect::<Vec<_>>()
+        );
+        assert_eq!(c[0].source, Source::Theory);
     }
 
     #[test]
@@ -376,7 +386,17 @@ mod tests {
 
     #[test]
     fn identify_caps_the_number_of_candidates() {
-        assert!(identify(frets("x3201x")).len() <= 5);
+        // 可動形は movable_candidate が先に1枠使うので、打ち切りの効き方が
+        // 通常の形と違う。両方見る
+        for shape in ["x3201x", "57xxxx"] {
+            let c = identify(frets(shape));
+            assert!(
+                c.len() <= MAX_CANDIDATES,
+                "{} で {} 件返った",
+                shape,
+                c.len()
+            );
+        }
     }
 
     #[test]
@@ -384,15 +404,18 @@ mod tests {
         // x32010 は 5弦3fr(C) が最低音なので C のまま。1弦を開放にした
         // "332010" は 6弦3fr = G が最低音になる C/G
         let c = identify(frets("332010"));
-        assert!(
-            c.iter().any(|x| x.name == "C/G"),
-            "C/G が候補に無い: {:?}",
-            c.iter().map(|x| &x.name).collect::<Vec<_>>()
+        assert_eq!(
+            c[0].name,
+            "C/G",
+            "候補の並び: {:?}",
+            c.iter()
+                .map(|x| format!("{}({})", x.name, x.score))
+                .collect::<Vec<_>>()
         );
     }
 
     #[test]
-    fn identify_prefers_the_slash_name_when_the_bass_is_not_the_root() {
+    fn identify_does_not_use_a_slash_name_when_the_bass_is_the_root() {
         // xx0232 は D。4弦開放(D) が最低音なのでスラッシュにはならない
         let d = identify(frets("xx0232"));
         assert_eq!(d[0].name, "D");
@@ -424,6 +447,28 @@ mod tests {
         assert_eq!(c[0].name, "C");
         assert_eq!(c[0].source, Source::Theory);
         assert!(c[0].unreachable);
+    }
+
+    /// ピッチクラス集合を "C, E, G" のような音名の並びにする。
+    /// u16 のビット集合を10進で突きつけられても何も分からないので
+    fn notes(mask: u16) -> String {
+        (0..12u8)
+            .filter(|p| (mask >> *p) & 1 == 1)
+            .map(|p| {
+                Pitch::try_from(p)
+                    .expect("ピッチクラスは 0..12")
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// 押さえ方を "x3201x" の形に戻す。失敗したとき指板で再現できるように
+    fn tab(frets: [Option<u8>; 6]) -> String {
+        frets
+            .iter()
+            .map(|v| v.map_or("x".to_string(), |n| format!("{:x}", n)))
+            .collect()
     }
 
     /// 記法を読み直して押さえ方検索用の情報にする。`node_parser` は private
@@ -558,7 +603,15 @@ mod tests {
                 for on in ons {
                     let n = node(root_pitch, quality, on);
                     if let Ok(r) = chord_ref(&n) {
-                        out.entry(r.label).or_insert(r.pitch_classes);
+                        // or_insert で黙って先勝ちにすると、同じ名前に違う
+                        // 構成音が割り当たっていても気付けない
+                        if let Some(prev) = out.insert(r.label.clone(), r.pitch_classes) {
+                            assert_eq!(
+                                prev, r.pitch_classes,
+                                "同じ名前 {} に違う構成音が割り当たっている",
+                                r.label
+                            );
+                        }
                     }
                 }
             }
@@ -583,9 +636,17 @@ mod tests {
                     )
                 });
                 assert_eq!(
-                    refs[0].pitch_classes, *want,
-                    "{} の候補 {} の記法 {} が別のコードに読まれる",
-                    f.name, c.name, c.notation
+                    refs[0].pitch_classes,
+                    *want,
+                    "{} ({}) の候補 {} の記法 {} が別のコードに読まれる: \
+                     読み直すと {{{}}}、{} が指すのは {{{}}}",
+                    f.name,
+                    tab(f.frets),
+                    c.name,
+                    c.notation,
+                    notes(refs[0].pitch_classes),
+                    c.name,
+                    notes(*want)
                 );
             }
         }
@@ -595,9 +656,13 @@ mod tests {
     /// 読み直して find() に流すと元の形が戻る
     #[test]
     fn every_shape_in_the_data_round_trips() {
+        let mut with_data = 0;
         for f in FINGERINGS.iter() {
             let got = identify(f.frets);
-            assert!(!got.is_empty(), "{} ({:?}) の候補が空", f.name, f.frets);
+            assert!(!got.is_empty(), "{} ({}) の候補が空", f.name, tab(f.frets));
+            if got.iter().any(|c| matches!(c.source, Source::Data(_))) {
+                with_data += 1;
+            }
             for c in got.iter().filter(|c| matches!(c.source, Source::Data(_))) {
                 let refs = reparse(&c.notation);
                 assert_eq!(refs.len(), 1, "{} が1コードにならない", c.notation);
@@ -610,5 +675,15 @@ mod tests {
                 );
             }
         }
+        // 上のループは Data の候補が無い形では何も検査しない。空振りで通らない
+        // よう、実際に検査できた形の数を押さえる。届かないのは3形だけ:
+        // x3x01x（原典の C だが鳴るのは {C, G} なので C5 と読まれる）、
+        // 3x003x（同じく G）、022000（原典の Em7、G/E と読まれる）。
+        // いずれも find() がその名前に別の形を返すので記法が往復しない
+        assert!(
+            with_data >= 112,
+            "Data の候補が出た形が {} 件しかない（112件以上のはず）",
+            with_data
+        );
     }
 }
