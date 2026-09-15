@@ -1,6 +1,11 @@
 //! 押さえ方からコード名を引く。[`super::find`] の逆。
 
-use super::{Fingering, OPEN_STRINGS, OPEN_STRING_PITCHES};
+use super::{
+    chord_ref, extra_cost, missing_cost, relative_semitones, ChordRef, Fingering, OPEN_STRINGS,
+    OPEN_STRING_PITCHES,
+};
+use crate::model::{ast::ChordNode, key::Key, modifier::Modifier, pitch::Pitch};
+use std::collections::BTreeSet;
 
 /// 候補がどこから来たか
 #[derive(Debug, Clone, PartialEq)]
@@ -61,19 +66,119 @@ fn played(frets: &[Option<u8>; 6]) -> Option<Played> {
     })
 }
 
+/// 返す候補の最大件数
+const MAX_CANDIDATES: usize = 5;
+
+/// 逆引きで当てにいくコードの品質。`Modifier::Major(5)` は `chord_node_parser`
+/// と同じく常に種として入れるので、ここには書かない。上から「よくある」順で、
+/// 同点のときはこの順が優先される。
+///
+/// 入れていない品質:
+/// - m6: `Modifier::Minor(6)` はマイナースケールの6度 = b6 を足す。実際の m6
+///   コードは長6度なので今の `Modifier` では正しく組めない
+/// - oct: 構成音がルート1音だけなので、どの1音を押さえても完全一致して候補を
+///   埋め尽くす。オクターブ形はデータ照合で拾う
+const QUALITIES: &[&[Modifier]] = &[
+    &[],                                      // C
+    &[Modifier::Minor(5)],                    // Cm
+    &[Modifier::Dominant(7)],                 // C7
+    &[Modifier::Minor(7)],                    // Cm7
+    &[Modifier::Major(7)],                    // Cmaj7
+    &[Modifier::Sus4],                        // Csus4
+    &[Modifier::Sus2],                        // Csus2
+    &[Modifier::Dominant(6)],                 // C6
+    &[Modifier::Add(9)],                      // Cadd9
+    &[Modifier::Dominant(9)],                 // C9
+    &[Modifier::Minor(9)],                    // Cm9
+    &[Modifier::Major(9)],                    // Cmaj9
+    &[Modifier::MinorMajaor7],                // CmM7
+    &[Modifier::Minor(7), Modifier::Flat5th], // Cm7b5
+    &[Modifier::Dim],                         // Cdim
+    &[Modifier::Dim7],                        // Cdim7
+    &[Modifier::Aug],                         // Caug
+    &[Modifier::Power],                       // C5 (記法は pow(C)。Task 6 で包む)
+];
+
+/// 品質から `ChordNode` を作る。`chord_node_parser` と同じく `Major(5)` を
+/// 種にしてから修飾を足す。種が無いと `Sus4` のような「既存の3rdを消して4thを
+/// 入れる」修飾が土台の無いところに当たって壊れる
+fn node(root: Pitch, quality: &[Modifier], on: Option<Pitch>) -> ChordNode {
+    let mut modifiers = BTreeSet::from([Modifier::Major(5)]);
+    modifiers.extend(quality.iter().cloned());
+    ChordNode {
+        key: Key::Absolute(root),
+        modifiers,
+        on: on.map(Key::Absolute),
+        root_string: None,
+    }
+}
+
+/// 押さえた音とコードのずれを点にする。小さいほど良い。
+/// 押さえた音のうちコードで説明できない音が2つ以上なら候補にしない
+fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
+    let extra_mask = played.pitch_classes & !chord.pitch_classes;
+    if extra_mask.count_ones() >= 2 {
+        return None;
+    }
+    let extra: u32 = relative_semitones(extra_mask, chord.root)
+        .map(extra_cost)
+        .sum();
+    let missing: u32 = relative_semitones(chord.pitch_classes & !played.pitch_classes, chord.root)
+        .map(missing_cost)
+        .sum();
+    // ルートが鳴っていない呼び方は疑わしい
+    let root_silent = if (played.pitch_classes >> chord.root) & 1 == 0 {
+        3
+    } else {
+        0
+    };
+    // 最低音がルートでないのにスラッシュで書いていない
+    let bass_mismatch = if chord.bass.is_none() && played.bass != chord.root {
+        2
+    } else {
+        0
+    };
+    Some(extra + missing + root_silent + bass_mismatch)
+}
+
 /// 押さえ方からコード名候補を引く。frets は 6弦→1弦、None = ミュート
 pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
-    let Some(_played) = played(&frets) else {
+    let Some(played) = played(&frets) else {
         return Vec::new();
     };
-    // 中身は次のタスクで入れる。今は「鳴っていれば1件は返す」だけ
-    vec![Candidate {
-        name: String::new(),
-        notation: String::new(),
-        source: Source::Theory,
-        unreachable: true,
-        score: u32::MAX,
-    }]
+
+    // (score, QUALITIES での並び順, ノード, 検索用の情報)
+    let mut scored: Vec<(u32, usize, ChordNode, ChordRef)> = Vec::new();
+    for root in 0..12u8 {
+        let Ok(root_pitch) = Pitch::try_from(root) else {
+            continue;
+        };
+        for (qi, quality) in QUALITIES.iter().enumerate() {
+            let node = node(root_pitch, quality, None);
+            let Ok(r) = chord_ref(&node) else { continue };
+            let Some(s) = score(&played, &r) else { continue };
+            scored.push((s, qi, node, r));
+        }
+    }
+    scored.sort_by_key(|(s, qi, _, _)| (*s, *qi));
+
+    let mut out: Vec<Candidate> = Vec::new();
+    for (s, _, node, r) in scored {
+        if out.len() >= MAX_CANDIDATES {
+            break;
+        }
+        if out.iter().any(|c| c.name == r.label) {
+            continue;
+        }
+        out.push(Candidate {
+            name: r.label.clone(),
+            notation: node.to_string(),
+            source: Source::Theory,
+            unreachable: false,
+            score: s,
+        });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -98,8 +203,43 @@ mod tests {
     }
 
     #[test]
-    fn identify_returns_something_for_a_real_chord() {
-        // C コード。名前が何になるかは次のタスクで詰める
-        assert!(!identify(frets("x3201x")).is_empty());
+    fn identify_names_an_open_c() {
+        let c = identify(frets("x3201x"));
+        assert_eq!(c[0].name, "C");
+    }
+
+    #[test]
+    fn identify_names_an_open_e() {
+        let c = identify(frets("022100"));
+        assert_eq!(c[0].name, "E");
+    }
+
+    #[test]
+    fn identify_names_an_open_a_minor() {
+        // x02210 = Am
+        let c = identify(frets("x02210"));
+        assert_eq!(c[0].name, "Am");
+    }
+
+    #[test]
+    fn identify_names_a_seventh() {
+        // 020100 = E7
+        let c = identify(frets("020100"));
+        assert_eq!(c[0].name, "E7");
+    }
+
+    #[test]
+    fn identify_caps_the_number_of_candidates() {
+        assert!(identify(frets("x3201x")).len() <= 5);
+    }
+
+    #[test]
+    fn identify_has_no_duplicate_names() {
+        let c = identify(frets("x3201x"));
+        let mut names: Vec<_> = c.iter().map(|x| x.name.clone()).collect();
+        names.sort();
+        let before = names.len();
+        names.dedup();
+        assert_eq!(names.len(), before);
     }
 }
