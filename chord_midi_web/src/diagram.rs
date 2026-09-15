@@ -67,8 +67,12 @@ fn diagram(f: &Fingering) -> Html {
                         },
                         _ => Html::default(),
                     };
-                    // 各行の最初のセルの左端がナット
-                    let class = if i == 0 { "cell nut" } else { "cell" };
+                    // ナットは0フレットにしか無い。窓が途中から始まるときは普通のフレット線
+                    let class = match (i, start) {
+                        (0, 1) => "cell nut",
+                        (0, _) => "cell edge",
+                        _ => "cell",
+                    };
                     html! { <div {class}>{dot}</div> }
                 })
                 .collect::<Html>();

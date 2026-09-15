@@ -25,6 +25,8 @@ impl Display for Modifier {
         match self {
             Modifier::Major(5) => write!(f, ""),
             Modifier::Major(d) => write!(f, "maj{}", d),
+            // 素のマイナートライアドは "Am5" ではなく "Am"。Major(5) と対称にする
+            Modifier::Minor(5) => write!(f, "m"),
             Modifier::Minor(d) => write!(f, "m{}", d),
             Modifier::Dominant(d) => write!(f, "{}", d),
             Modifier::MinorMajaor7 => write!(f, "mM7"),
