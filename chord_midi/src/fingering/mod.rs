@@ -9,7 +9,7 @@ pub use data::FINGERINGS;
 
 use crate::model::modifier::Modifier;
 use crate::model::{
-    ast::{Ast, ChordNode, Node},
+    ast::{Ast, ChordNode, Func, Node, Pattern},
     key::Key,
     pitch::Pitch,
     scale::Scale,
@@ -133,6 +133,8 @@ pub struct MeasureRef {
     pub chords: Vec<ChordRef>,
     /// この小節の後ろで入力が改行されている
     pub line_break: bool,
+    /// この小節を囲んでいる `pat()` のリズム。無ければ None
+    pub pattern: Option<Pattern>,
 }
 
 /// AST に現れるコードを小節ごとにまとめて取り出す。
@@ -140,15 +142,17 @@ pub struct MeasureRef {
 /// 呼ぶ前に [`Ast::resolve`] を通しておくこと。
 pub fn measure_refs(ast: &Ast) -> Result<Vec<MeasureRef>> {
     let mut out = Vec::new();
-    collect_ast(ast, &mut out)?;
+    collect_ast(ast, None, &mut out)?;
     Ok(out)
 }
 
-fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
+/// `pattern` は外側の `pat()` から降ってきたリズム。
+/// 内側の `pat()` が優先されるのは export/midi.rs の解釈と同じ
+fn collect_ast(ast: &Ast, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>) -> Result<()> {
     match ast {
         Ast::Score(items) => {
             for item in items {
-                collect_ast(item, out)?;
+                collect_ast(item, pattern, out)?;
             }
         }
         Ast::Measure(nodes, line_break) => {
@@ -159,11 +163,16 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
             out.push(MeasureRef {
                 chords,
                 line_break: *line_break,
+                pattern: pattern.cloned(),
             });
         }
-        Ast::Apply(_, items, _) => {
+        Ast::Apply(func, items, _) => {
+            let inner = match func {
+                Func::Pat(p) => Some(p),
+                _ => pattern,
+            };
             for item in items {
-                collect_ast(item, out)?;
+                collect_ast(item, inner, out)?;
             }
         }
         Ast::Comment(_) | Ast::Directive(_) => {}
@@ -376,6 +385,28 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         let ast = RechordImporter.import(input).unwrap().resolve();
         measure_refs(&ast).unwrap()
+    }
+
+    #[test]
+    fn measure_refs_carries_pattern_of_enclosing_pat() {
+        let ms = measures("pat(\"o.oo..oo\", C | Am F)\n");
+        assert_eq!(ms.len(), 2);
+        for m in &ms {
+            assert_eq!(m.pattern.as_ref().unwrap().to_string(), "o.oo..oo");
+        }
+    }
+
+    #[test]
+    fn measure_refs_has_no_pattern_without_pat() {
+        let ms = measures("C | Am F |\n");
+        assert!(ms.iter().all(|m| m.pattern.is_none()));
+    }
+
+    #[test]
+    fn measure_refs_inner_pattern_wins() {
+        let ms = measures("pat(\"oxox\", pat(\"o.oo..oo\", C))\n");
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].pattern.as_ref().unwrap().to_string(), "o.oo..oo");
     }
 
     #[test]

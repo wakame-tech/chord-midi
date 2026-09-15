@@ -276,7 +276,17 @@ fn app() -> Html {
                     />
                 });
             }
-            rows.push(html! { <div class="measure">{cards}</div> });
+            // pat() が無い小節でも枠は残す。空けておかないとカードの上端が揃わない
+            let rhythm = match &measure.pattern {
+                Some(p) => html! { <div class="rhythm">{ p.to_string() }</div> },
+                None => html! { <div class="rhythm"></div> },
+            };
+            rows.push(html! {
+                <div class="measure">
+                    { rhythm }
+                    <div class="measure-cards">{cards}</div>
+                </div>
+            });
             // 入力が改行されている小節の後ろで、カードの並びも折り返す
             if measure.line_break {
                 rows.push(html! { <div class="line-break"></div> });
