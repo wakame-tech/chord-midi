@@ -69,6 +69,13 @@ fn played(frets: &[Option<u8>; 6]) -> Option<Played> {
 /// 返す候補の最大件数
 const MAX_CANDIDATES: usize = 5;
 
+/// 自分のルート以外がベースに来るパワーコードに足す点。[`score`] を見よ。
+///
+/// 115形すべてで測ると 1〜4 のどれでも先頭の候補は同じになる。2 にしてあるのは、
+/// 1 だと実際の名前とパワーコードが同点になり、勝敗が QUALITIES の並び順の
+/// タイブレーク（`Power` が末尾）頼みになるため。2 以上なら点そのもので決まる
+const POWER_ON_FOREIGN_BASS: u32 = 2;
+
 /// 逆引きで当てにいくコードの品質。`Modifier::Major(5)` は `chord_node_parser`
 /// と同じく常に種として入れるので、ここには書かない。上から「よくある」順で、
 /// 同点のときはこの順が優先される。
@@ -138,7 +145,18 @@ fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
     } else {
         0
     };
-    Some(extra + missing + root_silent + bass_mismatch)
+    // ルート以外がベースに来るパワーコード。パワーコードは2音しか無いので
+    // たいていの押さえ方に 0 点で当たってしまい、まともな名前を押しのける。
+    // {C, D#, A#} を「D# パワーコード on C」と読む人はいない（5thを省いた
+    // Cm7 と読む）ので、自分のルートに乗っていないパワーコードだけ重くする。
+    // `chord_ref` は Power の修飾から `wanted` を立てるので、それで見分ける
+    let power_on_foreign_bass =
+        if chord.wanted == Some(ShapeKind::Power) && chord.bass.is_some_and(|b| b != chord.root) {
+            POWER_ON_FOREIGN_BASS
+        } else {
+            0
+        };
+    Some(extra + missing + root_silent + bass_mismatch + power_on_foreign_bass)
 }
 
 /// ノードを記法の文字列にする。
@@ -247,9 +265,9 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     if let Some(c) = data.and_then(movable_candidate) {
         out.push(c);
     }
-    // 打ち切る前に全部の記法を決める。段1で当たった形を再現するかは
-    // notation_for を通すまで分からないので、先に5件へ絞ると再現する候補を
-    // 取りこぼす
+    // 候補ごとに記法を決める。並び順は (score, QUALITIES の並び順) で既に
+    // 確定しているので、truncate で落ちる分の notation_for は捨てることになる。
+    // 足切り後の候補は数十件、find() は115件の軽いビット演算なので許容する
     for (s, _, node, r) in scored {
         if out.iter().any(|c| c.name == r.label) {
             continue;
@@ -267,10 +285,6 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             score: s,
         });
     }
-    // 段1で当たった形を再現する候補を先に出す。`sort_by_key` は安定なので、
-    // 再現する組・しない組それぞれの中では (score, QUALITIES の並び順) が保たれる。
-    // ここで score で並べ直すと QUALITIES のタイブレークを壊す
-    out.sort_by_key(|c| c.unreachable);
     out.truncate(MAX_CANDIDATES);
     out
 }
@@ -422,35 +436,36 @@ mod tests {
     }
 
     #[test]
-    fn identify_puts_the_data_shape_first() {
-        // x3x34x は原典の Cm7。理論だけで出た D#5/C に先を越されないこと
+    fn identify_prefers_a_real_name_over_a_power_chord_on_a_foreign_bass() {
+        // x3x34x が鳴らすのは {C, D#, A#}。D#5/C（D# パワーコード on C）は
+        // ちょうどこの3音に当たるので素点は 0 になるが、こう読む人はいない。
+        // 5th を省いた Cm7 が先頭に来ること
         let c = identify(frets("x3x34x"));
         assert_eq!(
             c[0].name,
             "Cm7",
             "候補の並び: {:?}",
-            c.iter().map(|x| &x.name).collect::<Vec<_>>()
+            c.iter()
+                .map(|x| format!("{}({})", x.name, x.score))
+                .collect::<Vec<_>>()
         );
-        assert!(matches!(c[0].source, Source::Data(_)));
     }
 
-    /// 原典に載っている呼び方が候補にあるなら、それが先頭に来る。
-    /// 並べ替えの第1キー（段1で当たった形を再現する候補が先）が効いていること
     #[test]
-    fn identify_never_buries_a_data_candidate() {
-        for f in FINGERINGS.iter() {
-            let got = identify(f.frets);
-            if got.iter().any(|c| matches!(c.source, Source::Data(_))) {
-                assert!(
-                    matches!(got[0].source, Source::Data(_)),
-                    "{} ({:?}) で原典の候補が先頭に来ない: {:?}",
-                    f.name,
-                    f.frets,
-                    got.iter()
-                        .map(|c| (c.name.clone(), matches!(c.source, Source::Data(_))))
-                        .collect::<Vec<_>>()
-                );
-            }
+    fn identify_keeps_a_power_chord_on_its_own_root() {
+        // 自分のルートに乗っているパワーコードは素直な読み方なので罰しない。
+        // どちらも原典が簡易コードとして載せている2音の形
+        for (shape, want) in [("x3x01x", "C5"), ("3x003x", "G5")] {
+            let c = identify(frets(shape));
+            assert_eq!(
+                c[0].name,
+                want,
+                "{} の候補の並び: {:?}",
+                shape,
+                c.iter()
+                    .map(|x| format!("{}({})", x.name, x.score))
+                    .collect::<Vec<_>>()
+            );
         }
     }
 
