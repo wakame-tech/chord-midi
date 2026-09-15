@@ -2,7 +2,7 @@
 
 use super::{
     chord_ref, extra_cost, find, missing_cost, relative_semitones, ChordRef, Fingering, ShapeKind,
-    FINGERINGS, OPEN_STRINGS, OPEN_STRING_PITCHES,
+    FINGERINGS, OPEN_STRING_PITCHES,
 };
 use crate::model::{ast::ChordNode, key::Key, modifier::Modifier, pitch::Pitch};
 use std::collections::BTreeSet;
@@ -49,11 +49,15 @@ struct Played {
 /// （6弦12fr = E3(52) より 5弦開放 = A2(45) の方が低い）。
 fn played(frets: &[Option<u8>; 6]) -> Option<Played> {
     let mut pitch_classes = 0u16;
-    let mut lowest: Option<(u8, u8, u8)> = None; // (midi, ピッチクラス, 弦)
+    let mut lowest: Option<(u16, u8, u8)> = None; // (midi, ピッチクラス, 弦)
     for (s, fret) in frets.iter().enumerate() {
         let Some(fret) = fret else { continue };
-        let midi = OPEN_STRING_PITCHES[s] + fret;
-        let pc = (OPEN_STRINGS[s] + fret) % 12;
+        // u16 で足す。identify は pub なので 200 フレットのような値でも
+        // 呼べてしまい、u8 のままだと桁あふれでパニックする。大小さえ比べ
+        // られればよいので幅を広げるだけで済む
+        let midi = u16::from(OPEN_STRING_PITCHES[s]) + u16::from(*fret);
+        // OPEN_STRINGS[s] == OPEN_STRING_PITCHES[s] % 12 なので midi から取れる
+        let pc = (midi % 12) as u8;
         pitch_classes |= 1u16 << pc;
         if lowest.is_none_or(|(m, _, _)| midi < m) {
             lowest = Some((midi, pc, s as u8));
@@ -178,7 +182,11 @@ fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
 /// `Modifier::Dominant(5)` = ただのメジャートライアドになってしまう
 /// （`Modifier::Power` は `pow()` からしか作れない）。`Power` を外した中身を
 /// `pow()` で包んで、書いた通りに読める形にする。`@N` は `ChordNode` の
-/// `Display` が末尾に付けるので、自然と括弧の内側に入る
+/// `Display` が末尾に付けるので、自然と括弧の内側に入る。
+///
+/// `Modifier::Octave` も `Aoct` と出て同じく読み戻せないが、`QUALITIES` に
+/// 入れていないのでここには来ない。オクターブ形は `movable_candidate` が
+/// `oct(...)` で書く
 fn render(node: &ChordNode) -> String {
     if !node.modifiers.contains(&Modifier::Power) {
         return node.to_string();
@@ -222,7 +230,7 @@ fn movable_candidate(f: &'static Fingering) -> Option<Candidate> {
         ShapeKind::Octave => ("oct", "oct"),
         ShapeKind::Normal => return None,
     };
-    let root = Pitch::try_from(f.bass).ok()?;
+    let root = Pitch::try_from(f.bass).expect("ピッチクラスは 0..12");
     // Fingering.lowest_string は 0 = 6弦、記法の @N は 1 = 1弦
     let string = 6 - f.lowest_string;
     Some(Candidate {
@@ -234,7 +242,12 @@ fn movable_candidate(f: &'static Fingering) -> Option<Candidate> {
     })
 }
 
-/// 押さえ方からコード名候補を引く。frets は 6弦→1弦、None = ミュート
+/// 押さえ方からコード名候補を引く。frets は 6弦→1弦、None = ミュート。
+///
+/// 返る候補は確度の高い順（[`Candidate::score`] の小さい順）で、最大
+/// [`MAX_CANDIDATES`] 件。同じ [`Candidate::name`] は1件に絞る。1本も鳴って
+/// いなければ空。押さえ方データに同じ形があればその候補に [`Source::Data`] が
+/// 付くが、必ずしも先頭とは限らない（並ぶのはあくまで採点順）
 pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     let Some(played) = played(&frets) else {
         return Vec::new();
@@ -243,20 +256,14 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     // (score, QUALITIES での並び順, ノード, 検索用の情報)
     let mut scored: Vec<(u32, usize, ChordNode, ChordRef)> = Vec::new();
     for root in 0..12u8 {
-        let Ok(root_pitch) = Pitch::try_from(root) else {
-            continue;
-        };
+        let root_pitch = Pitch::try_from(root).expect("ピッチクラスは 0..12");
+        // `on` 無しと、最低音がルートと違うときの `on` 付きを両方試す。
+        // `C/E` と `C` はどちらも正しい呼び方なので、どちらが上に来るかは
+        // 採点に任せる。品質には依らないので root ごとに1回だけ決める
+        let on_bass = (played.bass != root)
+            .then(|| Pitch::try_from(played.bass).expect("ピッチクラスは 0..12"));
         for (qi, quality) in QUALITIES.iter().enumerate() {
-            // `on` 無しと、最低音がルートと違うときの `on` 付きを両方試す。
-            // `C/E` と `C` はどちらも正しい呼び方なので、どちらが上に来るかは
-            // 採点に任せる
-            let mut ons: Vec<Option<Pitch>> = vec![None];
-            if played.bass != root {
-                if let Ok(bass) = Pitch::try_from(played.bass) {
-                    ons.push(Some(bass));
-                }
-            }
-            for on in ons {
+            for on in std::iter::once(None).chain(on_bass.map(Some)) {
                 let node = node(root_pitch, quality, on);
                 let Ok(r) = chord_ref(&node) else { continue };
                 let Some(s) = score(&played, &r) else {
@@ -332,6 +339,13 @@ mod tests {
     #[test]
     fn identify_returns_nothing_for_all_muted() {
         assert!(identify(frets("xxxxxx")).is_empty());
+    }
+
+    #[test]
+    fn identify_does_not_overflow_on_a_large_fret() {
+        // identify は pub なので、型が許す値はどれも渡されうる。
+        // MIDI 番号を u8 で足していた頃はここで桁あふれしてパニックした
+        assert!(!identify([None, None, None, None, None, Some(200)]).is_empty());
     }
 
     #[test]
