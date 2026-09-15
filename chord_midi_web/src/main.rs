@@ -8,10 +8,14 @@ use chord_midi::{
     presets,
 };
 use cursor::Edit;
+use defines::DefineChips;
 use diagram::ChordDiagram;
 use fretboard::Fretboard;
+use palette::FuncPalette;
+use rhythm::RhythmGrid;
 use std::io::BufWriter;
 use std::str::FromStr;
+use syntax_ref::SyntaxReference;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
@@ -546,6 +550,10 @@ fn app() -> Html {
             <details class="side-panel" open=true>
                 <summary>{"記法パネル"}</summary>
                 <div class="side-panel-body">
+                    <DefineChips text={(*input).clone()} on_edit={on_edit.clone()} />
+                    <RhythmGrid on_edit={on_edit.clone()} />
+                    <FuncPalette on_edit={on_edit.clone()} />
+                    <SyntaxReference on_edit={on_edit.clone()} />
                 </div>
             </details>
         </div>
