@@ -1,6 +1,6 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::{Ast, Beat, Func, Node, Pattern};
+use crate::model::ast::{Ast, Beat, ChordNode, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -42,6 +42,11 @@ fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
         .collect())
 }
 
+/// `ChordNode` を鳴らす音（MIDI ノート番号）に直す。低い方から並ぶ
+fn voicing(node: &ChordNode) -> Result<Vec<NoteNumber>> {
+    into_note_numbers(&node.to_chord()?)
+}
+
 /// ブラッシング（ミュートした空振り）のベロシティ
 const BRUSH_VELOCITY: Velocity = Velocity::new(40);
 
@@ -75,7 +80,8 @@ struct Score {
     notes: Vec<Note>,
     sustain: u32,
     rest: u32,
-    pre: Option<Chord>,
+    /// 直前に鳴らした声部。`=` と `%` が伸ばす対象
+    pre: Option<Vec<NoteNumber>>,
 }
 
 const MEASURE_LENGTH: u32 = 16;
@@ -95,7 +101,7 @@ impl Score {
             "pre={} sus={}/{}, rest={}/{}",
             self.pre
                 .as_ref()
-                .map(|c| format!("{:?}", c))
+                .map(|notes| format!("{:?}", notes))
                 .unwrap_or("None".to_string()),
             self.sustain,
             MEASURE_LENGTH,
@@ -107,12 +113,7 @@ impl Score {
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
         self.inspect();
         if !matches!(node, Node::Sustain) && self.sustain != 0 {
-            let notes = if let Some(pre) = &self.pre {
-                Some(into_note_numbers(pre)?)
-            } else {
-                None
-            };
-            self.notes.push(Note::new(notes, self.sustain));
+            self.notes.push(Note::new(self.pre.clone(), self.sustain));
             self.sustain = 0;
         }
         if !matches!(node, Node::Rest) && self.rest != 0 {
@@ -122,13 +123,11 @@ impl Score {
         match node {
             Node::Chord(node) => {
                 log::debug!("chord: {}: {:?}", node, node.modifiers);
-                let chord = node.to_chord()?;
-                self.pre = Some(chord.clone());
+                self.pre = Some(voicing(&node)?);
                 self.sustain = dur;
             }
             Node::Arpeggio(node) => {
-                let chord = node.to_chord()?;
-                let all = into_note_numbers(&chord)?;
+                let all = voicing(&node)?;
                 // dur が音数より少ない密な小節では鳴らせる音数を dur に制限し、
                 // 総尺が dur を超えて後続ノードがずれるのを防ぐ（総尺は常に dur）
                 let k = (all.len() as u32).min(dur).max(1);
@@ -157,9 +156,8 @@ impl Score {
                 }
             }
             Node::Brush(node) => {
-                let chord = node.to_chord()?;
-                let notes = into_note_numbers(&chord)?;
-                self.pre = Some(chord);
+                let notes = voicing(&node)?;
+                self.pre = Some(notes.clone());
                 self.notes.push(Note::brushed(Some(notes), dur));
             }
             Node::Repeat => {
@@ -198,12 +196,7 @@ impl Score {
                     self.interpret(*node)?
                 }
                 if self.sustain != 0 {
-                    let notes = if let Some(pre) = &self.pre {
-                        Some(into_note_numbers(pre)?)
-                    } else {
-                        None
-                    };
-                    self.notes.push(Note::new(notes, self.sustain));
+                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
                     self.sustain = 0;
                 }
                 Ok(())
