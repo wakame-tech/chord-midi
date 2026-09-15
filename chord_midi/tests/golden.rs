@@ -187,7 +187,11 @@ fn transforms_in_pattern_match_hand_expansion() {
     let pairs: &[(&str, &str, &str)] = &[
         // s25 は小節を2つに割る。パターンを掛けても手で 2 コード書いたのと同じ
         ("s25", "pat(\"oooo\", s25(G7))\n", "pat(\"oooo\", Dm7 G7)\n"),
-        ("s25_dense", "pat(\"oxoxoxox\", s25(G7))\n", "pat(\"oxoxoxox\", Dm7 G7)\n"),
+        (
+            "s25_dense",
+            "pat(\"oxoxoxox\", s25(G7))\n",
+            "pat(\"oxoxoxox\", Dm7 G7)\n",
+        ),
     ];
     let mut failures = Vec::new();
     for (name, shorthand, expanded) in pairs {
