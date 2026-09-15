@@ -4,8 +4,10 @@
 //! <https://daichan-easyguitar.com/easychord-list/>
 
 mod data;
+mod identify;
 
 pub use data::FINGERINGS;
+pub use identify::{identify, Candidate, Source};
 
 use crate::model::modifier::Modifier;
 use crate::model::{
