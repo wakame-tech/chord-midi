@@ -537,7 +537,7 @@ mod tests {
             for it in items {
                 if let Expr::Measure(nodes, _) = it {
                     if let Some(Node::Chord(c)) = nodes.first() {
-                        return c.key.clone();
+                        return c.innermost().key.clone();
                     }
                 }
             }

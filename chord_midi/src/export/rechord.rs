@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordExpr, ChordMap, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
@@ -180,10 +180,12 @@ impl Display for Expr {
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::Chord(chord) => write!(f, "{}", chord),
-            Node::Brush(chord) => write!(f, "{}", chord),
-            Node::Arpeggio(chord) => write!(f, "arp({})", chord),
-            Node::Transform(t, c) => write!(f, "{}({})", transform_prefix(t), c),
+            Node::Chord(e) => write!(f, "{}", e),
+            // ブラッシングは `pat` の `x` が作るもので記法には無いので、
+            // 中身をそのまま出す
+            Node::Brush(e) => write!(f, "{}", e),
+            Node::Arpeggio(e) => write!(f, "arp({})", e),
+            Node::Split(e) => write!(f, "s25({})", e),
             Node::Rest => write!(f, "N.C."),
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
@@ -205,13 +207,20 @@ impl Display for Pattern {
     }
 }
 
-fn transform_prefix(t: &crate::model::ast::Transform) -> &'static str {
-    use crate::model::ast::Transform::*;
-    match t {
-        S25 => "s25",
-        Sub => "sub",
-        Dom => "dom",
-        Blk => "blk",
+impl Display for ChordExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChordExpr::Chord(c) => write!(f, "{}", c),
+            ChordExpr::Map(m, inner) => write!(f, "{}({})", chord_map_prefix(*m), inner),
+        }
+    }
+}
+
+fn chord_map_prefix(m: ChordMap) -> &'static str {
+    match m {
+        ChordMap::Sub => "sub",
+        ChordMap::Dom => "dom",
+        ChordMap::Blk => "blk",
     }
 }
 

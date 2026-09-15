@@ -3,7 +3,7 @@ use super::{
     SexpImporter,
 };
 use crate::model::{
-    ast::{ChordNode, Expr, Node},
+    ast::{ChordExpr, ChordNode, Expr, Node},
     key::Key,
     pitch::{Accidental, Pitch},
     scale::Degree,
@@ -45,18 +45,20 @@ fn parse_node(sexp: &Sexp) -> Result<Node> {
         Sexp::String(s) if s == "=" => Ok(Node::Sustain),
         Sexp::String(s) if s == "_" => Ok(Node::Rest),
         Sexp::String(s) if s == "%" => Ok(Node::Repeat),
-        Sexp::String(key) => Ok(Node::Chord(ChordNode {
+        Sexp::String(key) => Ok(Node::Chord(ChordExpr::Chord(ChordNode {
             key: parse_key(&key)?,
             modifiers: BTreeSet::new(),
             on: None,
             root_string: None,
-        })),
-        Sexp::List(list) if starts_with(&sexp, "chord") => Ok(Node::Chord(ChordNode {
-            key: parse_key(list[1].string()?)?,
-            modifiers: BTreeSet::new(),
-            on: None,
-            root_string: None,
-        })),
+        }))),
+        Sexp::List(list) if starts_with(&sexp, "chord") => {
+            Ok(Node::Chord(ChordExpr::Chord(ChordNode {
+                key: parse_key(list[1].string()?)?,
+                modifiers: BTreeSet::new(),
+                on: None,
+                root_string: None,
+            })))
+        }
         _ => Err(anyhow::anyhow!("unexpected input: {:?}", sexp)),
     }
 }
@@ -100,7 +102,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Expr> {
 mod tests {
     use crate::{
         import::{Importer, SexpImporter},
-        model::ast::{ChordNode, Expr, Node},
+        model::ast::{ChordExpr, ChordNode, Expr, Node},
         model::pitch::{Accidental, Pitch},
         model::scale::Degree,
     };
@@ -108,10 +110,10 @@ mod tests {
 
     #[test]
     fn test_parse_score() -> Result<()> {
-        let c = Node::Chord(ChordNode::absolute(Pitch::C));
-        let d = Node::Chord(ChordNode::absolute(Pitch::D));
-        let e = Node::Chord(ChordNode::absolute(Pitch::E));
-        let f = Node::Chord(ChordNode::absolute(Pitch::F));
+        let c = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::C)));
+        let d = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::D)));
+        let e = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::E)));
+        let f = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::F)));
         assert_eq!(
             SexpImporter.import("(score (C D) (E F))")?,
             Expr::Seq(vec![
@@ -121,8 +123,14 @@ mod tests {
         );
 
         // I# parses to degree I with a sharp; IV parses to degree IV natural
-        let is = Node::Chord(ChordNode::relative(Degree(1, Accidental::Sharp)));
-        let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
+        let is = Node::Chord(ChordExpr::Chord(ChordNode::relative(Degree(
+            1,
+            Accidental::Sharp,
+        ))));
+        let iv = Node::Chord(ChordExpr::Chord(ChordNode::relative(Degree(
+            4,
+            Accidental::Natural,
+        ))));
         assert_eq!(
             SexpImporter.import("(score (I# IV))")?,
             Expr::Seq(vec![Expr::Measure(vec![is, iv], false)])
@@ -172,8 +180,8 @@ mod tests {
         let resolved = ast.resolve().unwrap();
         let expected = Expr::Seq(vec![Expr::Measure(
             vec![
-                Node::Chord(ChordNode::absolute(Pitch::D)),
-                Node::Chord(ChordNode::absolute(Pitch::G)),
+                Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::D))),
+                Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::G))),
             ],
             false,
         )]);
@@ -191,8 +199,8 @@ mod tests {
         let resolved = ast.resolve().unwrap();
         let expected = Expr::Seq(vec![Expr::Measure(
             vec![
-                Node::Chord(ChordNode::absolute(Pitch::C)),
-                Node::Chord(ChordNode::absolute(Pitch::F)),
+                Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::C))),
+                Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::F))),
             ],
             false,
         )]);

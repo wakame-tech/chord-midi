@@ -1,10 +1,25 @@
 use crate::{
-    model::ast::{ChordNode, Expr, Func, Node},
+    model::ast::{ChordExpr, ChordNode, Expr, Func, Node},
     model::modifier::Modifier,
     model::pitch::Pitch,
     model::scale::Scale,
 };
 use anyhow::Result;
+
+/// `ChordExpr` の一番内側の素のコードを度数に戻す。
+///
+/// `blk`/`sub`/`dom` は「元のコードからどう作るか」を表す式なので、
+/// キーの解決は一番内側の素のコードに掛ける。変換の結果 (`eval` した後の
+/// コード) には掛けない。`Node::Transform(t, chord)` の頃に `chord` だけを
+/// 変換していたのと同じ扱い
+fn expr_into_degree(expr: ChordExpr, tonic: Pitch, scale: Scale) -> ChordExpr {
+    expr.map_innermost(&mut |c| chordnode_into_degree(c, tonic, scale))
+}
+
+/// [`expr_into_degree`] の逆向き
+fn expr_into_pitch(expr: ChordExpr, tonic: Pitch, scale: Scale) -> ChordExpr {
+    expr.map_innermost(&mut |c| chordnode_into_pitch(c, tonic, scale))
+}
 
 fn chordnode_into_degree(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
     ChordNode {
@@ -37,13 +52,12 @@ impl Expr {
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(c) => Node::Chord(chordnode_into_degree(c, tonic, scale)),
-                        Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_degree(c, tonic, scale)),
-                        Node::Transform(t, c) => {
-                            Node::Transform(t, chordnode_into_degree(c, tonic, scale))
-                        }
-                        Node::Brush(c) => Node::Brush(chordnode_into_degree(c, tonic, scale)),
-                        other => other,
+                        Node::Chord(e) => Node::Chord(expr_into_degree(e, tonic, scale)),
+                        Node::Arpeggio(e) => Node::Arpeggio(expr_into_degree(e, tonic, scale)),
+                        Node::Split(e) => Node::Split(expr_into_degree(e, tonic, scale)),
+                        Node::Brush(e) => Node::Brush(expr_into_degree(e, tonic, scale)),
+                        // 音程を持たないものはそのまま
+                        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -84,13 +98,12 @@ impl Expr {
                 nodes
                     .into_iter()
                     .map(|node| match node {
-                        Node::Chord(c) => Node::Chord(chordnode_into_pitch(c, tonic, scale)),
-                        Node::Arpeggio(c) => Node::Arpeggio(chordnode_into_pitch(c, tonic, scale)),
-                        Node::Transform(t, c) => {
-                            Node::Transform(t, chordnode_into_pitch(c, tonic, scale))
-                        }
-                        Node::Brush(c) => Node::Brush(chordnode_into_pitch(c, tonic, scale)),
-                        other => other,
+                        Node::Chord(e) => Node::Chord(expr_into_pitch(e, tonic, scale)),
+                        Node::Arpeggio(e) => Node::Arpeggio(expr_into_pitch(e, tonic, scale)),
+                        Node::Split(e) => Node::Split(expr_into_pitch(e, tonic, scale)),
+                        Node::Brush(e) => Node::Brush(expr_into_pitch(e, tonic, scale)),
+                        // 音程を持たないものはそのまま
+                        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -260,14 +273,24 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
     }
 }
 
+/// `pow`/`oct` の修飾は一番内側の素のコードに足す。
+///
+/// `Node::Transform(t, chord)` の頃に `chord` だけへ足していたのと同じ扱い。
+/// `blk`/`sub`/`dom` は元のコードのキーだけを見て新しいコードを組み直すので、
+/// 内側に足した修飾は変換に食われて消える (`pow(blk(F))` は `blk(F)` と
+/// 同じ音になる)。これは Phase 4 以前からの挙動で、ここでは変えない
 fn mark_node(node: Node, modifier: Modifier) -> Node {
     match node {
-        Node::Chord(c) => Node::Chord(mark_chord(c, modifier)),
-        Node::Arpeggio(c) => Node::Arpeggio(mark_chord(c, modifier)),
-        Node::Brush(c) => Node::Brush(mark_chord(c, modifier)),
-        Node::Transform(t, c) => Node::Transform(t, mark_chord(c, modifier)),
-        other => other,
+        Node::Chord(e) => Node::Chord(mark_expr(e, modifier)),
+        Node::Arpeggio(e) => Node::Arpeggio(mark_expr(e, modifier)),
+        Node::Brush(e) => Node::Brush(mark_expr(e, modifier)),
+        Node::Split(e) => Node::Split(mark_expr(e, modifier)),
+        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
     }
+}
+
+fn mark_expr(expr: ChordExpr, modifier: Modifier) -> ChordExpr {
+    expr.map_innermost(&mut |c| mark_chord(c, modifier.clone()))
 }
 
 fn mark_chord(mut chord: ChordNode, modifier: Modifier) -> ChordNode {
@@ -278,22 +301,33 @@ fn mark_chord(mut chord: ChordNode, modifier: Modifier) -> ChordNode {
 #[cfg(test)]
 mod tests {
     use crate::model::{
-        ast::{ChordNode, Expr, Node},
+        ast::{ChordExpr, ChordNode, Expr, Node},
         pitch::Pitch,
     };
+
+    /// `ChordExpr` を畳んで鳴るコードにする。素のコードならそのまま
+    fn chord_of(expr: &ChordExpr) -> ChordNode {
+        expr.eval(Pitch::C, crate::model::scale::Scale::Major)
+    }
 
     #[test]
     fn test_transpose() {
         use crate::model::pitch::Accidental;
         use crate::model::scale::{Degree, Scale};
-        let i = Node::Chord(ChordNode::relative(Degree(1, Accidental::Natural)));
-        let c = Node::Chord(ChordNode::absolute(Pitch::C));
+        let i = Node::Chord(ChordExpr::Chord(ChordNode::relative(Degree(
+            1,
+            Accidental::Natural,
+        ))));
+        let c = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::C)));
         assert_eq!(
             Expr::Measure(vec![i], false).into_pitch(Pitch::C, Scale::Major),
             Expr::Measure(vec![c], false)
         );
-        let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
-        let f = Node::Chord(ChordNode::absolute(Pitch::F));
+        let iv = Node::Chord(ChordExpr::Chord(ChordNode::relative(Degree(
+            4,
+            Accidental::Natural,
+        ))));
+        let f = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::F)));
         assert_eq!(
             Expr::Measure(vec![iv], false).into_pitch(Pitch::C, Scale::Major),
             Expr::Measure(vec![f], false)
@@ -345,7 +379,10 @@ mod tests {
             if let Expr::Measure(nodes, _) = it {
                 for n in nodes {
                     if let Node::Chord(c) = n {
-                        assert!(matches!(c.key, crate::model::key::Key::Absolute(_)));
+                        assert!(matches!(
+                            chord_of(c).key,
+                            crate::model::key::Key::Absolute(_)
+                        ));
                         found = true;
                     }
                 }
@@ -369,7 +406,7 @@ mod tests {
                 Expr::Measure(nodes, _) => {
                     for n in nodes {
                         if let Node::Chord(c) = n {
-                            if let Key::Absolute(p) = c.key {
+                            if let Key::Absolute(p) = chord_of(c).key {
                                 out.push(p);
                             }
                         }
@@ -416,8 +453,11 @@ mod tests {
     fn test_into_degree_is_inverse() {
         use crate::model::pitch::Accidental;
         use crate::model::scale::{Degree, Scale};
-        let g = Node::Chord(ChordNode::absolute(Pitch::G));
-        let v = Node::Chord(ChordNode::relative(Degree(5, Accidental::Natural)));
+        let g = Node::Chord(ChordExpr::Chord(ChordNode::absolute(Pitch::G)));
+        let v = Node::Chord(ChordExpr::Chord(ChordNode::relative(Degree(
+            5,
+            Accidental::Natural,
+        ))));
         assert_eq!(
             Expr::Measure(vec![g], false).into_degree(Pitch::C, Scale::Major),
             Expr::Measure(vec![v], false)
@@ -440,7 +480,12 @@ mod tests {
             let Node::Chord(c) = &nodes[0] else {
                 panic!("not a chord")
             };
-            c.to_chord().unwrap().semitones.into_iter().collect()
+            chord_of(c)
+                .to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect()
         }
 
         // ルートと5thだけになる
@@ -471,7 +516,7 @@ mod tests {
         let Node::Chord(c) = &nodes[0] else {
             panic!("not a chord")
         };
-        assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
+        assert_eq!(chord_of(c).on, Some(Key::Absolute(Pitch::E)));
     }
 
     #[test]
@@ -534,7 +579,8 @@ mod tests {
             panic!("not a chord")
         };
         assert_eq!(
-            c.to_chord()
+            chord_of(c)
+                .to_chord()
                 .unwrap()
                 .semitones
                 .into_iter()
@@ -548,9 +594,9 @@ mod tests {
         // `pow($a)` の修飾が Section の壁を越えて定義の中身に届くこと。
         // mark に Section の腕が無いと三和音のまま鳴る (catch-all が隠していた)
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{ChordNode, Node};
+        use crate::model::ast::Node;
 
-        fn first_chord(e: &Expr) -> Option<&ChordNode> {
+        fn first_chord(e: &Expr) -> Option<&ChordExpr> {
             match e {
                 Expr::Measure(nodes, _) => nodes.iter().find_map(|n| match n {
                     Node::Chord(c) => Some(c),
@@ -565,8 +611,7 @@ mod tests {
 
         fn semitones(code: &str) -> Vec<u8> {
             let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
-            first_chord(&ast)
-                .unwrap()
+            chord_of(first_chord(&ast).unwrap())
                 .to_chord()
                 .unwrap()
                 .semitones
@@ -615,7 +660,8 @@ mod tests {
             panic!("not a chord")
         };
         assert_eq!(
-            c.to_chord()
+            chord_of(c)
+                .to_chord()
                 .unwrap()
                 .semitones
                 .into_iter()
@@ -640,7 +686,12 @@ mod tests {
             let Node::Chord(c) = &nodes[0] else {
                 panic!("not a chord")
             };
-            c.to_chord().unwrap().semitones.into_iter().collect()
+            chord_of(c)
+                .to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect()
         }
 
         // ルート1音だけになる
@@ -671,7 +722,7 @@ mod tests {
         let Node::Chord(c) = &nodes[0] else {
             panic!("not a chord")
         };
-        assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
+        assert_eq!(chord_of(c).on, Some(Key::Absolute(Pitch::E)));
     }
 
     #[test]
@@ -700,7 +751,8 @@ mod tests {
             panic!("not a chord")
         };
         assert_eq!(
-            c.to_chord()
+            chord_of(c)
+                .to_chord()
                 .unwrap()
                 .semitones
                 .into_iter()

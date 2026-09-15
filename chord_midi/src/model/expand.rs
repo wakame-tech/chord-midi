@@ -453,7 +453,7 @@ mod tests {
                 Expr::Measure(nodes, _) => {
                     for n in nodes {
                         if let crate::model::ast::Node::Chord(c) = n {
-                            if let Key::Absolute(p) = c.key {
+                            if let Key::Absolute(p) = c.innermost().key {
                                 out.push(p);
                             }
                         }

@@ -86,8 +86,10 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
 
 fn shift_node(node: &mut Node, delta: i8, seen: &mut Seen) {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) | Node::Transform(_, c) | Node::Brush(c) => {
-            shift_chord(c, delta, seen)
+        // 移調は「元のコード」を動かす。`blk`/`sub`/`dom` は元のコードから
+        // 組み直す式なので、一番内側の素のコードだけを動かせば変換の結果も付いてくる
+        Node::Chord(e) | Node::Arpeggio(e) | Node::Split(e) | Node::Brush(e) => {
+            shift_chord(e.innermost_mut(), delta, seen)
         }
         Node::Rest | Node::Sustain | Node::Repeat => {}
     }
@@ -359,7 +361,7 @@ mod tests {
                 Expr::Measure(nodes, _) => {
                     for n in nodes {
                         if let Node::Chord(c) = n {
-                            if let Key::Absolute(p) = c.key {
+                            if let Key::Absolute(p) = c.innermost().key {
                                 out.push(p);
                             }
                         }
