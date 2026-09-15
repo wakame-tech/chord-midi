@@ -23,6 +23,7 @@ mod diagram;
 mod fretboard;
 mod palette;
 mod rhythm;
+mod syntax_ref;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     let u8_arr = unsafe { web_sys::js_sys::Uint8Array::view(arr) };
