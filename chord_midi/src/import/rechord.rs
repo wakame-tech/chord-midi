@@ -348,7 +348,12 @@ fn group_parser(s: Span) -> IResult<Span, Expr> {
         tuple((
             tag("("),
             space0,
-            many1(alt((apply_parser, group_parser, ref_parser, measure_parser))),
+            many1(alt((
+                apply_parser,
+                group_parser,
+                ref_parser,
+                measure_parser,
+            ))),
             space0,
             tag(")"),
             space0,
@@ -356,9 +361,7 @@ fn group_parser(s: Span) -> IResult<Span, Expr> {
             opt(measure_sep),
             space_or_line_ending_many0,
         )),
-        |(_, _, items, _, _, _, n, br, _)| {
-            repeated(Expr::Seq(items), n, br.unwrap_or(false))
-        },
+        |(_, _, items, _, _, _, n, br, _)| repeated(Expr::Seq(items), n, br.unwrap_or(false)),
     )(s)
 }
 
@@ -386,7 +389,12 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             // group_parser も並べる。`pow((C | D) x2)` のように関数の中で
             // グループを使えるようにする。`apply_parser` を先に試すので
             // `pow(` のタグが `(` のグループに食われることはない
-            many1(alt((apply_parser, group_parser, ref_parser, measure_parser))),
+            many1(alt((
+                apply_parser,
+                group_parser,
+                ref_parser,
+                measure_parser,
+            ))),
             space0,
             tag(")"),
             space0,
@@ -502,7 +510,9 @@ mod tests {
         assert!(RechordImporter.import("scale: dorian\n\nC |\n").is_ok());
         assert!(RechordImporter.import("key: C\n\n\nC | Am |\n").is_ok());
         // ディレクティブが2つ続く間の空行も飲む
-        assert!(RechordImporter.import("key: C\n\nscale: dorian\n\nI |\n").is_ok());
+        assert!(RechordImporter
+            .import("key: C\n\nscale: dorian\n\nI |\n")
+            .is_ok());
     }
 
     #[test]
@@ -692,7 +702,9 @@ mod tests {
         let ast = RechordImporter
             .import("$riff = pow(C | E D)\n$riff | C |\n")
             .unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         // 定義は 0 小節を返す単位元。スコープ包みではないので平らに並ぶ
         let Expr::Define(name, body, _) = &items[0] else {
             panic!("1つ目は Define: {:?}", items[0])
@@ -702,7 +714,8 @@ mod tests {
         // 定義の後ろが入れ子 Seq になっていないこと
         assert!(
             !matches!(&items[1], Expr::Seq(_)),
-            "定義の後ろは入れ子 Seq にしない: {:?}", items[1]
+            "定義の後ろは入れ子 Seq にしない: {:?}",
+            items[1]
         );
     }
 
@@ -711,13 +724,19 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Expr;
         let ast = RechordImporter.import("$a = C\n$b = D\nC |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         // 定義2つと小節。ネストしない
-        let defines = items.iter().filter(|e| matches!(e, Expr::Define(_, _, _))).count();
+        let defines = items
+            .iter()
+            .filter(|e| matches!(e, Expr::Define(_, _, _)))
+            .count();
         assert_eq!(defines, 2, "定義が平らに並ばない: {:?}", items);
         assert!(
             items.iter().all(|e| !matches!(e, Expr::Seq(_))),
-            "入れ子 Seq が残っている: {:?}", items
+            "入れ子 Seq が残っている: {:?}",
+            items
         );
     }
 
@@ -757,8 +776,12 @@ mod tests {
         let ast = RechordImporter
             .import("$eight = \"o.o.o.o.\"\npat($eight, C)\n")
             .unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(name, body, _) = &items[0] else { panic!("not a define") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
+        let Expr::Define(name, body, _) = &items[0] else {
+            panic!("not a define")
+        };
         assert_eq!(name, "eight");
         assert!(matches!(body.as_ref(), Expr::Pattern(_)));
         fn find_pat_arg(e: &Expr) -> Option<&Expr> {
@@ -777,9 +800,15 @@ mod tests {
     fn test_japanese_define_name() {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Expr;
-        let ast = RechordImporter.import("$Aメロ = C | Am |\n$Aメロ\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(name, _, _) = &items[0] else { panic!("not a define") };
+        let ast = RechordImporter
+            .import("$Aメロ = C | Am |\n$Aメロ\n")
+            .unwrap();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
+        let Expr::Define(name, _, _) = &items[0] else {
+            panic!("not a define")
+        };
         assert_eq!(name, "Aメロ");
     }
 
@@ -789,10 +818,14 @@ mod tests {
         use crate::model::ast::Expr;
         // 定義の本体は1行。次の行を飲み込まないこと
         let ast = RechordImporter.import("$a = C | E |\nAm | F |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         // 定義は平らに並ぶので、後ろの Am / F はトップに2小節として残る
         assert_eq!(items.len(), 3, "定義と、その後ろの2小節: {:?}", items);
-        let Expr::Define(_, body, _) = &items[0] else { panic!("not a define") };
+        let Expr::Define(_, body, _) = &items[0] else {
+            panic!("not a define")
+        };
         fn count_measures(e: &Expr) -> usize {
             match e {
                 Expr::Measure(_, _) => 1,
@@ -802,7 +835,12 @@ mod tests {
             }
         }
         // 本体は C と E の2小節だけ。Am / F を飲み込んでいない
-        assert_eq!(count_measures(body), 2, "本体が次の行まで伸びている: {:?}", body);
+        assert_eq!(
+            count_measures(body),
+            2,
+            "本体が次の行まで伸びている: {:?}",
+            body
+        );
     }
 
     #[test]
@@ -812,7 +850,9 @@ mod tests {
         // 行末コメントが付いても定義は定義のまま。小節行 (`C | Am | # memo`)
         // と同じく、コメントは後ろに別の式として並ぶ
         let ast = RechordImporter.import("$a = C |  # riff\n$a\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         assert!(
             matches!(&items[0], Expr::Define(..)),
             "1つ目は Define: {:?}",
@@ -839,7 +879,9 @@ mod tests {
         let ast = RechordImporter
             .import("$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)\n")
             .unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         let Expr::Define(name, body, _) = &items[0] else {
             panic!("1つ目は Define: {:?}", items[0])
         };
@@ -954,8 +996,12 @@ mod tests {
         use crate::model::ast::Expr;
         // 定義の本体にもリピートが書ける
         let ast = RechordImporter.import("$a = C x2 | D |\n$a\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(_, body, _) = &items[0] else { panic!("not a define") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
+        let Expr::Define(_, body, _) = &items[0] else {
+            panic!("not a define")
+        };
         fn has_repeat(e: &Expr) -> bool {
             match e {
                 Expr::Repeat(_, _, _) => true,
@@ -972,14 +1018,19 @@ mod tests {
         use crate::model::ast::{Expr, Func};
         // 関数の中にグループとリピートを書ける
         let ast = RechordImporter.import("pow((C | D) x2)\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         let Expr::Apply(Func::Pow, inner, _) = &items[0] else {
             panic!("not a pow: {:?}", items[0])
         };
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         assert!(
             matches!(&inner[0], Expr::Repeat(_, 2, _)),
-            "関数の中のグループがリピートされていない: {:?}", inner[0]
+            "関数の中のグループがリピートされていない: {:?}",
+            inner[0]
         );
     }
 
@@ -1013,7 +1064,9 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pat(\"oxox\", C)\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         let Expr::Apply(Func::Pat(arg), _, _) = &items[0] else {
             panic!("not a pat apply: {:?}", items[0])
         };

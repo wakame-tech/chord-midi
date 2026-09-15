@@ -435,10 +435,7 @@ mod tests {
     fn test_define_trailing_comment_roundtrip() {
         // 行末コメントは行末のまま。`Define` の `br` が「行がここで終わるか」を
         // 持つので、小節行 (`C | Am | # memo`) と同じ扱いになる
-        assert_eq!(
-            roundtrip("$a = C |  # riff\n$a"),
-            "$a = C | # riff\n$a |"
-        );
+        assert_eq!(roundtrip("$a = C |  # riff\n$a"), "$a = C | # riff\n$a |");
         assert_eq!(
             roundtrip("$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)"),
             "$eight = \"o.o.o.o.\" # 8分の刻み\npat($eight, C)"
@@ -448,10 +445,7 @@ mod tests {
     #[test]
     fn test_comment_after_define_stays_on_its_own_line() {
         // 独立した行のコメントは行を移らない。行末コメントと取り違えない
-        assert_eq!(
-            roundtrip("$a = C |\n# riff\n$a"),
-            "$a = C |\n# riff\n$a |"
-        );
+        assert_eq!(roundtrip("$a = C |\n# riff\n$a"), "$a = C |\n# riff\n$a |");
     }
 
     #[test]

@@ -130,7 +130,9 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
                 br,
             ))
         }
-        Expr::Apply(func, inner, br) => Ok(Expr::Apply(func, Box::new(expand_in(*inner, env)?), br)),
+        Expr::Apply(func, inner, br) => {
+            Ok(Expr::Apply(func, Box::new(expand_in(*inner, env)?), br))
+        }
         Expr::Keyed(p, inner) => Ok(Expr::Keyed(p, Box::new(expand_in(*inner, env)?))),
         Expr::Scaled(s, inner) => Ok(Expr::Scaled(s, Box::new(expand_in(*inner, env)?))),
         // 定義は `Seq` の要素としてしか書けない。`(...)` や `xN` の中には置けない
@@ -440,8 +442,7 @@ mod tests {
         // 定義は key: C の下、使うのは key: D の下。
         // expand は度数を解決しないので、使う位置のスコープが効く。
         // これにより度数表記のリフをキーを変えて使い回せる
-        let e =
-            expanded("key: C\n$a = I | IV |\nkey: D\n$a\n").into_pitch(Pitch::C, Scale::Major);
+        let e = expanded("key: C\n$a = I | IV |\nkey: D\n$a\n").into_pitch(Pitch::C, Scale::Major);
 
         fn pitches(e: &Expr, out: &mut Vec<Pitch>) {
             match e {

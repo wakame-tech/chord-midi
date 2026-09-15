@@ -58,7 +58,7 @@ impl Expr {
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
             Expr::Repeat(inner, n, br) => {
                 Expr::Repeat(Box::new(inner.into_degree(tonic, scale)), n, br)
-            },
+            }
             // 展開の跡。名前は残したまま中身だけ変換する
             Expr::Section(name, inner) => {
                 Expr::Section(name, Box::new(inner.into_degree(tonic, scale)))
@@ -105,7 +105,7 @@ impl Expr {
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
             Expr::Repeat(inner, n, br) => {
                 Expr::Repeat(Box::new(inner.into_pitch(tonic, scale)), n, br)
-            },
+            }
             // 展開の跡。名前は残したまま中身だけ変換する。`Keyed` を包んだ
             // ままでも、その `Keyed` は中身へ潜る途中で消える
             Expr::Section(name, inner) => {
