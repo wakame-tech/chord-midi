@@ -69,11 +69,19 @@ pub struct ChordNode {
 
 `scripts/gen_fingerings.py` が `easy_guiter_chords.json` と `power_chords.json` の両方を読んで `data.rs` を作る。`easy_guiter_chords.json` は daichan からの抽出結果のまま保ち、手書きのデータを混ぜない。
 
-## Fingering に足すフィールド
+## Fingering の変更
+
+2つ足して、1つ消す。
 
 ```rust
 pub struct Fingering {
-    // ... 既存 ...
+    pub name: &'static str,
+    pub group: &'static str,
+    /// None = ミュート、Some(0) = 開放。6弦→1弦
+    pub frets: [Option<u8>; 6],
+    pub fingers: [Option<Finger>; 6],
+    pub pitch_classes: u16,
+    pub bass: u8,
     /// 最低音が鳴る弦。0 = 6弦, 5 = 1弦
     pub lowest_string: u8,
     /// 可動パワーコード形かどうか
@@ -83,14 +91,39 @@ pub struct Fingering {
 
 `lowest_string` は既存67件も `frets` から算出して埋める（最初に `Some` になる添字）。
 
+### `tab` を消す
+
+`tab: &'static str`（`"x3201x"` の形）を消す。
+
+可動パワーコードには10フレット以上が出る（6弦ルートの `D5` は 10fr + 12fr、`D#5` は 11fr + 13fr）。`tab` は1弦1文字なので2桁が入らず、`"1012xxxx"` と並べると読み分けられない。
+
+そもそも `tab` は `frets` と同じ情報を文字列にしただけの冗長なフィールドで、参照しているのは `fingering/mod.rs` のテストと生成スクリプトだけ。**web の描画は `frets` しか見ていない**。消せば桁あふれの問題自体が無くなる。
+
+- `data_is_consistent` の「`tab` と `frets` が一致するか」の検査は不要になる（冗長性が無くなるため）
+- `known_fingerings` が `f.tab == "x3201x"` で引いている箇所は `frets` で引く
+- テストの可読性のために、テストモジュール内に整形ヘルパを置く。桁あふれしないよう区切る
+
+```rust
+/// テスト用。押さえ方を "x-3-2-0-1-x" の形にする
+fn tab(f: &Fingering) -> String {
+    f.frets
+        .iter()
+        .map(|v| v.map_or("x".to_string(), |n| n.to_string()))
+        .collect::<Vec<_>>()
+        .join("-")
+}
+```
+
+`docs/easy_guiter_chords.json` の `tab` フィールドと、`docs/easy_guiter_chords.md` の「押さえ方」列は人が読む用として残す。daichan のデータは全部6フレット以下なので曖昧さは無い。
+
 ## find のガード
 
 可動パワーコード形は2音しか無いので、無条件に候補へ入れると3rd や7th が欠けた形が本来のコードを押しのける。12ルート × よく使う10種類 = 120コードで実測したところ、ガード無しでは **9件が劣化**した。
 
 ```
-D#m7   x3x34x (Cm7 の形)  ->  x68xxx (D#5)     3rd も b7 も無くなる
-D#m    x3x34x             ->  x68xxx (D#5)
-C#sus4 x1x12x             ->  x46xxx (C#5)     4th が無くなる
+D#m7   Cm7 の形  ->  D#5 の形     3rd も b7 も無くなる
+D#m    Cm7 の形  ->  D#5 の形
+C#sus4 B♭m7 の形 ->  C#5 の形     4th が無くなる
 ```
 
 そこで2段のガードを入れる。
@@ -126,15 +159,15 @@ pub struct ChordRef {
 ## 期待する結果
 
 ```
-A@6  ->  57xxxx   6弦5fr(人) + 5弦7fr(薬)
-D@5  ->  x57xxx   5弦5fr(人) + 4弦7fr(薬)
-E@5  ->  x79xxx   5弦7fr(人) + 4弦9fr(薬)
-E@6  ->  02xxxx   6弦開放 + 5弦2fr(薬)
+A@6  ->  5-7-x-x-x-x   6弦5fr(人) + 5弦7fr(薬)
+D@5  ->  x-5-7-x-x-x   5弦5fr(人) + 4弦7fr(薬)
+E@5  ->  x-7-9-x-x-x   5弦7fr(人) + 4弦9fr(薬)
+E@6  ->  0-2-x-x-x-x   6弦開放 + 5弦2fr(薬)
 ```
 
-弦指定なしの `pow(...)` では、コストが同じならローポジション優先の既存 tie-break により開放弦を使う形が選ばれる（`E5` → `02xxxx`、`A5` → `x02xxx`）。
+弦指定なしの `pow(...)` では、コストが同じならローポジション優先の既存 tie-break により開放弦を使う形が選ばれる（`E5` → `0-2-x-x-x-x`、`A5` → `x-0-2-x-x-x`）。
 
-daichan のデータにも2音だけの形がいくつかあり（`C` の `x3x01x` = C+G、`D` の `xx023x` = D+A、`G` の `3x003x` = G+D）、これらは `is_power` ではないのでガードに関係なく候補に残る。`pow(C)` はこの `x3x01x` を引くのでカードに `C5 (≒ C)` と出る。可動形より低いポジションで鳴る音も同じなので、これは妥当な結果として受け入れる。
+daichan のデータにも2音だけの形がいくつかあり（`C` の `x-3-x-0-1-x` = C+G、`D` の `x-x-0-2-3-x` = D+A、`G` の `3-x-0-0-3-x` = G+D）、これらは `is_power` ではないのでガードに関係なく候補に残る。`pow(C)` はこの `C` の形を引くのでカードに `C5 (≒ C)` と出る。可動形より低いポジションで鳴る音も同じなので、これは妥当な結果として受け入れる。
 
 ## 既存コードで触る箇所
 
@@ -143,7 +176,7 @@ daichan のデータにも2音だけの形がいくつかあり（`C` の `x3x01
 | `chord_midi/src/model/ast.rs` | `ChordNode` に `root_string` |
 | `chord_midi/src/import/chord.rs` | `@N` のパーサ |
 | `chord_midi/src/export/rechord.rs` | `ChordNode` の `Display` に `@N` |
-| `chord_midi/src/fingering/mod.rs` | `Fingering` に2フィールド、`ChordRef` に `root_string`、`find` のガード |
+| `chord_midi/src/fingering/mod.rs` | `Fingering` に2フィールド追加・`tab` 削除、`ChordRef` に `root_string`、`find` のガード |
 | `chord_midi/src/model/transform.rs` | `ChordNode` を組み立てている箇所（`transform_chord`）に `root_string: None` |
 | `docs/power_chords.json` | 新規 |
 | `scripts/gen_fingerings.py` | 両方の JSON を読む、運指の特例、新フィールドの出力 |
@@ -163,11 +196,12 @@ daichan のデータにも2音だけの形がいくつかあり（`C` の `x3x01
 - 可動パワーコード形24件すべてで、鳴る音が `{root, 5th}` の2音
 - 可動パワーコード形の運指が 人 + 薬（開放ルートの形は薬のみ）
 - 全件で `lowest_string` が `frets` の最初の `Some` の添字と一致
+- 10フレット以上の形（6弦ルートの `D5` / `D#5` など）が正しく持てていること
 
 **find**
 - `A@6` → `57xxxx`、`D@5` → `x57xxx`、`E@5` → `x79xxx`
 - 弦指定なしの `pow(E)` → `02xxxx`、`pow(A)` → `x02xxx`
-- **既存の結果が変わらないこと**: `C` → `x3201x`、`Am7` → `x0201x`、`D#m7` → `x3x34x`、`C#sus4` → `x1x12x`
+- **既存の結果が変わらないこと**: `C` → `x-3-2-0-1-x`、`Am7` → `x-0-2-0-1-x`、`D#m7` → `x-3-x-3-4-x`、`C#sus4` → `x-1-x-1-2-x`
 - `@N` に一致する形が無いとき `None`（例: `C@1`）
 
 ## スコープ外 (YAGNI)
