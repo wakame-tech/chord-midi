@@ -10,12 +10,85 @@ impl Exporter for RechordExporter {
     }
 }
 
+/// 式を関数の引数や `( )` の中に埋め込む形にする。
+///
+/// 小節の Display は末尾に `" | "` を出すので、そのままでは
+/// `pow(C | E D | )` になってしまう。最後の区切りだけを落とす
+fn inline(expr: &Expr) -> String {
+    let s = expr.to_string();
+    let s = s.trim_end();
+    s.strip_suffix('|').unwrap_or(s).trim_end().to_string()
+}
+
+/// 小節を1つ書く。
+///
+/// `xN` は小節の中身と区切りの間に置く (`C x4 |`)。パーサもその位置で
+/// 読むので、`C | x4` のように区切りの後ろへ出すと読み戻せない
+fn write_measure(
+    f: &mut std::fmt::Formatter<'_>,
+    nodes: &[Node],
+    repeat: Option<u8>,
+    br: bool,
+) -> std::fmt::Result {
+    let body = nodes
+        .iter()
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    write!(f, "{}", body)?;
+    if let Some(n) = repeat {
+        write!(f, " x{}", n)?;
+    }
+    write!(f, " | ")?;
+    if br {
+        writeln!(f)?;
+    }
+    Ok(())
+}
+
+/// `pow(...)` / `oct(...)` / `pat(...)` を書く。
+///
+/// `xN` は閉じ括弧の後ろ、行末の判定より前に置く (`pow(C) x2`)
+fn write_apply(
+    f: &mut std::fmt::Formatter<'_>,
+    func: &Func,
+    inner: &Expr,
+    repeat: Option<u8>,
+    br: bool,
+) -> std::fmt::Result {
+    let inner = inline(inner);
+    match func {
+        Func::Pow => write!(f, "pow({})", inner)?,
+        Func::Oct => write!(f, "oct({})", inner)?,
+        // パターンの引用符はここで付ける。`Pattern` 自身の Display は
+        // 中身だけを出すので二重にはならない
+        Func::Pat(arg) => match arg.as_ref() {
+            Expr::Pattern(p) => write!(f, "pat(\"{}\", {})", p, inner)?,
+            other => write!(f, "pat({}, {})", other, inner)?,
+        },
+    }
+    if let Some(n) = repeat {
+        write!(f, " x{}", n)?;
+    }
+    if br {
+        writeln!(f)
+    } else {
+        write!(f, " ")
+    }
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Seq(nodes) => {
                 for node in nodes {
                     write!(f, "{}", node)?;
+                    // 小節の位置に置かれた参照は `$a | C |` のように `|` で
+                    // 閉じる。`Ref` 自身の Display が `$a` だけなのは、
+                    // `pat($a, C)` の引数としても使われるため
+                    if matches!(node, Expr::Ref(_)) {
+                        write!(f, " | ")?;
+                    }
                 }
                 Ok(())
             }
@@ -30,48 +103,38 @@ impl Display for Expr {
                 writeln!(f, "scale: {}", s)?;
                 write!(f, "{}", inner)
             }
-            Expr::Apply(func, inner, br) => {
-                let inner = inner.to_string();
-                // 小節の Display は末尾に " | " を出すので、関数の中では
-                // 最後の区切りを落として `pow(C | E D)` の形に揃える
-                let inner = inner.trim_end();
-                let inner = inner.strip_suffix('|').unwrap_or(inner).trim_end();
-                match func {
-                    Func::Pow => write!(f, "pow({})", inner)?,
-                    Func::Oct => write!(f, "oct({})", inner)?,
-                    Func::Pat(arg) => match arg.as_ref() {
-                        Expr::Pattern(p) => write!(f, "pat(\"{}\", {})", p, inner)?,
-                        other => write!(f, "pat({}, {})", other, inner)?,
-                    },
-                }
-                if *br {
-                    writeln!(f)
-                } else {
-                    write!(f, " ")
-                }
-            }
-            Expr::Measure(nodes, br) => {
-                write!(
-                    f,
-                    "{}",
-                    nodes
-                        .iter()
-                        .map(|n| n.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )?;
-                write!(f, " | ")?;
-                if *br {
-                    writeln!(f)?;
-                }
-                Ok(())
-            }
+            Expr::Apply(func, inner, br) => write_apply(f, func, inner, None, *br),
+            Expr::Measure(nodes, br) => write_measure(f, nodes, None, *br),
             Expr::Pattern(p) => write!(f, "\"{}\"", p),
-            // Task 6 で正式化する。いまは往復できる最低限の形だけ出す
-            Expr::Define(name, body) => writeln!(f, "${} = {}", name, body),
-            Expr::Ref(name) => write!(f, "${} ", name),
-            // Task 6 で `( )` の導出も含めて正式化する。いまは最低限の形だけ
-            Expr::Repeat(inner, n) => write!(f, "{} x{}", inner, n),
+            Expr::Define(name, body) => {
+                // 定義は1行。本体が小節で終わると末尾に `" | "` が付くので
+                // 行末の空白だけ落として `$a = C | Am |` の形に揃える
+                writeln!(f, "${} = {}", name, body.to_string().trim_end())
+            }
+            Expr::Ref(name) => write!(f, "${}", name),
+            Expr::Repeat(inner, n) => {
+                // 1項目だけの `Seq` は素の式と区別が付かない。`(C) x2` が
+                // `C x2` と同じ意味になるよう、括弧の判定の前に剥がす
+                let mut target = inner.as_ref();
+                while let Expr::Seq(items) = target {
+                    if items.len() == 1 {
+                        target = &items[0];
+                    } else {
+                        break;
+                    }
+                }
+                match target {
+                    // 小節 / 関数 / 参照の繰り返しに括弧は要らない
+                    Expr::Measure(nodes, br) => write_measure(f, nodes, Some(*n), *br),
+                    Expr::Apply(func, body, br) => write_apply(f, func, body, Some(*n), *br),
+                    // 2小節以上のまとまりと、入れ子の繰り返しにだけ `( )` を
+                    // 出す。括弧が無いと `xN` がどこに掛かるか読み戻せない
+                    Expr::Seq(_) | Expr::Repeat(_, _) => {
+                        write!(f, "({}) x{} ", inline(target), n)
+                    }
+                    other => write!(f, "{} x{} ", inline(other), n),
+                }
+            }
         }
     }
 }
@@ -283,5 +346,99 @@ mod tests {
     #[test]
     fn test_blank_line_roundtrip() {
         assert_eq!(roundtrip("key: C\nC |\n\nAm |"), "key: C\nC |\nAm |");
+    }
+
+    #[test]
+    fn test_define_roundtrip() {
+        assert_eq!(
+            roundtrip("$riff = pow(C | E D)\n$riff | C |"),
+            "$riff = pow(C | E D)\n$riff | C |"
+        );
+    }
+
+    #[test]
+    fn test_pattern_define_roundtrip() {
+        assert_eq!(
+            roundtrip("$eight = \"o.o.o.o.\"\npat($eight, C)"),
+            "$eight = \"o.o.o.o.\"\npat($eight, C)"
+        );
+    }
+
+    #[test]
+    fn test_repeat_on_measure_roundtrip() {
+        // 小節1つの繰り返しには括弧を付けない
+        assert_eq!(roundtrip("C x4 |"), "C x4 |");
+    }
+
+    #[test]
+    fn test_repeat_on_group_roundtrip() {
+        // 2小節以上の繰り返しには括弧を付ける
+        assert_eq!(roundtrip("(C | Am) x3"), "(C | Am) x3");
+    }
+
+    #[test]
+    fn test_repeat_on_ref_roundtrip() {
+        // 定義の本体の小節は `|` で閉じる。`$a = C` と `$a = C |` は同じ
+        // AST になるので、Display はどちらも `|` を付けた形に寄せる
+        assert_eq!(roundtrip("$a = C |\n$a x2"), "$a = C |\n$a x2");
+        assert_eq!(roundtrip("$a = C\n$a x2"), "$a = C |\n$a x2");
+    }
+
+    #[test]
+    fn test_japanese_define_roundtrip() {
+        assert_eq!(
+            roundtrip("$Aメロ = C | Am |\n$Aメロ x2"),
+            "$Aメロ = C | Am |\n$Aメロ x2"
+        );
+    }
+
+    #[test]
+    fn test_define_under_key_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\n$a = I | IV |\n$a x2"),
+            "key: C\n$a = I | IV |\n$a x2"
+        );
+    }
+
+    #[test]
+    fn test_ref_in_pat_has_no_extra_space() {
+        assert_eq!(
+            roundtrip("$eight = \"o.o.o.o.\"\npat($eight, C | Am)"),
+            "$eight = \"o.o.o.o.\"\npat($eight, C | Am)"
+        );
+    }
+
+    #[test]
+    fn test_ref_keeps_bar_separator() {
+        assert_eq!(roundtrip("$a = C |\n$a | D |"), "$a = C |\n$a | D |");
+    }
+
+    #[test]
+    fn test_nested_repeat_roundtrip() {
+        assert_eq!(roundtrip("((C | Am) x2) x3"), "((C | Am) x2) x3");
+    }
+
+    /// 書き戻した結果をもう一度書き戻しても変わらないこと。
+    /// これが崩れると、web の移調ボタンを押すたびにテキストが劣化する
+    #[test]
+    fn test_roundtrip_is_idempotent() {
+        for code in [
+            "$riff = pow(C | E D)\n$riff | C |",
+            "$eight = \"o.o.o.o.\"\npat($eight, C)",
+            "C x4 |",
+            "(C | Am) x3",
+            "$a = C\n$a x2",
+            "$a = C |\n$a | D |",
+            "$Aメロ = C | Am |\n$Aメロ x2",
+            "key: C\n$a = I | IV |\n$a x2",
+            "(C) x2",
+            "((C | Am) x2) x3",
+            "pow(C) x2\nAm |",
+            "$a = C |\n$a x2\nD |",
+            "# memo\nkey: C\n$a = C | Am |\n$a x2 D |",
+        ] {
+            let once = roundtrip(code);
+            assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);
+        }
     }
 }
