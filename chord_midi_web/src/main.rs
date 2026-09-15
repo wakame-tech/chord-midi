@@ -72,7 +72,7 @@ fn app() -> Html {
     let measures = use_state(Vec::<MeasureRef>::new);
     let tab = use_state(|| Tab::Editor);
     // 運指タブで押さえた形。タブを離れても消さないので App が持つ
-    let picked = use_state(|| [None::<u8>; 6]);
+    let held = use_state(|| [None::<u8>; 6]);
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
@@ -322,9 +322,9 @@ fn app() -> Html {
         let tab = tab.clone();
         Callback::from(move |_| tab.set(Tab::Fretboard))
     };
-    let on_pick = {
-        let picked = picked.clone();
-        Callback::from(move |next: [Option<u8>; 6]| picked.set(next))
+    let on_held_change = {
+        let held = held.clone();
+        Callback::from(move |next: [Option<u8>; 6]| held.set(next))
     };
     // 記法をエディタ末尾に足す。改行結合の規則は進行プリセットと共通
     // (append_line)。挿入するのは1小節ぶんの記法なので ` |` は呼び出し側で足す
@@ -442,7 +442,7 @@ fn app() -> Html {
     };
 
     let fretboard = html! {
-        <Fretboard frets={*picked} on_change={on_pick} on_insert={on_insert} />
+        <Fretboard frets={*held} on_change={on_held_change} on_insert={on_insert} />
     };
 
     html! {
