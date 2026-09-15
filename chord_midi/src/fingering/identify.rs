@@ -231,10 +231,10 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     if let Some(c) = data.and_then(movable_candidate) {
         out.push(c);
     }
+    // 打ち切る前に全部の記法を決める。段1で当たった形を再現するかは
+    // notation_for を通すまで分からないので、先に5件へ絞ると再現する候補を
+    // 取りこぼす
     for (s, _, node, r) in scored {
-        if out.len() >= MAX_CANDIDATES {
-            break;
-        }
         if out.iter().any(|c| c.name == r.label) {
             continue;
         }
@@ -251,6 +251,11 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             score: s,
         });
     }
+    // 段1で当たった形を再現する候補を先に出す。`sort_by_key` は安定なので、
+    // 再現する組・しない組それぞれの中では (score, QUALITIES の並び順) が保たれる。
+    // ここで score で並べ直すと QUALITIES のタイブレークを壊す
+    out.sort_by_key(|c| c.unreachable);
+    out.truncate(MAX_CANDIDATES);
     out
 }
 
@@ -397,6 +402,39 @@ mod tests {
         // x02xxx = 5弦開放 + 4弦2fr の A パワーコード
         let c = identify(frets("x02xxx"));
         assert_eq!(c[0].notation, "pow(A@5)");
+    }
+
+    #[test]
+    fn identify_puts_the_data_shape_first() {
+        // x3x34x は原典の Cm7。理論だけで出た D#5/C に先を越されないこと
+        let c = identify(frets("x3x34x"));
+        assert_eq!(
+            c[0].name,
+            "Cm7",
+            "候補の並び: {:?}",
+            c.iter().map(|x| &x.name).collect::<Vec<_>>()
+        );
+        assert!(matches!(c[0].source, Source::Data(_)));
+    }
+
+    /// 原典に載っている呼び方が候補にあるなら、それが先頭に来る。
+    /// 並べ替えの第1キー（段1で当たった形を再現する候補が先）が効いていること
+    #[test]
+    fn identify_never_buries_a_data_candidate() {
+        for f in FINGERINGS.iter() {
+            let got = identify(f.frets);
+            if got.iter().any(|c| matches!(c.source, Source::Data(_))) {
+                assert!(
+                    matches!(got[0].source, Source::Data(_)),
+                    "{} ({:?}) で原典の候補が先頭に来ない: {:?}",
+                    f.name,
+                    f.frets,
+                    got.iter()
+                        .map(|c| (c.name.clone(), matches!(c.source, Source::Data(_))))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
     }
 
     /// データの全要素について、逆引きが1件は返し、Data と印が付いた候補の記法を
