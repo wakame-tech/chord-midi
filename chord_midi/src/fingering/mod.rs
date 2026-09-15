@@ -276,11 +276,14 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
     FINGERINGS
         .iter()
-        // Normal は常に候補。可動形 (Power / Octave) は鳴る音が少ないので、
-        // その種類が明示されたか @N の指定があるときだけ候補にする
-        .filter(|f| match f.kind {
-            ShapeKind::Normal => true,
-            other => chord.wanted == Some(other) || chord.root_string.is_some(),
+        // Normal は常に候補。可動形 (Power / Octave) は、書かれた関数で
+        // 種類が明示されていればその種類だけ、明示が無ければ @N の指定が
+        // あるときだけ候補にする
+        // pow() / oct() で種類が明示されたら、その種類の押さえ方だけを候補にする。
+        // 明示が無ければ原典の押さえ方だけ。ただし @N があれば可動形も開放する
+        .filter(|f| match chord.wanted {
+            Some(wanted) => f.kind == wanted,
+            None => f.kind == ShapeKind::Normal || chord.root_string.is_some(),
         })
         .filter(|f| match chord.root_string {
             Some(string) => f.lowest_string == string,
@@ -724,5 +727,40 @@ mod tests {
                 n => panic!("unexpected pressed count {} for {}", n, f.name),
             }
         }
+    }
+
+
+    #[test]
+    fn find_picks_octave_shapes_for_oct() {
+        assert_eq!(tab_of("oct(A@6)\n"), "5-x-7-x-x-x");
+        assert_eq!(tab_of("oct(G#@6)\n"), "4-x-6-x-x-x");
+        assert_eq!(tab_of("oct(C#@6)\n"), "9-x-11-x-x-x");
+        assert_eq!(tab_of("oct(A@5)\n"), "x-0-x-2-x-x");
+    }
+
+    #[test]
+    fn find_keeps_power_and_octave_apart() {
+        // 同じ弦指定でも、書かれた関数どおりの種類が選ばれる
+        assert_eq!(tab_of("pow(A@6)\n"), "5-7-x-x-x-x");
+        assert_eq!(tab_of("oct(A@6)\n"), "5-x-7-x-x-x");
+    }
+
+    #[test]
+    fn find_picks_octave_shape_for_slash_bass() {
+        // スラッシュのベースが構成音に足されてパワーコードの条件と一致しても、
+        // 書かれた関数が oct なのでオクターブ形が選ばれる
+        let r = refs("oct(A/E@6)\n");
+        let f = find(&r[0]).expect("no fingering found");
+        assert_eq!(f.kind, ShapeKind::Octave);
+    }
+
+    #[test]
+    fn octave_shapes_do_not_displace_normal_chords() {
+        // 鳴る音が1種類しかないオクターブ形が通常のコードを押しのけないこと
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
+        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
     }
 }

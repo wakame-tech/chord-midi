@@ -555,4 +555,15 @@ mod tests {
             assert!(p.windows(2).all(|w| w[0] < w[1]), "{}: {:?}", code, p);
         }
     }
+
+
+    #[test]
+    fn test_octave_shape_sounds_the_fingering() {
+        // 6弦5fr=A2(45) + 4弦7fr=A3(57)
+        assert_eq!(pitches_of("oct(A@6)"), vec![45, 57]);
+        // 6弦4fr=G#2(44) + 4弦6fr=G#3(56)
+        assert_eq!(pitches_of("oct(G#@6)"), vec![44, 56]);
+        // 6弦9fr=C#3(49) + 4弦11fr=C#4(61)
+        assert_eq!(pitches_of("oct(C#@6)"), vec![49, 61]);
+    }
 }
