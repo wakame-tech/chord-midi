@@ -1004,7 +1004,11 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     /* エディタを見ながら使う。フッタのプレイヤーのぶんを引いて収める */
     position: sticky;
     top: 12px;
-    max-height: calc(100vh - 170px);
+    /* 170px はビューポート上端からの見積もりだったが、パネルの実際の上端は
+     ヘッダとタブのぶん約 118px 下にある。スクロール前の状態では
+     118 + max-height がフッタのプレイヤー (最大 145px) を越えて隠れた。
+     118 + 145 + 余白 で 280px 引く */
+  max-height: calc(100vh - 280px);
     overflow-y: auto;
 }
 
