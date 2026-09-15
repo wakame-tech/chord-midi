@@ -24,6 +24,10 @@ const SAMPLES: &[(&str, &str)] = &[
     ("oct", "oct(A | G#)\n"),
     ("pat", "pat(\"o.o.oxox\", C | E D)\n"),
     ("pat_nested", "pat(\"oxox\", pow(C))\n"),
+    // 入れ子の向きを逆にした形。pow/oct が外、pat が内。
+    // 修飾が pat の包む Seq を越えて内側のコードまで届くかを見る
+    ("pow_pat", "pow(pat(\"oxox\", C))\n"),
+    ("oct_pat", "oct(pat(\"oxox\", A))\n"),
     ("root_string", "pow(A@6 | D@5 | E@5)\n"),
     ("comment", "# memo\nkey: C\nC | F |\n"),
     ("multiline", "C | Am |\nF | G |\n"),
