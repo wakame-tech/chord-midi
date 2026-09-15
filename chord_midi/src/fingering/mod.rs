@@ -143,7 +143,7 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
                 line_break: *line_break,
             });
         }
-        Ast::Apply(_, items) => {
+        Ast::Apply(_, items, _) => {
             for item in items {
                 collect_ast(item, out)?;
             }

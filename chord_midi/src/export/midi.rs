@@ -208,13 +208,13 @@ impl Score {
                 }
                 Ok(())
             }
-            Ast::Apply(Func::Pat(pattern), items) => {
+            Ast::Apply(Func::Pat(pattern), items, _) => {
                 for item in items {
                     self.interpret_with_pattern(*item, &pattern)?;
                 }
                 Ok(())
             }
-            Ast::Apply(_, items) => {
+            Ast::Apply(_, items, _) => {
                 // pow は resolve() で消えているが、素の AST を渡された場合に備える
                 for item in items {
                     self.interpret(*item)?;
@@ -237,13 +237,13 @@ impl Score {
         match ast {
             Ast::Measure(nodes, _) => self.interpret_patterned_measure(nodes, pattern),
             // 内側の pat が優先される
-            Ast::Apply(Func::Pat(inner), items) => {
+            Ast::Apply(Func::Pat(inner), items, _) => {
                 for item in items {
                     self.interpret_with_pattern(*item, &inner)?;
                 }
                 Ok(())
             }
-            Ast::Apply(_, items) => {
+            Ast::Apply(_, items, _) => {
                 for item in items {
                     self.interpret_with_pattern(*item, pattern)?;
                 }

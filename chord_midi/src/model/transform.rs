@@ -45,12 +45,13 @@ impl Ast {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Ast::Apply(func, items) => Ast::Apply(
+            Ast::Apply(func, items, br) => Ast::Apply(
                 func,
                 items
                     .into_iter()
                     .map(|ast| Box::new((*ast).into_degree(tonic, scale)))
                     .collect(),
+                br,
             ),
             other => other,
         }
@@ -79,12 +80,13 @@ impl Ast {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Ast::Apply(func, items) => Ast::Apply(
+            Ast::Apply(func, items, br) => Ast::Apply(
                 func,
                 items
                     .into_iter()
                     .map(|ast| Box::new((*ast).into_pitch(tonic, scale)))
                     .collect(),
+                br,
             ),
             other => other,
         }
@@ -140,18 +142,19 @@ fn desugar_pow(ast: Ast) -> Vec<Ast> {
                 .map(Box::new)
                 .collect(),
         )],
-        Ast::Apply(Func::Pow, items) => items
+        Ast::Apply(Func::Pow, items, _) => items
             .into_iter()
             .flat_map(|item| desugar_pow(*item))
             .map(mark_power)
             .collect(),
-        Ast::Apply(func, items) => vec![Ast::Apply(
+        Ast::Apply(func, items, br) => vec![Ast::Apply(
             func,
             items
                 .into_iter()
                 .flat_map(|item| desugar_pow(*item))
                 .map(Box::new)
                 .collect(),
+            br,
         )],
         other => vec![other],
     }
@@ -163,12 +166,13 @@ fn mark_power(ast: Ast) -> Ast {
         Ast::Measure(nodes, br) => {
             Ast::Measure(nodes.into_iter().map(mark_power_node).collect(), br)
         }
-        Ast::Apply(func, items) => Ast::Apply(
+        Ast::Apply(func, items, br) => Ast::Apply(
             func,
             items
                 .into_iter()
                 .map(|item| Box::new(mark_power(*item)))
                 .collect(),
+            br,
         ),
         other => other,
     }
@@ -304,7 +308,7 @@ mod tests {
         let ast = RechordImporter.import("pat(\"oxox\", C)\n").unwrap().resolve();
         let Ast::Score(items) = &ast else { panic!("not a score") };
         // リズムは MIDI の関心なので resolve では展開しない
-        assert!(matches!(items[0].as_ref(), Ast::Apply(Func::Pat(_), _)));
+        assert!(matches!(items[0].as_ref(), Ast::Apply(Func::Pat(_), _, _)));
     }
 
     #[test]
@@ -317,7 +321,7 @@ mod tests {
             .unwrap()
             .resolve();
         let Ast::Score(items) = &ast else { panic!("not a score") };
-        let Ast::Apply(Func::Pat(_), inner) = items[0].as_ref() else { panic!("not a pat") };
+        let Ast::Apply(Func::Pat(_), inner, _) = items[0].as_ref() else { panic!("not a pat") };
         let Ast::Measure(nodes, _) = inner[0].as_ref() else {
             panic!("pow should be desugared inside pat: {:?}", inner[0])
         };

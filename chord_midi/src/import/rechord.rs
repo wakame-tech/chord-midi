@@ -9,7 +9,7 @@ use std::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, not_line_ending, space0};
-use nom::combinator::{eof, map, map_res, peek, value};
+use nom::combinator::{eof, map, map_res, opt, peek, value};
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
@@ -139,9 +139,14 @@ fn apply_parser(s: Span) -> IResult<Span, Ast> {
             many1(alt((apply_parser, measure_parser))),
             space0,
             tag(")"),
+            space0,
+            // 閉じ括弧の直後が行末なら、この関数でひと行が終わる
+            opt(peek(line_ending)),
             space_or_line_ending_many0,
         )),
-        |(func, items, _, _, _)| Ast::Apply(func, items.into_iter().map(Box::new).collect()),
+        |(func, items, _, _, _, br, _)| {
+            Ast::Apply(func, items.into_iter().map(Box::new).collect(), br.is_some())
+        },
     )(s)
 }
 
@@ -246,7 +251,7 @@ mod tests {
         let ast = RechordImporter.import("pow(C | E D)\n").unwrap();
         let Ast::Score(items) = &ast else { panic!("not a score") };
         assert_eq!(items.len(), 1);
-        let Ast::Apply(Func::Pow, inner) = items[0].as_ref() else {
+        let Ast::Apply(Func::Pow, inner, _) = items[0].as_ref() else {
             panic!("not a pow apply: {:?}", items[0])
         };
         // C の小節と E D の小節
@@ -263,7 +268,7 @@ mod tests {
         use crate::model::ast::{Ast, Beat, Func};
         let ast = RechordImporter.import("pat(\"o.ox\", C | E D)\n").unwrap();
         let Ast::Score(items) = &ast else { panic!("not a score") };
-        let Ast::Apply(Func::Pat(pattern), inner) = items[0].as_ref() else {
+        let Ast::Apply(Func::Pat(pattern), inner, _) = items[0].as_ref() else {
             panic!("not a pat apply: {:?}", items[0])
         };
         assert_eq!(
@@ -279,10 +284,10 @@ mod tests {
         use crate::model::ast::{Ast, Func};
         let ast = RechordImporter.import("pat(\"oxox\", pow(C))\n").unwrap();
         let Ast::Score(items) = &ast else { panic!("not a score") };
-        let Ast::Apply(Func::Pat(_), inner) = items[0].as_ref() else {
+        let Ast::Apply(Func::Pat(_), inner, _) = items[0].as_ref() else {
             panic!("not a pat apply")
         };
-        assert!(matches!(inner[0].as_ref(), Ast::Apply(Func::Pow, _)));
+        assert!(matches!(inner[0].as_ref(), Ast::Apply(Func::Pow, _, _)));
     }
 
     #[test]
@@ -292,7 +297,7 @@ mod tests {
         let ast = RechordImporter.import("pow(C) F |\n").unwrap();
         let Ast::Score(items) = &ast else { panic!("not a score") };
         assert_eq!(items.len(), 2);
-        assert!(matches!(items[0].as_ref(), Ast::Apply(_, _)));
+        assert!(matches!(items[0].as_ref(), Ast::Apply(_, _, _)));
         assert!(matches!(items[1].as_ref(), Ast::Measure(_, _)));
     }
 

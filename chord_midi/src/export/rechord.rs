@@ -24,7 +24,7 @@ impl Display for Ast {
             }
             Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
             Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
-            Ast::Apply(func, items) => {
+            Ast::Apply(func, items, br) => {
                 let inner = items
                     .iter()
                     .map(|item| item.to_string())
@@ -35,8 +35,13 @@ impl Display for Ast {
                 let inner = inner.trim_end();
                 let inner = inner.strip_suffix('|').unwrap_or(inner).trim_end();
                 match func {
-                    Func::Pow => write!(f, "pow({}) ", inner),
-                    Func::Pat(pattern) => write!(f, "pat(\"{}\", {}) ", pattern, inner),
+                    Func::Pow => write!(f, "pow({})", inner)?,
+                    Func::Pat(pattern) => write!(f, "pat(\"{}\", {})", pattern, inner)?,
+                }
+                if *br {
+                    writeln!(f)
+                } else {
+                    write!(f, " ")
                 }
             }
             Ast::Measure(nodes, br) => {
@@ -161,6 +166,11 @@ mod tests {
     #[test]
     fn test_nested_apply_roundtrip() {
         assert_eq!(roundtrip("pat(\"oxox\", pow(C))"), "pat(\"oxox\", pow(C))");
+    }
+
+    #[test]
+    fn test_apply_keeps_line_breaks_roundtrip() {
+        assert_eq!(roundtrip("pow(C)\npat(\"oo\", D)"), "pow(C)\npat(\"oo\", D)");
     }
 
     #[test]

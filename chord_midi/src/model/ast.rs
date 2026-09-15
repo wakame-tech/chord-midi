@@ -20,8 +20,9 @@ pub enum Ast {
     Directive(Directive),
     // nodes, br?
     Measure(Vec<Node>, bool),
-    /// 小節列に関数を適用する。中身は Measure と Apply（ネスト）だけ
-    Apply(Func, Vec<Box<Ast>>),
+    /// 小節列に関数を適用する。中身は Measure と Apply（ネスト）だけ。
+    /// 3つ目は「この関数の後ろで入力が改行されている」
+    Apply(Func, Vec<Box<Ast>>, bool),
     Score(Vec<Box<Ast>>),
 }
 

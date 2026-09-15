@@ -65,7 +65,7 @@ fn shift_ast(ast: &mut Ast, delta: i8, seen: &mut Seen) {
                 shift_node(node, delta, seen);
             }
         }
-        Ast::Apply(_, items) => {
+        Ast::Apply(_, items, _) => {
             for item in items {
                 shift_ast(item, delta, seen);
             }
@@ -206,6 +206,15 @@ mod tests {
     fn test_shift_key_transposes_inside_pow() {
         assert_eq!(shift_key("pow(C | E D)", 1), "pow(C# | F D#)");
         assert_eq!(shift_key("pow(C# | F D#)", -1), "pow(C | E D)");
+    }
+
+    #[test]
+    fn test_shift_key_keeps_function_line_breaks() {
+        // 関数を別々の行に書いても行が潰れないこと
+        assert_eq!(
+            shift_key("pow(C)\npat(\"oo\", D)", 1),
+            "pow(C#)\npat(\"oo\", D#)"
+        );
     }
 
     #[test]
