@@ -212,7 +212,9 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             for on in ons {
                 let node = node(root_pitch, quality, on);
                 let Ok(r) = chord_ref(&node) else { continue };
-                let Some(s) = score(&played, &r) else { continue };
+                let Some(s) = score(&played, &r) else {
+                    continue;
+                };
                 scored.push((s, qi, node, r));
             }
         }
