@@ -686,6 +686,22 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     color: var(--muted);
 }
 
+/* $定義 から展開された小節。名前は範囲の先頭だけに出し、
+   続きは下線で「どこまでか」を示す。枠は常に置いて上端を揃える */
+.section {
+    min-height: 15px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--accent);
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+}
+
+.measure.in-section .section {
+    border-bottom-color: var(--accent-soft);
+}
+
 /* 入力の改行位置でカードの並びを折り返す */
 .line-break {
     flex-basis: 100%;

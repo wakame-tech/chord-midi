@@ -327,6 +327,11 @@ fn app() -> Html {
         ];
         let mut labels: Vec<String> = Vec::new();
         let mut rows: Vec<Html> = Vec::new();
+        // 直前の小節のセクション名。名前は範囲の先頭の小節にだけ出す
+        let mut prev_section: Option<String> = None;
+        // 定義を1つも使っていない進行では帯そのものを出さない。
+        // 空でも枠だけは残る仕組みなので、出すと今までの見た目が変わってしまう
+        let has_section = measures.iter().any(|m| m.section.is_some());
         for measure in measures.iter() {
             let mut cards: Vec<Html> = Vec::new();
             for c in measure.chords.iter() {
@@ -350,8 +355,24 @@ fn app() -> Html {
                 Some(p) => html! { <div class="rhythm">{ p.to_string() }</div> },
                 None => html! { <div class="rhythm"></div> },
             };
+            // $定義 から展開された小節に帯を出す。名前は範囲の先頭だけに
+            // 出し、続きは帯だけにする。枠は常に置いてカードの上端を揃える
+            let is_head = measure.section != prev_section;
+            let section = if !has_section {
+                html! {}
+            } else {
+                match (&measure.section, is_head) {
+                    (Some(name), true) => {
+                        html! { <div class="section">{format!("${}", name)}</div> }
+                    }
+                    _ => html! { <div class="section"></div> },
+                }
+            };
+            prev_section = measure.section.clone();
             rows.push(html! {
-                <div class="measure">
+                <div class={classes!("measure",
+                    measure.section.is_some().then_some("in-section"))}>
+                    { section }
                     { rhythm }
                     <div class="measure-cards">{cards}</div>
                 </div>
