@@ -7,6 +7,7 @@ mod data;
 
 pub use data::FINGERINGS;
 
+use crate::model::modifier::Modifier;
 use crate::model::{
     ast::{Ast, ChordNode, Node},
     key::Key,
@@ -39,6 +40,17 @@ impl Finger {
     }
 }
 
+/// 押さえ方の種類。`find` のガードに使う
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKind {
+    /// 原典の押さえ方
+    Normal,
+    /// 可動パワーコード形（ルート + 5th）
+    Power,
+    /// オクターブ形（ルート + 1オクターブ上のルート）
+    Octave,
+}
+
 /// 1つの押さえ方。配列はすべて 6弦→1弦 の順
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fingering {
@@ -56,8 +68,8 @@ pub struct Fingering {
     pub bass: u8,
     /// 最低音が鳴る弦。0 = 6弦, 5 = 1弦
     pub lowest_string: u8,
-    /// 可動パワーコード形かどうか。`find` のガードに使う
-    pub is_power: bool,
+    /// 押さえ方の種類
+    pub kind: ShapeKind,
 }
 
 impl Fingering {
@@ -100,6 +112,8 @@ pub struct ChordRef {
     pub bass: Option<u8>,
     /// `@N` の指定。`Fingering.lowest_string` に合わせて 0 = 6弦 に正規化する
     pub root_string: Option<u8>,
+    /// `pow()` / `oct()` で明示された押さえ方の種類
+    pub wanted: Option<ShapeKind>,
 }
 
 /// AST に現れるコードを出現順に取り出す。
@@ -197,6 +211,15 @@ pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         }
         None => None,
     };
+    // 書かれた関数の種類をそのまま持ち回す。構成音から推測すると
+    // oct(A/E) の構成音 {A, E} がパワーコードの条件と一致してしまう
+    let wanted = if node.modifiers.contains(&Modifier::Octave) {
+        Some(ShapeKind::Octave)
+    } else if node.modifiers.contains(&Modifier::Power) {
+        Some(ShapeKind::Power)
+    } else {
+        None
+    };
     Ok(ChordRef {
         label,
         root,
@@ -204,6 +227,7 @@ pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         bass,
         // 記法は 1 = 1弦。Fingering.lowest_string は 0 = 6弦 なので変換する
         root_string: node.root_string.map(|n| 6 - n),
+        wanted,
     })
 }
 
@@ -250,14 +274,14 @@ fn extra_cost(semitone: u8) -> u32 {
 /// 代用させる構成なので、部分集合だけに絞ると素の三和音が軒並み引けなくなる。
 pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
-    // 可動パワーコード形は2音しか無いので、無条件に候補へ入れると
-    // 3rd や 7th が欠けた形が本来のコードを押しのける。ルートと5th
-    // ちょうどのときか、弦指定があるときだけ候補にする
-    let power_target =
-        chord.pitch_classes == (1u16 << chord.root) | (1u16 << ((chord.root + 7) % 12));
     FINGERINGS
         .iter()
-        .filter(|f| !f.is_power || power_target || chord.root_string.is_some())
+        // Normal は常に候補。可動形 (Power / Octave) は鳴る音が少ないので、
+        // その種類が明示されたか @N の指定があるときだけ候補にする
+        .filter(|f| match f.kind {
+            ShapeKind::Normal => true,
+            other => chord.wanted == Some(other) || chord.root_string.is_some(),
+        })
         .filter(|f| match chord.root_string {
             Some(string) => f.lowest_string == string,
             None => true,
@@ -524,6 +548,7 @@ mod tests {
             pitch_classes: 1u16 << 1,
             bass: None,
             root_string: None,
+            wanted: None,
         };
         assert!(find(&c).is_none());
     }
@@ -548,7 +573,10 @@ mod tests {
 
     #[test]
     fn power_chord_shapes_are_present() {
-        let powers: Vec<_> = FINGERINGS.iter().filter(|f| f.is_power).collect();
+        let powers: Vec<_> = FINGERINGS
+            .iter()
+            .filter(|f| f.kind == ShapeKind::Power)
+            .collect();
         // 6弦ルート12キー + 5弦ルート12キー
         assert_eq!(powers.len(), 24);
         assert_eq!(FINGERINGS.len(), 67 + 24);
@@ -556,7 +584,7 @@ mod tests {
 
     #[test]
     fn power_chord_shapes_sound_root_and_fifth() {
-        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Power) {
             // 鳴るのは2音だけ
             assert_eq!(f.pitch_classes.count_ones(), 2, "{} {}", f.name, tab(f));
             // 最低音がルート、その完全5度上がもう1音
@@ -568,7 +596,7 @@ mod tests {
 
     #[test]
     fn power_chord_fingers_are_index_and_ring() {
-        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Power) {
             let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
             match used.len() {
                 // 開放弦がルートの形は押さえるのが5thだけ
@@ -589,7 +617,7 @@ mod tests {
     fn power_chord_shapes_reach_high_frets() {
         // 6弦ルートの D5 は 10fr + 12fr。桁あふれせずに持てていること
         let d5 = shape([Some(10), Some(12), None, None, None, None]);
-        assert!(d5.is_power);
+        assert_eq!(d5.kind, ShapeKind::Power);
         assert_eq!(tab(d5), "10-12-x-x-x-x");
     }
 
