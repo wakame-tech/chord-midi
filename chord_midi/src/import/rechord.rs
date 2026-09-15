@@ -254,6 +254,13 @@ mod tests {
         // invalid pitch / scale must yield an Err (graceful), never panic
         assert!(RechordImporter.import("key: H\nC |\n").is_err());
         assert!(RechordImporter.import("scale: bogus\nC |\n").is_err());
+        // 途中行の不正なディレクティブも握り潰さない。seq_parser は
+        // directive_head の失敗を `if let Ok` で捨てるので、その行が
+        // 小節として食われてしまわないことを固定しておく
+        assert!(RechordImporter.import("C |\nkey: H\n").is_err());
+        assert!(RechordImporter.import("C |\nscale: bogus\n").is_err());
+        // 値なしも通さない
+        assert!(RechordImporter.import("key:\nC |\n").is_err());
     }
 
     #[test]
