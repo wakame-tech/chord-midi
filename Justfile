@@ -6,4 +6,4 @@ rechord file:
 
 gen-fingerings:
     python3 scripts/gen_fingerings.py
-    cargo fmt -p chord_midi
+    rustfmt --edition 2021 chord_midi/src/fingering/data.rs
