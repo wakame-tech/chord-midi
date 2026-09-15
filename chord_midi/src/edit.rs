@@ -287,10 +287,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Task 6 待ち: Ref の Display が末尾に `Ref(\"$riff\")` -> `$riff ` と\
-        末尾空白を出し、続く `|` を書き戻すと `$riff D# |` になり `|` が落ちる \
-        (現在の実際の出力: \"$riff = C# | F |\\n$riff D# |\")。\
-        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
     fn test_shift_key_transposes_inside_define() {
         assert_eq!(
             shift_key("$riff = C | E |\n$riff | D |", 1),
@@ -299,9 +295,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Task 6 待ち: Ref の Display が末尾に空白を出すため \
-        `pat($eight, C#)` が `pat($eight , C#)` になる。\
-        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
     fn test_shift_key_keeps_pattern_define() {
         // リズムの定義は移調の対象外
         assert_eq!(
@@ -311,18 +304,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Task 6 待ち: Repeat の暫定 Display が壊れていて \
-        `C x4 |` が `C# |\\n x4` になる。\
-        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
     fn test_shift_key_transposes_inside_repeat() {
         assert_eq!(shift_key("C x4 |", 1), "C# x4 |");
         assert_eq!(shift_key("(C | Am) x2", 1), "(C# | A#m) x2");
     }
 
     #[test]
-    #[ignore = "Task 6 待ち: Ref の Display の末尾空白と Repeat の暫定 Display の \
-        組み合わせで `$a x2` が `$a  x2` (二重空白) になり round trip が崩れる。\
-        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
     fn test_shift_key_round_trip_with_defines() {
         let src = "key: C\n$a = I | IV |\n$a x2";
         assert_eq!(shift_key(&shift_key(src, 1), -1), src);
@@ -386,7 +373,7 @@ mod tests {
         // 度数表記が定義の中にしか無くても key: が補われること
         assert_eq!(
             shift_key("$a = I | IV |\n$a", 1),
-            "key: C#\n$a = I | IV |\n$a"
+            "key: C#\n$a = I | IV |\n$a |"
         );
     }
 
@@ -396,7 +383,7 @@ mod tests {
         // 移調で変わらず、各 key: だけがずれる
         assert_eq!(
             shift_key("key: C\n$a = I | IV |\nkey: D\n$a", 1),
-            "key: C#\n$a = I | IV |\nkey: D#\n$a"
+            "key: C#\n$a = I | IV |\nkey: D#\n$a |"
         );
     }
 }
