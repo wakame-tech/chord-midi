@@ -157,6 +157,11 @@ fn app() -> Html {
         let applied = applied.clone();
         use_effect_with((), move |_| {
             if let Some(el) = player_ref.cast::<web_sys::Element>() {
+                // visualizer 属性を付け直して紐付けをやり直す。Yew はツリーを
+                // 組み立てる途中でこの属性をセットするので、その時点では
+                // フッタの #visualizer がまだ document に無く解決に失敗する
+                let _ = el.remove_attribute("visualizer");
+                let _ = el.set_attribute("visualizer", "#visualizer");
                 {
                     let playing = playing.clone();
                     let cb = Closure::<dyn FnMut()>::new(move || {
@@ -399,14 +404,7 @@ fn app() -> Html {
                     <span class="app-name">{"chord-midi"}</span>
                     <span class="app-tagline">{"コード進行から MIDI とギターの押さえ方を作る"}</span>
                 </div>
-                // プレイヤーはタブの外。タブを切り替えても再生が止まらないようにする
-                <div class="player">
-                    <midi-player ref={player_ref} visualizer="#visualizer" />
-                </div>
             </header>
-            // 何も読み込んでいないときは高さを潰す。要素は外さない（player の参照先なので）
-            <midi-visualizer type="piano-roll" id="visualizer"
-                class={if (*url).is_empty() { "is-empty" } else { "" }} />
 
             <nav class="tabs">
                 <button
@@ -429,6 +427,16 @@ fn app() -> Html {
             <main class="panel">
                 if *tab == Tab::Editor { {editor} } else { {preview} }
             </main>
+
+            // プレイヤーはタブの外に固定で置く。タブを切り替えても再生は止まらない
+            <footer class="app-footer">
+                // 何も読み込んでいないときは高さを潰す。要素は外さない（player の参照先なので）
+                <midi-visualizer type="piano-roll" id="visualizer"
+                    class={if (*url).is_empty() { "is-empty" } else { "" }} />
+                <div class="footer-inner">
+                    <midi-player ref={player_ref} visualizer="#visualizer" />
+                </div>
+            </footer>
         </>
     }
 }
