@@ -21,7 +21,7 @@ fn example_cell(example: &'static str, on_edit: &Callback<Edit>) -> Html {
     };
     html! {
         <td>
-            <code class="syntax-example" style="cursor: pointer;"
+            <code class="syntax-example"
                 title="クリックしてカーソル位置に挿入" {onclick}>
                 {example}
             </code>

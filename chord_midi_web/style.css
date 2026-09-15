@@ -1152,3 +1152,12 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
         max-height: none;
     }
 }
+
+/* 記法表の例はクリックでカーソル位置に挿入できる。押せると分かる見た目にする */
+.syntax-example {
+  cursor: pointer;
+}
+
+.syntax-example:hover {
+  background: var(--accent-soft, #e8f0f7);
+}

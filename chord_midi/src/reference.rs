@@ -74,9 +74,14 @@ pub const SYMBOLS: &[Symbol] = &[
         example: "pow(A@6)",
     },
     Symbol {
-        symbol: "$",
-        summary: "定義と参照",
+        symbol: "$名前 =",
+        summary: "進行やリズムに名前を付ける",
         example: "$A = C | Am |",
+    },
+    Symbol {
+        symbol: "$名前",
+        summary: "付けた名前を呼び出す",
+        example: "$A | F |",
     },
     Symbol {
         symbol: "xN",
