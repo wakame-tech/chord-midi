@@ -274,6 +274,44 @@ mod tests {
         assert!(s.contains("arp(C)"));
     }
 
+    #[test]
+    fn test_nested_transform_roundtrip() {
+        assert_eq!(roundtrip("arp(blk(C)) |"), "arp(blk(C)) |");
+        assert_eq!(roundtrip("blk(sub(G7)) |"), "blk(sub(G7)) |");
+        assert_eq!(roundtrip("arp(blk(sub(G7))) |"), "arp(blk(sub(G7))) |");
+        assert_eq!(roundtrip("s25(blk(C)) |"), "s25(blk(C)) |");
+    }
+
+    #[test]
+    fn test_flat_transform_roundtrip_unchanged() {
+        // 既存の書き方が変わらないこと
+        assert_eq!(roundtrip("arp(C) |"), "arp(C) |");
+        assert_eq!(roundtrip("blk(F) |"), "blk(F) |");
+        assert_eq!(roundtrip("s25(G7) |"), "s25(G7) |");
+        assert_eq!(roundtrip("sub(G7) |"), "sub(G7) |");
+        assert_eq!(roundtrip("dom(Dm7) |"), "dom(Dm7) |");
+    }
+
+    /// `shift_key` で往復 (+delta してから -delta) しても元のテキストに戻ること。
+    /// 入れ子の変換 (`arp(blk(...))` 等) を通しても壊れないことを確認する
+    #[test]
+    fn test_nested_transform_survives_transpose_round_trip() {
+        for code in [
+            "key: C\narp(blk(I)) |",
+            "key: C\nblk(sub(V7)) |",
+            "key: C\narp(blk(sub(G7))) |",
+            "key: C\ns25(blk(IV)) |",
+        ] {
+            let up = crate::edit::shift_key(code, 1);
+            // 移調した結果も読み戻せる (パースが通る) こと
+            RechordImporter
+                .import(&format!("{}\n", up))
+                .unwrap_or_else(|e| panic!("移調後にパースできない: {:?}\n{}", e, up));
+            let back = crate::edit::shift_key(&up, -1);
+            assert_eq!(back, code, "+1 -1 の往復で元に戻らない: {:?}", code);
+        }
+    }
+
     fn roundtrip(code: &str) -> String {
         let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
         format!("{}", ast)
@@ -564,6 +602,11 @@ mod tests {
             "$a = C |\n$a x2 | D |",
             "(C | Am) x2 | D |",
             "((C | Am) x2) x3 | D |",
+            // 入れ子の変換
+            "arp(blk(C)) |",
+            "blk(sub(G7)) |",
+            "arp(blk(sub(G7))) |",
+            "s25(blk(C)) |",
         ] {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);
