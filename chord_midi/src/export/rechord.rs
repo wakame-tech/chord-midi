@@ -157,7 +157,13 @@ mod tests {
 
     fn roundtrip(code: &str) -> String {
         let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
-        format!("{}", ast).trim_end().to_string()
+        format!("{}", ast)
+            .lines()
+            .map(|l| l.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim_end()
+            .to_string()
     }
 
     #[test]
@@ -198,5 +204,66 @@ mod tests {
         assert_eq!(roundtrip("A@6 |"), "A@6 |");
         assert_eq!(roundtrip("A/E@6 |"), "A/E@6 |");
         assert_eq!(roundtrip("pow(A@6 | D@5)"), "pow(A@6 | D@5)");
+    }
+
+    #[test]
+    fn test_key_directive_roundtrip() {
+        assert_eq!(roundtrip("key: C\nC | Am |"), "key: C\nC | Am |");
+    }
+
+    #[test]
+    fn test_scale_directive_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nscale: dorian\nI | IV |"),
+            "key: C\nscale: dorian\nI | IV |"
+        );
+    }
+
+    #[test]
+    fn test_scale_only_directive_roundtrip() {
+        assert_eq!(roundtrip("scale: dorian\nC | Am |"), "scale: dorian\nC | Am |");
+    }
+
+    #[test]
+    fn test_comment_and_key_roundtrip() {
+        assert_eq!(roundtrip("# memo\nkey: C\nC |"), "# memo\nkey: C\nC |");
+    }
+
+    #[test]
+    fn test_key_then_comment_roundtrip() {
+        assert_eq!(roundtrip("key: C\n# memo\nC |"), "key: C\n# memo\nC |");
+    }
+
+    #[test]
+    fn test_comment_mid_song_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nC |\n# memo\nAm |"),
+            "key: C\nC |\n# memo\nAm |"
+        );
+    }
+
+    #[test]
+    fn test_mid_song_key_change_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nI |\nkey: D\nI |"),
+            "key: C\nI |\nkey: D\nI |"
+        );
+    }
+
+    #[test]
+    fn test_key_with_apply_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\npow(C | E D)"),
+            "key: C\npow(C | E D)"
+        );
+        assert_eq!(
+            roundtrip("key: C\npat(\"oxox\", C)"),
+            "key: C\npat(\"oxox\", C)"
+        );
+    }
+
+    #[test]
+    fn test_blank_line_roundtrip() {
+        assert_eq!(roundtrip("key: C\nC |\n\nAm |"), "key: C\nC |\nAm |");
     }
 }
