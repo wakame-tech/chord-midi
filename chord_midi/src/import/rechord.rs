@@ -37,6 +37,15 @@ enum DirectiveHead {
 
 #[tracable_parser]
 fn directive_head(s: Span) -> IResult<Span, DirectiveHead> {
+    let (s, head) = directive_head_line(s)?;
+    // 行を閉じた後ろの空行を飲む。飲まないと `key: C\n\nC |` の残った改行が
+    // seq_parser のどの枝にも当たらず、そこで打ち切られて Eof になる。
+    // 他の枝 (measure_parser など) は末尾で同じことをしている
+    let (s, _) = space_or_line_ending_many0(s)?;
+    Ok((s, head))
+}
+
+fn directive_head_line(s: Span) -> IResult<Span, DirectiveHead> {
     // a bad value (e.g. `key: H`) fails the parse gracefully (map_res) rather
     // than panicking — important for the realtime web editor while typing.
     // The terminator accepts eof so a trailing directive without a newline parses.
@@ -482,6 +491,18 @@ mod tests {
         assert!(RechordImporter.import("C |\nscale: bogus\n").is_err());
         // 値なしも通さない
         assert!(RechordImporter.import("key:\nC |\n").is_err());
+    }
+
+    #[test]
+    fn test_blank_line_after_directive() {
+        use crate::import::{Importer, RechordImporter};
+        // ディレクティブの直後の空行。他の位置の空行は
+        // `space_or_line_ending_many0` が飲むので、ここだけが落ちていた
+        assert!(RechordImporter.import("key: C\n\n$a = C |\n$a\n").is_ok());
+        assert!(RechordImporter.import("scale: dorian\n\nC |\n").is_ok());
+        assert!(RechordImporter.import("key: C\n\n\nC | Am |\n").is_ok());
+        // ディレクティブが2つ続く間の空行も飲む
+        assert!(RechordImporter.import("key: C\n\nscale: dorian\n\nI |\n").is_ok());
     }
 
     #[test]

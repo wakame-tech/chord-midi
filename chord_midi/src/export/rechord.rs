@@ -384,6 +384,15 @@ mod tests {
     }
 
     #[test]
+    fn test_blank_line_after_directive_roundtrip() {
+        assert_eq!(roundtrip("key: C\n\nC | Am |"), "key: C\nC | Am |");
+        assert_eq!(
+            roundtrip("key: C\n\n$a = C |\n$a"),
+            "key: C\n$a = C |\n$a |"
+        );
+    }
+
+    #[test]
     fn test_define_roundtrip() {
         assert_eq!(
             roundtrip("$riff = pow(C | E D)\n$riff | C |"),
