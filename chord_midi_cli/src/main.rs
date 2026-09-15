@@ -30,7 +30,7 @@ enum AstForm {
 #[derive(Debug, clap::Parser)]
 #[command(version, about = "rechord 記法のコード進行を MIDI などに変換する")]
 struct Cli {
-    /// 入力ファイル。`--preset` / `--list-presets` のときは省略できる
+    /// 入力ファイル。`--preset` / `--list-presets` / `--help-syntax` のときは省略できる
     #[arg(short, long)]
     input: Option<PathBuf>,
     /// 出力ファイル。拡張子が midi なら MIDI、それ以外は rechord 記法
@@ -44,6 +44,9 @@ struct Cli {
     /// 使えるプリセットを一覧して終わる
     #[arg(long)]
     list_presets: bool,
+    /// 記法の一覧を出して終わる
+    #[arg(long)]
+    help_syntax: bool,
     /// キーを半音単位で移調する。負の値も取る
     #[arg(long, allow_hyphen_values = true, value_name = "SEMITONES")]
     transpose: Option<i8>,
@@ -144,6 +147,11 @@ fn main() -> Result<()> {
         log::LevelFilter::Warn
     };
     simplelog::SimpleLogger::init(level, Default::default())?;
+
+    if args.help_syntax {
+        print!("{}", chord_midi::reference::help_text());
+        return Ok(());
+    }
 
     if args.list_presets {
         list_presets();
