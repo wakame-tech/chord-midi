@@ -275,6 +275,11 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             continue;
         }
         let (notation, reproduces) = notation_for(&node, &r, &played, &frets);
+        // `ShapeKind::Normal` の条件は消さないこと。可動形に当たった形は
+        // `movable_candidate` が既に原典として1件出している。可動形は2音しか
+        // 無いので理論候補もよく同じ形を引き当ててしまい（`57xxxx` の
+        // `Esus4@6` など）、ここを緩めると Esus4 のカードに「原典での呼び名:
+        // A5」が付く。原典名を貸してよいのは原典そのものの押さえ方だけ
         let source = match data {
             Some(f) if reproduces && f.kind == ShapeKind::Normal => Source::Data(f),
             _ => Source::Theory,
@@ -418,6 +423,27 @@ mod tests {
         assert_eq!(c[0].notation, "pow(A@6)");
         assert!(matches!(c[0].source, Source::Data(_)));
         assert!(!c[0].unreachable);
+    }
+
+    /// 可動形に当たったとき、原典のバッジが付くのは `movable_candidate` が出した
+    /// 1件だけ。同じ形を `find()` で引き当てただけの理論候補に原典名を貸さない
+    /// （`score()` の `ShapeKind::Normal` ガードが効いていること）
+    #[test]
+    fn identify_gives_the_data_badge_only_to_the_movable_candidate() {
+        let c = identify(frets("57xxxx"));
+        let data: Vec<_> = c
+            .iter()
+            .filter(|x| matches!(x.source, Source::Data(_)))
+            .collect();
+        assert_eq!(
+            data.len(),
+            1,
+            "原典のバッジが付くのは1件だけのはず: {:?}",
+            c.iter()
+                .map(|x| (x.name.clone(), matches!(x.source, Source::Data(_))))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(data[0].notation, "pow(A@6)");
     }
 
     #[test]
