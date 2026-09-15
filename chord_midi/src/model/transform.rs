@@ -116,10 +116,10 @@ impl Ast {
         }
         let transposed = self.into_pitch(tonic, scale);
         // pow は音程の話なのでここで潰す。pat はリズムの話なので残す
-        let desugared = desugar_pow(transposed)
+        let desugared = desugar_shapes(transposed)
             .into_iter()
             .next()
-            .expect("desugar_pow always yields at least one node for a Score");
+            .expect("desugar_shapes always yields at least one node for a Score");
         match desugared {
             Ast::Score(items) => Ast::Score(
                 items
@@ -132,28 +132,34 @@ impl Ast {
     }
 }
 
-/// `Apply(Func::Pow, ..)` を潰し、中の全コードに `Modifier::Power` を足す。
+/// `Apply(Func::Pow, ..)` と `Apply(Func::Oct, ..)` を潰し、
+/// 中の全コードに対応する修飾を足す。
 ///
 /// `Apply` は親のリストの中で複数の要素に展開されるので `Vec` を返す。
-fn desugar_pow(ast: Ast) -> Vec<Ast> {
+fn desugar_shapes(ast: Ast) -> Vec<Ast> {
     match ast {
         Ast::Score(items) => vec![Ast::Score(
             items
                 .into_iter()
-                .flat_map(|item| desugar_pow(*item))
+                .flat_map(|item| desugar_shapes(*item))
                 .map(Box::new)
                 .collect(),
         )],
         Ast::Apply(Func::Pow, items, _) => items
             .into_iter()
-            .flat_map(|item| desugar_pow(*item))
-            .map(mark_power)
+            .flat_map(|item| desugar_shapes(*item))
+            .map(|item| mark(item, Modifier::Power))
+            .collect(),
+        Ast::Apply(Func::Oct, items, _) => items
+            .into_iter()
+            .flat_map(|item| desugar_shapes(*item))
+            .map(|item| mark(item, Modifier::Octave))
             .collect(),
         Ast::Apply(func, items, br) => vec![Ast::Apply(
             func,
             items
                 .into_iter()
-                .flat_map(|item| desugar_pow(*item))
+                .flat_map(|item| desugar_shapes(*item))
                 .map(Box::new)
                 .collect(),
             br,
@@ -162,17 +168,21 @@ fn desugar_pow(ast: Ast) -> Vec<Ast> {
     }
 }
 
-/// AST に含まれる全コードに `Modifier::Power` を足す
-fn mark_power(ast: Ast) -> Ast {
+/// AST に含まれる全コードに修飾を足す
+fn mark(ast: Ast, modifier: Modifier) -> Ast {
     match ast {
-        Ast::Measure(nodes, br) => {
-            Ast::Measure(nodes.into_iter().map(mark_power_node).collect(), br)
-        }
+        Ast::Measure(nodes, br) => Ast::Measure(
+            nodes
+                .into_iter()
+                .map(|node| mark_node(node, modifier.clone()))
+                .collect(),
+            br,
+        ),
         Ast::Apply(func, items, br) => Ast::Apply(
             func,
             items
                 .into_iter()
-                .map(|item| Box::new(mark_power(*item)))
+                .map(|item| Box::new(mark(*item, modifier.clone())))
                 .collect(),
             br,
         ),
@@ -180,18 +190,18 @@ fn mark_power(ast: Ast) -> Ast {
     }
 }
 
-fn mark_power_node(node: Node) -> Node {
+fn mark_node(node: Node, modifier: Modifier) -> Node {
     match node {
-        Node::Chord(c) => Node::Chord(mark_power_chord(c)),
-        Node::Arpeggio(c) => Node::Arpeggio(mark_power_chord(c)),
-        Node::Brush(c) => Node::Brush(mark_power_chord(c)),
-        Node::Transform(t, c) => Node::Transform(t, mark_power_chord(c)),
+        Node::Chord(c) => Node::Chord(mark_chord(c, modifier)),
+        Node::Arpeggio(c) => Node::Arpeggio(mark_chord(c, modifier)),
+        Node::Brush(c) => Node::Brush(mark_chord(c, modifier)),
+        Node::Transform(t, c) => Node::Transform(t, mark_chord(c, modifier)),
         other => other,
     }
 }
 
-fn mark_power_chord(mut chord: ChordNode) -> ChordNode {
-    chord.modifiers.insert(Modifier::Power);
+fn mark_chord(mut chord: ChordNode, modifier: Modifier) -> ChordNode {
+    chord.modifiers.insert(modifier);
     chord
 }
 
@@ -331,6 +341,63 @@ mod tests {
         assert_eq!(
             c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
             vec![0, 7]
+        );
+    }
+
+    #[test]
+    fn test_oct_becomes_root_only() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Node;
+
+        fn semitones(code: &str) -> Vec<u8> {
+            let ast = RechordImporter.import(code).unwrap().resolve();
+            let Ast::Score(items) = &ast else { panic!("not a score") };
+            let Ast::Measure(nodes, _) = items[0].as_ref() else {
+                panic!("oct should be desugared into a measure: {:?}", items[0])
+            };
+            let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+            c.to_chord().unwrap().semitones.into_iter().collect()
+        }
+
+        // ルート1音だけになる
+        assert_eq!(semitones("oct(A)\n"), vec![0]);
+        // 元の修飾を上書きする
+        assert_eq!(semitones("oct(Am7)\n"), vec![0]);
+        assert_eq!(semitones("oct(AM7)\n"), vec![0]);
+    }
+
+    #[test]
+    fn test_oct_keeps_slash_bass() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Node;
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        let ast = RechordImporter.import("oct(A/E)\n").unwrap().resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Measure(nodes, _) = items[0].as_ref() else { panic!("not a measure") };
+        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
+    }
+
+    #[test]
+    fn test_oct_inside_pat_is_desugared() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Func, Node};
+
+        let ast = RechordImporter
+            .import("pat(\"oxox\", oct(A))\n")
+            .unwrap()
+            .resolve();
+        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Ast::Apply(Func::Pat(_), inner, _) = items[0].as_ref() else { panic!("not a pat") };
+        let Ast::Measure(nodes, _) = inner[0].as_ref() else {
+            panic!("oct should be desugared inside pat: {:?}", inner[0])
+        };
+        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        assert_eq!(
+            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            vec![0]
         );
     }
 }

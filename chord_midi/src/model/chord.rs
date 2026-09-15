@@ -190,6 +190,12 @@ impl Chord {
                 self.semitones.insert(Scale::Major.semitone(5));
                 Ok(())
             }
+            Modifier::Octave => {
+                // 他の修飾を全部捨ててルートだけにする
+                self.semitones.clear();
+                self.semitones.insert(Scale::Major.semitone(1));
+                Ok(())
+            }
             _ => Err(anyhow::anyhow!("unknown mod: {:?}", modifier)),
         }
     }
