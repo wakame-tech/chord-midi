@@ -42,7 +42,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1e26209844d82c079fc15db7490cefd3-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1e26209844d82c079fc15db7490cefd3-1.png",
+          "fingers": [
+            null,
+            "ring",
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "C",
@@ -62,7 +70,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2f7e0ef65be39a58afe4fbbff7627eee.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2f7e0ef65be39a58afe4fbbff7627eee.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "C△7",
@@ -83,7 +99,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-1.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "Cadd9",
@@ -103,7 +127,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c515def52439f1e659f00e4cb0dc4013.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c515def52439f1e659f00e4cb0dc4013.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "Csus4",
@@ -124,7 +156,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d995af39a7c5f6c6bf73b3c53b798766.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d995af39a7c5f6c6bf73b3c53b798766.png",
+          "fingers": [
+            null,
+            "middle",
+            "ring",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "C/E",
@@ -146,7 +186,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bae0f7a3172fa6c4294c59c1f60ef122.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bae0f7a3172fa6c4294c59c1f60ef122.png",
+          "fingers": [
+            null,
+            "ring",
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "C/E",
@@ -166,7 +214,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a476b5c5246d336caaff5d47ef2f138e.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a476b5c5246d336caaff5d47ef2f138e.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "Cm7",
@@ -186,7 +242,15 @@
           ],
           "minFret": 3,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "C#△7",
@@ -206,7 +270,15 @@
           ],
           "minFret": 4,
           "maxFret": 6,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-2.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-2.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "C#m7",
@@ -227,7 +299,15 @@
           ],
           "minFret": 4,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d-1.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            null,
+            null
+          ]
         },
         {
           "name": "C#m7-5",
@@ -248,7 +328,15 @@
           ],
           "minFret": 4,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9cdb6b222e9d696f6c749764b5909cad.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9cdb6b222e9d696f6c749764b5909cad.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
         }
       ]
     },
@@ -274,7 +362,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a1cf40bae048266f740e3d27bc0933a9.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a1cf40bae048266f740e3d27bc0933a9.png",
+          "fingers": [
+            null,
+            null,
+            "ring",
+            "middle",
+            "index",
+            null
+          ]
         },
         {
           "name": "Fadd9",
@@ -294,7 +390,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3c253f5747c2e3de2b88d2dd0b76c0c6.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3c253f5747c2e3de2b88d2dd0b76c0c6.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "Fsus4",
@@ -314,7 +418,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0eb5d5e0a7a2bdca957eff6b9b9ad714.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0eb5d5e0a7a2bdca957eff6b9b9ad714.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
         },
         {
           "name": "Fm",
@@ -334,7 +446,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/575df4b8cd348f8e42012410198375bb.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/575df4b8cd348f8e42012410198375bb.png",
+          "fingers": [
+            null,
+            null,
+            "ring",
+            "index",
+            "middle",
+            null
+          ]
         },
         {
           "name": "Fm7",
@@ -354,7 +474,15 @@
           ],
           "minFret": 1,
           "maxFret": 1,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "F#7",
@@ -374,7 +502,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/239939afa160a510bf94ee917221819a.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/239939afa160a510bf94ee917221819a.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "F#m7",
@@ -394,7 +530,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af-1.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "F#m7(11)",
@@ -416,7 +560,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/66bc928f6619503750f2f4be70c41ef3.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/66bc928f6619503750f2f4be70c41ef3.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "F#m7-5",
@@ -437,7 +589,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b292b44eacaca1f9a92365bfdc4d24cd.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b292b44eacaca1f9a92365bfdc4d24cd.png",
+          "fingers": [
+            "thumb",
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
         }
       ]
     },
@@ -464,7 +624,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d0bda35ab29747f4abd45fdac91f5f78.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d0bda35ab29747f4abd45fdac91f5f78.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "G",
@@ -485,7 +653,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9c4ef1a9200899446d237cd1b00fc59c.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9c4ef1a9200899446d237cd1b00fc59c.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "G△7",
@@ -505,7 +681,15 @@
           ],
           "minFret": 3,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a2bc25aa2bf78122f69d41b93943dc7e.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a2bc25aa2bf78122f69d41b93943dc7e.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "Gadd9",
@@ -526,7 +710,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/75c00c2499a777980b95e60b5c8a0efc.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/75c00c2499a777980b95e60b5c8a0efc.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            "index",
+            "ring",
+            null
+          ]
         },
         {
           "name": "G6(9)",
@@ -548,7 +740,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d7a0e4293c5d6c2ec20e0b00af5f3197.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d7a0e4293c5d6c2ec20e0b00af5f3197.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            "index",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Gsus4",
@@ -569,7 +769,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3efe51ada10572442194e973a3aef097.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3efe51ada10572442194e973a3aef097.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "G/B",
@@ -590,7 +798,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7cd70630dbb8408d1624539cad8234a1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7cd70630dbb8408d1624539cad8234a1.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "G/A",
@@ -611,7 +827,15 @@
           ],
           "minFret": 0,
           "maxFret": 0,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef980060ff11557e2c6a35de8adc6676-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef980060ff11557e2c6a35de8adc6676-1.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "Gm",
@@ -632,7 +856,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/e13a7a7b74981ce405f46b5c8402c9eb.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/e13a7a7b74981ce405f46b5c8402c9eb.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "G#7",
@@ -652,7 +884,15 @@
           ],
           "minFret": 4,
           "maxFret": 5,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/fe8cb046356ac6084311402752abfd87.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/fe8cb046356ac6084311402752abfd87.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "G#m7-5",
@@ -673,7 +913,15 @@
           ],
           "minFret": 3,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/77d3514065ce0df01f6bf1e9f699a69c.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/77d3514065ce0df01f6bf1e9f699a69c.png",
+          "fingers": [
+            "thumb",
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
         }
       ]
     },
@@ -700,7 +948,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c4d5ec973fbf0113b7e60c71720544ee.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c4d5ec973fbf0113b7e60c71720544ee.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Aadd9",
@@ -722,7 +978,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/065d881dae752965470042ce4c02d3c2.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/065d881dae752965470042ce4c02d3c2.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            null,
+            null
+          ]
         },
         {
           "name": "Asus4",
@@ -743,7 +1007,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ff91ab5f4bfb25feee21312272139053.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ff91ab5f4bfb25feee21312272139053.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "A7/D",
@@ -764,7 +1036,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4003af4304d2abb8605091e60fa5006b.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4003af4304d2abb8605091e60fa5006b.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "A/B",
@@ -784,7 +1064,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/24fa89e97917f68ec7a440af0dab42f8.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/24fa89e97917f68ec7a440af0dab42f8.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Am7",
@@ -805,7 +1093,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c0b9b3158d1adb344a6e13f881db5189.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c0b9b3158d1adb344a6e13f881db5189.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "Am7/G",
@@ -826,7 +1122,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d71eb93de93e609831936f5bd13cc888.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d71eb93de93e609831936f5bd13cc888.png",
+          "fingers": [
+            "ring",
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
         },
         {
           "name": "Am7/D",
@@ -847,7 +1151,15 @@
           ],
           "minFret": 1,
           "maxFret": 1,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4ee35ffb61c7517dd01189bd7c04a49d.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4ee35ffb61c7517dd01189bd7c04a49d.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "Am/D",
@@ -868,7 +1180,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7398863a20e7cea3ae87356e10ef5692.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7398863a20e7cea3ae87356e10ef5692.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "index",
+            null
+          ]
         },
         {
           "name": "Am7-5",
@@ -889,7 +1209,15 @@
           ],
           "minFret": 1,
           "maxFret": 1,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/813387a4566da15ff80b582a4871f66a.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/813387a4566da15ff80b582a4871f66a.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "A#dim",
@@ -910,7 +1238,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/5e2150a81335f69c6d85f7e13f13206f.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/5e2150a81335f69c6d85f7e13f13206f.png",
+          "fingers": [
+            null,
+            "index",
+            "middle",
+            null,
+            "ring",
+            null
+          ]
         },
         {
           "name": "A♭△7",
@@ -930,7 +1266,15 @@
           ],
           "minFret": 4,
           "maxFret": 5,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/107439679f958aa45a749d60d0169b25.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/107439679f958aa45a749d60d0169b25.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         }
       ]
     },
@@ -959,7 +1303,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d6fb5a4334810b445c94f22a7d6100ff.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d6fb5a4334810b445c94f22a7d6100ff.png",
+          "fingers": [
+            null,
+            "middle",
+            "ring",
+            "index",
+            null,
+            null
+          ]
         },
         {
           "name": "E7",
@@ -982,7 +1334,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b8e3c4861f2c1402f8fc1c80010975a4.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b8e3c4861f2c1402f8fc1c80010975a4.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            "index",
+            null,
+            null
+          ]
         },
         {
           "name": "E7/G#",
@@ -1003,7 +1363,15 @@
           ],
           "minFret": 4,
           "maxFret": 5,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4adcf2112e0cbe5c3cb9f18f6720f8ff.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4adcf2112e0cbe5c3cb9f18f6720f8ff.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Eadd9/G#",
@@ -1025,7 +1393,15 @@
           ],
           "minFret": 4,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b3dcd185fa11e114e10d13e63098cd8f.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b3dcd185fa11e114e10d13e63098cd8f.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "Em7",
@@ -1048,7 +1424,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/80b560c1dc076c87a7232519858d8b73.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/80b560c1dc076c87a7232519858d8b73.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "Em7",
@@ -1070,7 +1454,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/46dbef71d734d79253fd944811ff65f7-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/46dbef71d734d79253fd944811ff65f7-1.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "Em7/A",
@@ -1092,7 +1484,15 @@
           ],
           "minFret": 0,
           "maxFret": 0,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2282e27581b31f66c4e2822bef83c04f.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2282e27581b31f66c4e2822bef83c04f.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
         },
         {
           "name": "E♭△7",
@@ -1112,7 +1512,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef2477f7411ca6591301c846258166ea-1.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef2477f7411ca6591301c846258166ea-1.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            null,
+            "middle",
+            "ring"
+          ]
         }
       ]
     },
@@ -1139,7 +1547,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1c3a1b61f6391ed1bd7e26dcb795bfcb.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1c3a1b61f6391ed1bd7e26dcb795bfcb.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "ring",
+            "middle"
+          ]
         },
         {
           "name": "D",
@@ -1159,7 +1575,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/816ef3b1834d4a1d42b300bf6dfae971.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/816ef3b1834d4a1d42b300bf6dfae971.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "middle",
+            null
+          ]
         },
         {
           "name": "Dsus4",
@@ -1179,7 +1603,15 @@
           ],
           "minFret": 3,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/859cb9832c4507f2a939b8378207be2c.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/859cb9832c4507f2a939b8378207be2c.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
         },
         {
           "name": "D△7(9)",
@@ -1200,7 +1632,15 @@
           ],
           "minFret": 2,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1ee026b8a3d52862df000fe325fe8f5e.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1ee026b8a3d52862df000fe325fe8f5e.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "middle",
+            null
+          ]
         },
         {
           "name": "D7(9)",
@@ -1221,7 +1661,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0381e3882ef065b8934e143df475e729.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0381e3882ef065b8934e143df475e729.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "index",
+            null
+          ]
         },
         {
           "name": "D/F#",
@@ -1242,7 +1690,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4be5a9bd04fa968da142a6ac27d40f23.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4be5a9bd04fa968da142a6ac27d40f23.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Dm7",
@@ -1263,7 +1719,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bed19edc6968fe230fbf080bbcc4e2bd.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bed19edc6968fe230fbf080bbcc4e2bd.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "ring",
+            "index",
+            "middle"
+          ]
         },
         {
           "name": "Dm/F",
@@ -1284,7 +1748,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/99922b2a8ea46f050ddce1a3102da463.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/99922b2a8ea46f050ddce1a3102da463.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "D#dim",
@@ -1304,7 +1776,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3ad52691798ecab31807b69d8b7f4372.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3ad52691798ecab31807b69d8b7f4372.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            null,
+            "ring"
+          ]
         }
       ]
     },
@@ -1331,7 +1811,15 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/6b45cbb749adb7509eb5d42a3a910d34.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/6b45cbb749adb7509eb5d42a3a910d34.png",
+          "fingers": [
+            null,
+            "middle",
+            "index",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "Bm7",
@@ -1351,7 +1839,15 @@
           ],
           "minFret": 2,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f5bd9e4b53b9947a53ddf27067ec9de4.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f5bd9e4b53b9947a53ddf27067ec9de4.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         },
         {
           "name": "Bdim",
@@ -1371,7 +1867,15 @@
           ],
           "minFret": 2,
           "maxFret": 4,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d75de35929f7996c09fdb80205cdf1fe.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d75de35929f7996c09fdb80205cdf1fe.png",
+          "fingers": [
+            null,
+            "index",
+            "middle",
+            "ring",
+            null,
+            null
+          ]
         },
         {
           "name": "B♭△7",
@@ -1391,7 +1895,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/036149163119e47751fcdf4df1668c55.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/036149163119e47751fcdf4df1668c55.png",
+          "fingers": [
+            null,
+            "index",
+            "ring",
+            "middle",
+            null,
+            null
+          ]
         },
         {
           "name": "B♭/D",
@@ -1412,7 +1924,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0e43c3c3833c9bb710e09022441c9221.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0e43c3c3833c9bb710e09022441c9221.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "ring",
+            "index"
+          ]
         },
         {
           "name": "B♭add9/D",
@@ -1433,7 +1953,15 @@
           ],
           "minFret": 1,
           "maxFret": 3,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4218b30a141e300b9124687849611a3d.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4218b30a141e300b9124687849611a3d.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "ring",
+            "index",
+            "middle"
+          ]
         },
         {
           "name": "B♭m7",
@@ -1453,9 +1981,18 @@
           ],
           "minFret": 1,
           "maxFret": 2,
-          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f4912c65caadcaaea8e2a82e8dfecd44.png"
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f4912c65caadcaaea8e2a82e8dfecd44.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
         }
       ]
     }
-  ]
+  ],
+  "fingersNotation": "fingers は frets と同じ 6弦→1弦 の順。index=人差し指 / middle=中指 / ring=薬指 / thumb=親指、null は押さえない弦。"
 }
