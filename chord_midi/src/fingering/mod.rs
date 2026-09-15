@@ -493,4 +493,22 @@ mod tests {
         };
         assert!(find(&c).is_none());
     }
+
+    #[test]
+    fn find_handles_power_chords() {
+        // pow(C) は C と G の2音になる
+        let r = refs("pow(C)\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].pitch_classes, mask(&[0, 7]));
+        assert!(find(&r[0]).is_some());
+    }
+
+    #[test]
+    fn measure_refs_ignores_rhythm() {
+        // リズムでカードが増えないこと
+        let ms = measures("pat(\"o.o.oxox\", C)\n");
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].chords.len(), 1);
+        assert_eq!(ms[0].chords[0].label, "C");
+    }
 }

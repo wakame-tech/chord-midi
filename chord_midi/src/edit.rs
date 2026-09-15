@@ -201,4 +201,16 @@ mod tests {
     fn test_set_scale_absent_after_key() {
         assert_eq!(set_scale("key: C\nI |", Scale::Lydian), "key: C\nscale: lydian\nI |");
     }
+
+    #[test]
+    fn test_shift_key_transposes_inside_pow() {
+        assert_eq!(shift_key("pow(C | E D)", 1), "pow(C# | F D#)");
+        assert_eq!(shift_key("pow(C# | F D#)", -1), "pow(C | E D)");
+    }
+
+    #[test]
+    fn test_shift_key_keeps_pattern_literal() {
+        // パターン文字列は移調で変わらない
+        assert_eq!(shift_key("pat(\"o.o.\", C)", 1), "pat(\"o.o.\", C#)");
+    }
 }
