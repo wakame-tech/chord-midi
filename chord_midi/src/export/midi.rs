@@ -1,7 +1,6 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::Ast;
-use crate::model::ast::Node;
+use crate::model::ast::{Ast, Beat, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -43,15 +42,31 @@ fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
         .collect())
 }
 
+/// ブラッシング（ミュートした空振り）のベロシティ
+const BRUSH_VELOCITY: Velocity = Velocity::new(40);
+
 #[derive(Debug, Clone)]
 struct Note {
     pub chord: Option<Vec<NoteNumber>>,
     pub duration: u32,
+    pub velocity: Velocity,
 }
 
 impl Note {
     fn new(chord: Option<Vec<NoteNumber>>, duration: u32) -> Self {
-        Note { chord, duration }
+        Note {
+            chord,
+            duration,
+            velocity: Velocity::default(),
+        }
+    }
+
+    fn brushed(chord: Option<Vec<NoteNumber>>, duration: u32) -> Self {
+        Note {
+            chord,
+            duration,
+            velocity: BRUSH_VELOCITY,
+        }
     }
 }
 
@@ -143,8 +158,9 @@ impl Score {
             }
             Node::Brush(node) => {
                 let chord = node.to_chord()?;
+                let notes = into_note_numbers(&chord)?;
                 self.pre = Some(chord);
-                self.sustain = dur;
+                self.notes.push(Note::brushed(Some(notes), dur));
             }
             Node::Repeat => {
                 self.sustain = dur;
@@ -192,7 +208,14 @@ impl Score {
                 }
                 Ok(())
             }
+            Ast::Apply(Func::Pat(pattern), items) => {
+                for item in items {
+                    self.interpret_with_pattern(*item, &pattern)?;
+                }
+                Ok(())
+            }
             Ast::Apply(_, items) => {
+                // pow は resolve() で消えているが、素の AST を渡された場合に備える
                 for item in items {
                     self.interpret(*item)?;
                 }
@@ -208,12 +231,67 @@ impl Score {
             }
         }
     }
+
+    /// `pat(...)` の中身を、パターンに従って読み替えながら解釈する
+    fn interpret_with_pattern(&mut self, ast: Ast, pattern: &Pattern) -> Result<()> {
+        match ast {
+            Ast::Measure(nodes, _) => self.interpret_patterned_measure(nodes, pattern),
+            // 内側の pat が優先される
+            Ast::Apply(Func::Pat(inner), items) => {
+                for item in items {
+                    self.interpret_with_pattern(*item, &inner)?;
+                }
+                Ok(())
+            }
+            Ast::Apply(_, items) => {
+                for item in items {
+                    self.interpret_with_pattern(*item, pattern)?;
+                }
+                Ok(())
+            }
+            other => self.interpret(other),
+        }
+    }
+
+    /// 1小節をパターンのスロット数に割り直す
+    fn interpret_patterned_measure(&mut self, nodes: Vec<Node>, pattern: &Pattern) -> Result<()> {
+        let slots = pattern.0.len() as u32;
+        // パターン長は 1/2/4/8/16 に限られるので必ず割り切れる
+        let slot_dur = MEASURE_LENGTH / slots;
+        // 元の小節で1ノードが占める尺
+        let node_dur = Self::measure_unit_size(nodes.len())?;
+        for (i, beat) in pattern.0.iter().enumerate() {
+            let at = i as u32 * slot_dur;
+            let index = ((at / node_dur) as usize).min(nodes.len() - 1);
+            let node = nodes[index].clone();
+            let node = match (beat, node) {
+                // 元が休符のところは打弦もブラッシングもしない
+                (_, Node::Rest) => Node::Rest,
+                (Beat::Rest, _) => Node::Rest,
+                (Beat::Hit, Node::Brush(c)) => Node::Chord(c),
+                (Beat::Hit, other) => other,
+                (Beat::Brush, Node::Chord(c)) => Node::Brush(c),
+                (Beat::Brush, Node::Arpeggio(c)) => Node::Brush(c),
+                (Beat::Brush, Node::Transform(_, c)) => Node::Brush(c),
+                (Beat::Brush, other) => other,
+            };
+            self.interpret_node(node, slot_dur)?;
+        }
+        Ok(())
+    }
 }
 
-fn write_notes(track: &mut Track, ch: Channel, notes: &[NoteNumber], dur: u32, skip: &mut u32) {
+fn write_notes(
+    track: &mut Track,
+    ch: Channel,
+    notes: &[NoteNumber],
+    dur: u32,
+    velocity: Velocity,
+    skip: &mut u32,
+) {
     for (i, n) in notes.iter().enumerate() {
         track
-            .push_note_on(if i == 0 { *skip } else { 0 }, ch, *n, Velocity::default())
+            .push_note_on(if i == 0 { *skip } else { 0 }, ch, *n, velocity)
             .unwrap();
         *skip = 0;
     }
@@ -249,7 +327,7 @@ fn dump_notes(f: &mut impl Write, notes: &[Note], bpm: u8) -> Result<()> {
             skip = dur;
             continue;
         };
-        write_notes(&mut track, ch, chord, dur, &mut skip);
+        write_notes(&mut track, ch, chord, dur, note.velocity, &mut skip);
     }
 
     mfile.push_track(track)?;
@@ -351,5 +429,75 @@ mod tests {
         score.interpret(ast.resolve()).unwrap();
         let chord_notes: Vec<_> = score.notes.iter().filter(|n| n.chord.is_some()).collect();
         assert_eq!(chord_notes.len(), 2);
+    }
+
+    fn resolved_notes_of(code: &str) -> Vec<Note> {
+        let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
+        let mut score = Score::new();
+        score.interpret(ast.resolve()).unwrap();
+        score.notes
+    }
+
+    #[test]
+    fn test_pat_splits_measure_into_slots() {
+        // "o.o." は4分割。打弦は2回で、それぞれ1スロットぶんの尺になる。
+        // 休符は連続すると1つの Note にまとまるので、鳴っている音だけを見る
+        let notes = resolved_notes_of("pat(\"o.o.\", C)");
+        let sounding: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(sounding.len(), 2);
+        assert!(sounding.iter().all(|n| n.duration == 4), "{:?}", sounding);
+    }
+
+    #[test]
+    fn test_pat_hit_count_matches_pattern() {
+        let notes = resolved_notes_of("pat(\"oooo\", C)");
+        assert_eq!(notes.iter().filter(|n| n.chord.is_some()).count(), 4);
+        let notes = resolved_notes_of("pat(\"o...\", C)");
+        assert_eq!(notes.iter().filter(|n| n.chord.is_some()).count(), 1);
+    }
+
+    #[test]
+    fn test_pat_total_duration_matches_plain_measure() {
+        // 全スロットで打弦するパターンなら、総尺はパターン無しと一致する
+        let plain = resolved_notes_of("C | F |")
+            .iter()
+            .map(|n| n.duration)
+            .sum::<u32>();
+        let patterned = resolved_notes_of("pat(\"oooo\", C | F)")
+            .iter()
+            .map(|n| n.duration)
+            .sum::<u32>();
+        assert_eq!(plain, patterned);
+    }
+
+    #[test]
+    fn test_pat_brush_is_quieter() {
+        let notes = resolved_notes_of("pat(\"ox\", C)");
+        let sounding: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(sounding.len(), 2);
+        assert!(sounding[0].velocity > sounding[1].velocity);
+    }
+
+    #[test]
+    fn test_pat_follows_the_chord_at_each_slot() {
+        // E D の小節に4スロット。前半が E、後半が D
+        let notes = resolved_notes_of("pat(\"oooo\", E D)");
+        assert_eq!(notes.len(), 4);
+        let first = notes[0].chord.clone().unwrap();
+        let second = notes[1].chord.clone().unwrap();
+        let third = notes[2].chord.clone().unwrap();
+        let fourth = notes[3].chord.clone().unwrap();
+        assert_eq!(first, second, "前半2スロットは同じコード");
+        assert_eq!(third, fourth, "後半2スロットは同じコード");
+        assert_ne!(first, third, "前半と後半は違うコード");
+    }
+
+    #[test]
+    fn test_pat_keeps_rest_as_rest() {
+        // 元が休符の位置は o でも鳴らさない。鳴るのは後半2スロットだけ
+        let notes = resolved_notes_of("pat(\"oooo\", _ C)");
+        let sounding: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
+        assert_eq!(sounding.len(), 2);
+        assert!(sounding.iter().all(|n| n.duration == 4));
     }
 }
