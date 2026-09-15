@@ -1,8 +1,8 @@
 //! 押さえ方からコード名を引く。[`super::find`] の逆。
 
 use super::{
-    chord_ref, extra_cost, missing_cost, relative_semitones, ChordRef, Fingering, OPEN_STRINGS,
-    OPEN_STRING_PITCHES,
+    chord_ref, extra_cost, find, missing_cost, relative_semitones, ChordRef, Fingering, ShapeKind,
+    FINGERINGS, OPEN_STRINGS, OPEN_STRING_PITCHES,
 };
 use crate::model::{ast::ChordNode, key::Key, modifier::Modifier, pitch::Pitch};
 use std::collections::BTreeSet;
@@ -141,6 +141,29 @@ fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
     Some(extra + missing + root_silent + bass_mismatch)
 }
 
+/// 記法を決める。`@N` 無しで元の形に戻るならそのまま、戻らなければ `@N` を
+/// 足してもう一度試す。それでも戻らなければ `@N` 無しの名前を返し、
+/// 「再現できない」と伝える。返り値は (記法, 元の形を再現するか)
+fn notation_for(
+    node: &ChordNode,
+    r: &ChordRef,
+    played: &Played,
+    frets: &[Option<u8>; 6],
+) -> (String, bool) {
+    if find(r).map(|f| f.frets) == Some(*frets) {
+        return (node.to_string(), true);
+    }
+    let mut with_string = node.clone();
+    // 記法は 1 = 1弦、Played.bass_string は 0 = 6弦
+    with_string.root_string = Some(6 - played.bass_string);
+    if let Ok(r2) = chord_ref(&with_string) {
+        if find(&r2).map(|f| f.frets) == Some(*frets) {
+            return (with_string.to_string(), true);
+        }
+    }
+    (node.to_string(), false)
+}
+
 /// 押さえ方からコード名候補を引く。frets は 6弦→1弦、None = ミュート
 pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     let Some(played) = played(&frets) else {
@@ -173,6 +196,10 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     }
     scored.sort_by_key(|(s, qi, _, _)| (*s, *qi));
 
+    // 同じ形が押さえ方データにあるか。名前はここから取らない（原典表記で
+    // rechord のパーサに通らないため）。使うのは「載っているか」と kind だけ
+    let data = FINGERINGS.iter().find(|f| f.frets == frets);
+
     let mut out: Vec<Candidate> = Vec::new();
     for (s, _, node, r) in scored {
         if out.len() >= MAX_CANDIDATES {
@@ -181,11 +208,16 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
         if out.iter().any(|c| c.name == r.label) {
             continue;
         }
+        let (notation, reproduces) = notation_for(&node, &r, &played, &frets);
+        let source = match data {
+            Some(f) if reproduces && f.kind == ShapeKind::Normal => Source::Data(f),
+            _ => Source::Theory,
+        };
         out.push(Candidate {
             name: r.label.clone(),
-            notation: node.to_string(),
-            source: Source::Theory,
-            unreachable: false,
+            notation,
+            source,
+            unreachable: !reproduces,
             score: s,
         });
     }
@@ -195,6 +227,7 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fingering::chord_refs;
 
     /// "x3201x" のような文字列を frets に直す。x = ミュート、それ以外は1桁の16進
     fn frets(s: &str) -> [Option<u8>; 6] {
@@ -271,5 +304,57 @@ mod tests {
         let before = names.len();
         names.dedup();
         assert_eq!(names.len(), before);
+    }
+
+    #[test]
+    fn identify_marks_a_shape_that_exists_in_the_data() {
+        let c = identify(frets("x3201x"));
+        assert_eq!(c[0].name, "C");
+        assert_eq!(c[0].notation, "C");
+        assert!(matches!(c[0].source, Source::Data(_)));
+        assert!(!c[0].unreachable);
+    }
+
+    #[test]
+    fn identify_marks_a_shape_that_is_not_in_the_data() {
+        // x3555x は C だが、この形は押さえ方データに無い
+        let c = identify(frets("x3555x"));
+        assert_eq!(c[0].name, "C");
+        assert_eq!(c[0].source, Source::Theory);
+        assert!(c[0].unreachable);
+    }
+
+    /// 記法を読み直して押さえ方検索用の情報にする。`node_parser` は private
+    /// モジュールにあり Span の組み立ても面倒なので、公開 API の
+    /// RechordImporter を通す。これなら `pow(A@6)` のような関数も読める
+    fn reparse(notation: &str) -> Vec<ChordRef> {
+        use crate::import::{Importer, RechordImporter};
+        let ast = RechordImporter
+            .import(&format!("{} |\n", notation))
+            .unwrap_or_else(|e| panic!("{} がパースできない: {}", notation, e))
+            .resolve();
+        chord_refs(&ast).unwrap()
+    }
+
+    /// データの全要素について、逆引きが1件は返し、Data と印が付いた候補の記法を
+    /// 読み直して find() に流すと元の形が戻る
+    #[test]
+    fn every_shape_in_the_data_round_trips() {
+        // 可動形は Task 6 まで扱わないので、ここでは原典の押さえ方だけ見る
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Normal) {
+            let got = identify(f.frets);
+            assert!(!got.is_empty(), "{} ({:?}) の候補が空", f.name, f.frets);
+            for c in got.iter().filter(|c| matches!(c.source, Source::Data(_))) {
+                let refs = reparse(&c.notation);
+                assert_eq!(refs.len(), 1, "{} が1コードにならない", c.notation);
+                let back =
+                    find(&refs[0]).unwrap_or_else(|| panic!("{} の押さえ方が引けない", c.notation));
+                assert_eq!(
+                    back.frets, f.frets,
+                    "{} -> {} で形が変わった",
+                    f.name, c.notation
+                );
+            }
+        }
     }
 }
