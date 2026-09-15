@@ -69,7 +69,7 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
         }
         Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
         // 定義の本体にもコードが入るので潜る。参照は名前だけなので触らない
-        Expr::Define(_, body) => shift_ast(body, delta, seen),
+        Expr::Define(_, body, _) => shift_ast(body, delta, seen),
         // リピートの中身にもコードが入るので潜る。回数は移調で変わらない
         Expr::Repeat(inner, _, _) => shift_ast(inner, delta, seen),
         // 展開の跡。移調は編集中の AST に掛かるので普通は現れないが、
@@ -348,7 +348,7 @@ mod tests {
         fn pitches(e: &Expr, out: &mut Vec<Pitch>) {
             match e {
                 Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
-                Expr::Define(_, body) => pitches(body, out),
+                Expr::Define(_, body, _) => pitches(body, out),
                 Expr::Repeat(inner, _, _) => pitches(inner, out),
                 Expr::Section(_, inner) => pitches(inner, out),
                 Expr::Apply(_, inner, _) => pitches(inner, out),

@@ -237,7 +237,7 @@ impl Score {
                 "Expr::Pattern は pat() の引数以外の場所に現れてはいけない"
             )),
             // 定義と参照は expand が消す。ここに来るのは expand を通していないとき
-            Expr::Define(name, _) => Err(anyhow::anyhow!(
+            Expr::Define(name, _, _) => Err(anyhow::anyhow!(
                 "定義 ${} が展開されていない。expand を通すこと",
                 name
             )),

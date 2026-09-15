@@ -52,8 +52,8 @@ impl Expr {
                 Expr::Apply(func, Box::new(inner.into_degree(tonic, scale)), br)
             }
             // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
-            Expr::Define(name, body) => {
-                Expr::Define(name, Box::new(body.into_degree(tonic, scale)))
+            Expr::Define(name, body, br) => {
+                Expr::Define(name, Box::new(body.into_degree(tonic, scale)), br)
             }
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
             Expr::Repeat(inner, n, br) => {
@@ -99,8 +99,8 @@ impl Expr {
                 Expr::Apply(func, Box::new(inner.into_pitch(tonic, scale)), br)
             }
             // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
-            Expr::Define(name, body) => {
-                Expr::Define(name, Box::new(body.into_pitch(tonic, scale)))
+            Expr::Define(name, body, br) => {
+                Expr::Define(name, Box::new(body.into_pitch(tonic, scale)), br)
             }
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
             Expr::Repeat(inner, n, br) => {
@@ -165,7 +165,7 @@ fn strip_comments(expr: Expr) -> Expr {
         | Expr::Scaled(_, _)
         | Expr::Measure(_, _)
         | Expr::Pattern(_)
-        | Expr::Define(_, _)
+        | Expr::Define(_, _, _)
         | Expr::Ref(_, _)
         | Expr::Repeat(_, _, _)) => e,
     }
@@ -221,7 +221,7 @@ fn desugar_shapes(ast: Expr) -> Vec<Expr> {
         | Expr::Scaled(_, _)
         | Expr::Measure(_, _)
         | Expr::Pattern(_)
-        | Expr::Define(_, _)
+        | Expr::Define(_, _, _)
         | Expr::Ref(_, _)
         | Expr::Repeat(_, _, _)) => vec![e],
     }
@@ -254,7 +254,7 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
         | Expr::Keyed(_, _)
         | Expr::Scaled(_, _)
         | Expr::Pattern(_)
-        | Expr::Define(_, _)
+        | Expr::Define(_, _, _)
         | Expr::Ref(_, _)
         | Expr::Repeat(_, _, _)) => e,
     }

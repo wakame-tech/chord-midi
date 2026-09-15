@@ -19,7 +19,7 @@ fn walk(expr: &Expr, seen_measure: &mut bool, out: &mut Vec<String>) {
         Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => walk(inner, seen_measure, out),
         Expr::Measure(_, _) => *seen_measure = true,
         Expr::Apply(_, _, _) | Expr::Repeat(_, _, _) | Expr::Ref(_, _) => *seen_measure = true,
-        Expr::Define(name, _) => {
+        Expr::Define(name, _, _) => {
             if *seen_measure {
                 out.push(format!(
                     "${} の定義が小節より後ろにある。素材は曲より前にまとめると読みやすい",

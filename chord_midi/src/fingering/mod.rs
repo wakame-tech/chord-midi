@@ -210,7 +210,7 @@ fn collect_ast(
         // ここに直接来ることはない
         Expr::Pattern(_) => {}
         // 定義と参照は expand が消す。ここに来るのは expand を通していないとき
-        Expr::Define(name, _) => {
+        Expr::Define(name, _, _) => {
             return Err(anyhow::anyhow!(
                 "定義 ${} が展開されていない。expand を通すこと",
                 name

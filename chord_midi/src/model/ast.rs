@@ -25,8 +25,10 @@ pub enum Expr {
     Seq(Vec<Expr>),
     /// `"o.ox"` のリズムパターン。`pat` の第1引数になる値
     Pattern(Pattern),
-    /// `$name = ...`。本体は1行。`expand` が環境に畳んで消す
-    Define(String, Box<Expr>),
+    /// `$name = ...`。本体は1行。`expand` が環境に畳んで消す。
+    /// 3つ目は「この定義の後ろで入力が改行されている」。行末コメント
+    /// (`$a = C |  # riff`) が続くときだけ偽になる
+    Define(String, Box<Expr>, bool),
     /// `$name`。`expand` が定義の本体に置き換えて消す。
     /// 2つ目は「この参照の後ろで入力が改行されている」
     Ref(String, bool),

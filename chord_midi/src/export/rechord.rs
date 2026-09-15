@@ -124,10 +124,15 @@ impl Display for Expr {
             Expr::Apply(func, inner, br) => write_apply(f, func, inner, None, *br),
             Expr::Measure(nodes, br) => write_measure(f, nodes, None, *br),
             Expr::Pattern(p) => write!(f, "\"{}\"", p),
-            Expr::Define(name, body) => {
+            Expr::Define(name, body, br) => {
                 // 定義は1行。本体が小節で終わると末尾に `" | "` が付くので
-                // 行末の空白だけ落として `$a = C | Am |` の形に揃える
-                writeln!(f, "${} = {}", name, body.to_string().trim_end())
+                // 行末の空白だけ落として `$a = C | Am |` の形に揃える。
+                // 行末コメントが続くときだけ改行せず、空白1つで繋ぐ
+                write_tail(
+                    f,
+                    format_args!("${} = {}", name, body.to_string().trim_end()),
+                    *br,
+                )
             }
             // 区切りも行末も付けない素の形。`pat($a, C)` の引数にも使われる。
             // 小節の位置に置かれたときの `|` と改行は `Seq` 側が出す
@@ -415,6 +420,29 @@ mod tests {
     }
 
     #[test]
+    fn test_define_trailing_comment_roundtrip() {
+        // 行末コメントは行末のまま。`Define` の `br` が「行がここで終わるか」を
+        // 持つので、小節行 (`C | Am | # memo`) と同じ扱いになる
+        assert_eq!(
+            roundtrip("$a = C |  # riff\n$a"),
+            "$a = C | # riff\n$a |"
+        );
+        assert_eq!(
+            roundtrip("$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)"),
+            "$eight = \"o.o.o.o.\" # 8分の刻み\npat($eight, C)"
+        );
+    }
+
+    #[test]
+    fn test_comment_after_define_stays_on_its_own_line() {
+        // 独立した行のコメントは行を移らない。行末コメントと取り違えない
+        assert_eq!(
+            roundtrip("$a = C |\n# riff\n$a"),
+            "$a = C |\n# riff\n$a |"
+        );
+    }
+
+    #[test]
     fn test_japanese_define_roundtrip() {
         assert_eq!(
             roundtrip("$Aメロ = C | Am |\n$Aメロ x2"),
@@ -504,6 +532,11 @@ mod tests {
             "(C | Am) x3\nD |",
             "(C) x2\nD |",
             "$a = C |\n$a x2\n$a\nD |",
+            // 定義の行末コメントと、独立した行のコメントが混ざらないこと
+            "$a = C |  # riff\n$a",
+            "$a = C |\n# riff\n$a",
+            "$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)",
+            "$a = C |  # riff\n$b = D |  # other\n$a | $b |",
         ] {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);

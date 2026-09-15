@@ -51,7 +51,7 @@ fn measures_in(expr: &Expr) -> usize {
         Expr::Section(_, inner) => measures_in(inner),
         Expr::Comment(_) | Expr::Pattern(_) => 0,
         // 展開後には残らない
-        Expr::Define(_, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => 0,
+        Expr::Define(_, _, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => 0,
     }
 }
 
@@ -72,7 +72,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             for item in items {
                 match item {
                     // 定義は環境に入れて、式としては 0 小節を返す
-                    Expr::Define(name, body) => define(name, *body, env)?,
+                    Expr::Define(name, body, _) => define(name, *body, env)?,
                     other => push_flat(&mut out, expand_in(other, env)?),
                 }
             }
@@ -134,7 +134,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
         Expr::Keyed(p, inner) => Ok(Expr::Keyed(p, Box::new(expand_in(*inner, env)?))),
         Expr::Scaled(s, inner) => Ok(Expr::Scaled(s, Box::new(expand_in(*inner, env)?))),
         // 定義は `Seq` の要素としてしか書けない。`(...)` や `xN` の中には置けない
-        Expr::Define(name, _) => Err(anyhow!(
+        Expr::Define(name, _, _) => Err(anyhow!(
             "${} の定義が式の位置にある。定義は行の先頭に書くこと",
             name
         )),
@@ -208,7 +208,7 @@ fn describe(expr: &Expr) -> &'static str {
         Expr::Apply(_, _, _) => "関数の適用",
         Expr::Seq(_) => "小節列",
         Expr::Pattern(_) => "リズムパターン",
-        Expr::Define(_, _) => "定義",
+        Expr::Define(_, _, _) => "定義",
         Expr::Ref(_, _) => "参照",
         Expr::Repeat(_, _, _) => "リピート",
         Expr::Section(_, _) => "展開済みの参照",
@@ -234,7 +234,7 @@ mod tests {
     /// 展開後に Define / Ref / Repeat が残っていないこと
     fn is_clean(e: &Expr) -> bool {
         match e {
-            Expr::Define(_, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => false,
+            Expr::Define(_, _, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => false,
             Expr::Seq(items) => items.iter().all(is_clean),
             Expr::Apply(func, inner, _) => {
                 let arg_ok = match func {

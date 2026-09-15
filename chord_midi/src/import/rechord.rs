@@ -85,8 +85,12 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
         // 0小節を返す単位元なので、後ろを包まずそのまま平らに並べる。
         // alt に混ぜずにここで先に試すことで、`$a = ...` の `$a` だけを
         // ref_parser に食われないようにしている
-        if let Ok((r, def)) = define_parser(rest) {
+        if let Ok((r, (def, comment))) = define_parser(rest) {
             items.push(def);
+            // 行末コメントは定義の後ろに平らに並べる
+            if let Some(comment) = comment {
+                items.push(comment);
+            }
             rest = r;
             continue;
         }
@@ -221,27 +225,40 @@ fn ref_parser(s: Span) -> IResult<Span, Expr> {
     )(s)
 }
 
-/// `$name = <本体>`。本体は1行。
+/// `$name = <本体>`。本体は1行。行末コメントを1つ伴うことがある。
 ///
 /// 本体を読む前に `not_line_ending` でその行の範囲を切り出し、切り出した
 /// Span の上で本体のパーサを走らせる。`measure_parser` は `measure_sep` で
-/// 改行を消費してしまうので、行の中で止まるよう入力の側を先に区切っておく
+/// 改行を消費してしまうので、行の中で止まるよう入力の側を先に区切っておく。
+///
+/// 行末コメントは `Define` の中ではなく、その後ろに並ぶ別の式として返す。
+/// 小節行 (`C | Am |  # memo`) と同じ扱いにするため。本体に混ぜると
+/// `$eight = "o.o.o.o."  # 8分` の本体が `Seq([Pattern, Comment])` になり、
+/// `pat($eight, ...)` の第1引数として使えなくなる
 #[tracable_parser]
-fn define_parser(s: Span) -> IResult<Span, Expr> {
+fn define_parser(s: Span) -> IResult<Span, (Expr, Option<Expr>)> {
     let (s, (name, _, _, _)) = tuple((name_parser, space0, tag("="), space0))(s)?;
     let (s, line) = not_line_ending(s)?;
     let (leftover, body) = define_body_parser(line)?;
-    // 行の中に読めない残りがあるなら、その定義ごと失敗させる。
-    // 黙って捨てると `$a = C ???` のような行が通ってしまう
-    if !leftover.fragment().trim().is_empty() {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            leftover,
-            nom::error::ErrorKind::Eof,
-        )));
-    }
+    let leftover = leftover.fragment().trim();
+    let comment = match leftover.strip_prefix('#') {
+        // 行末コメント。`comment_parser` と同じく前後の空白は落とす
+        Some(text) => Some(Expr::Comment(text.trim().to_string())),
+        None if leftover.is_empty() => None,
+        // 行の中に読めない残りがあるなら、その定義ごと失敗させる。
+        // 黙って捨てると `$a = C ???` のような行が通ってしまう
+        None => {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                s,
+                nom::error::ErrorKind::Eof,
+            )))
+        }
+    };
     let (s, _) = alt((line_ending, eof))(s)?;
     let (s, _) = space_or_line_ending_many0(s)?;
-    Ok((s, Expr::Define(name, Box::new(body))))
+    // 行末コメントが続くなら、行はこの定義では終わっていない
+    let br = comment.is_none();
+    Ok((s, (Expr::Define(name, Box::new(body), br), comment)))
 }
 
 /// 定義の本体。入力は既に1行ぶんに切り出された Span なので、
@@ -656,7 +673,7 @@ mod tests {
             .unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
         // 定義は 0 小節を返す単位元。スコープ包みではないので平らに並ぶ
-        let Expr::Define(name, body) = &items[0] else {
+        let Expr::Define(name, body, _) = &items[0] else {
             panic!("1つ目は Define: {:?}", items[0])
         };
         assert_eq!(name, "riff");
@@ -675,7 +692,7 @@ mod tests {
         let ast = RechordImporter.import("$a = C\n$b = D\nC |\n").unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
         // 定義2つと小節。ネストしない
-        let defines = items.iter().filter(|e| matches!(e, Expr::Define(_, _))).count();
+        let defines = items.iter().filter(|e| matches!(e, Expr::Define(_, _, _))).count();
         assert_eq!(defines, 2, "定義が平らに並ばない: {:?}", items);
         assert!(
             items.iter().all(|e| !matches!(e, Expr::Seq(_))),
@@ -704,7 +721,7 @@ mod tests {
                 Expr::Ref(n, _) => n == want,
                 Expr::Seq(items) => items.iter().any(|i| has_ref(i, want)),
                 Expr::Apply(_, inner, _) => has_ref(inner, want),
-                Expr::Define(_, body) => has_ref(body, want),
+                Expr::Define(_, body, _) => has_ref(body, want),
                 Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => has_ref(inner, want),
                 _ => false,
             }
@@ -720,14 +737,14 @@ mod tests {
             .import("$eight = \"o.o.o.o.\"\npat($eight, C)\n")
             .unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(name, body) = &items[0] else { panic!("not a define") };
+        let Expr::Define(name, body, _) = &items[0] else { panic!("not a define") };
         assert_eq!(name, "eight");
         assert!(matches!(body.as_ref(), Expr::Pattern(_)));
         fn find_pat_arg(e: &Expr) -> Option<&Expr> {
             match e {
                 Expr::Apply(Func::Pat(arg), _, _) => Some(arg.as_ref()),
                 Expr::Seq(items) => items.iter().find_map(find_pat_arg),
-                Expr::Define(_, body) => find_pat_arg(body),
+                Expr::Define(_, body, _) => find_pat_arg(body),
                 _ => None,
             }
         }
@@ -741,7 +758,7 @@ mod tests {
         use crate::model::ast::Expr;
         let ast = RechordImporter.import("$Aメロ = C | Am |\n$Aメロ\n").unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(name, _) = &items[0] else { panic!("not a define") };
+        let Expr::Define(name, _, _) = &items[0] else { panic!("not a define") };
         assert_eq!(name, "Aメロ");
     }
 
@@ -754,7 +771,7 @@ mod tests {
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
         // 定義は平らに並ぶので、後ろの Am / F はトップに2小節として残る
         assert_eq!(items.len(), 3, "定義と、その後ろの2小節: {:?}", items);
-        let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
+        let Expr::Define(_, body, _) = &items[0] else { panic!("not a define") };
         fn count_measures(e: &Expr) -> usize {
             match e {
                 Expr::Measure(_, _) => 1,
@@ -765,6 +782,68 @@ mod tests {
         }
         // 本体は C と E の2小節だけ。Am / F を飲み込んでいない
         assert_eq!(count_measures(body), 2, "本体が次の行まで伸びている: {:?}", body);
+    }
+
+    #[test]
+    fn test_define_takes_a_trailing_comment() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        // 行末コメントが付いても定義は定義のまま。小節行 (`C | Am | # memo`)
+        // と同じく、コメントは後ろに別の式として並ぶ
+        let ast = RechordImporter.import("$a = C |  # riff\n$a\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        assert!(
+            matches!(&items[0], Expr::Define(..)),
+            "1つ目は Define: {:?}",
+            items[0]
+        );
+        assert!(
+            matches!(&items[1], Expr::Comment(c) if c == "riff"),
+            "2つ目は行末コメント: {:?}",
+            items[1]
+        );
+        assert!(
+            matches!(&items[2], Expr::Ref(n, _) if n == "a"),
+            "3つ目は参照: {:?}",
+            items[2]
+        );
+    }
+
+    #[test]
+    fn test_define_body_excludes_the_trailing_comment() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Func};
+        // 行末コメントは本体の一部にしない。ここで `Seq([Pattern, Comment])`
+        // になると `pat($eight, ...)` の第1引数がパターンでなくなる
+        let ast = RechordImporter
+            .import("$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)\n")
+            .unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Define(name, body, _) = &items[0] else {
+            panic!("1つ目は Define: {:?}", items[0])
+        };
+        assert_eq!(name, "eight");
+        assert!(
+            matches!(body.as_ref(), Expr::Pattern(_)),
+            "本体はパターンそのもの: {:?}",
+            body
+        );
+        // 実際に pat の引数として使えること
+        fn find_pat_arg(e: &Expr) -> Option<&Expr> {
+            match e {
+                Expr::Apply(Func::Pat(arg), _, _) => Some(arg.as_ref()),
+                Expr::Seq(items) => items.iter().find_map(find_pat_arg),
+                _ => None,
+            }
+        }
+        assert!(matches!(find_pat_arg(&ast), Some(Expr::Ref(n, _)) if n == "eight"));
+    }
+
+    #[test]
+    fn test_define_still_rejects_unreadable_leftover() {
+        use crate::import::{Importer, RechordImporter};
+        // コメント以外の読み残しは今まで通り通さない
+        assert!(RechordImporter.import("$a = C ???\n$a\n").is_err());
     }
 
     #[test]
@@ -855,7 +934,7 @@ mod tests {
         // 定義の本体にもリピートが書ける
         let ast = RechordImporter.import("$a = C x2 | D |\n$a\n").unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
+        let Expr::Define(_, body, _) = &items[0] else { panic!("not a define") };
         fn has_repeat(e: &Expr) -> bool {
             match e {
                 Expr::Repeat(_, _, _) => true,
