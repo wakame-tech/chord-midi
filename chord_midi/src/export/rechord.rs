@@ -159,13 +159,16 @@ impl Display for Expr {
                     // 小節 / 関数 / 参照の繰り返しに括弧は要らない
                     Expr::Measure(nodes, _) => write_measure(f, nodes, Some(*n), *br),
                     Expr::Apply(func, body, _) => write_apply(f, func, body, Some(*n), *br),
-                    // 参照の繰り返しは `|` で閉じない。`$a` が何小節に
-                    // 展開されるかは定義次第で、区切りを足す位置が決まらない
-                    Expr::Ref(name, _) => write_tail(f, format_args!("${} x{}", name, n), *br),
+                    // 参照とグループの繰り返しも小節の位置にあるので `|` で
+                    // 閉じる。`$a` が `$a |` に、`C` が `C |` になるのと同じ。
+                    // 閉じないと `$a x2 | D |` の `|` が書き戻しで落ちる。
+                    // `Apply` だけ別なのは、パーサが `pow(C) x2 |` の `|` を
+                    // 受け付けない (apply_parser に measure_sep が無い) ため
+                    Expr::Ref(name, _) => write_tail(f, format_args!("${} x{} |", name, n), *br),
                     // 2小節以上のまとまりと、入れ子の繰り返しにだけ `( )` を
                     // 出す。括弧が無いと `xN` がどこに掛かるか読み戻せない
                     Expr::Seq(_) | Expr::Repeat(_, _, _) => {
-                        write_tail(f, format_args!("({}) x{}", inline(target), n), *br)
+                        write_tail(f, format_args!("({}) x{} |", inline(target), n), *br)
                     }
                     other => write_tail(f, format_args!("{} x{}", inline(other), n), *br),
                 }
@@ -417,15 +420,15 @@ mod tests {
     #[test]
     fn test_repeat_on_group_roundtrip() {
         // 2小節以上の繰り返しには括弧を付ける
-        assert_eq!(roundtrip("(C | Am) x3"), "(C | Am) x3");
+        assert_eq!(roundtrip("(C | Am) x3 |"), "(C | Am) x3 |");
     }
 
     #[test]
     fn test_repeat_on_ref_roundtrip() {
         // 定義の本体の小節は `|` で閉じる。`$a = C` と `$a = C |` は同じ
         // AST になるので、Display はどちらも `|` を付けた形に寄せる
-        assert_eq!(roundtrip("$a = C |\n$a x2"), "$a = C |\n$a x2");
-        assert_eq!(roundtrip("$a = C\n$a x2"), "$a = C |\n$a x2");
+        assert_eq!(roundtrip("$a = C |\n$a x2"), "$a = C |\n$a x2 |");
+        assert_eq!(roundtrip("$a = C\n$a x2"), "$a = C |\n$a x2 |");
     }
 
     #[test]
@@ -455,7 +458,7 @@ mod tests {
     fn test_japanese_define_roundtrip() {
         assert_eq!(
             roundtrip("$Aメロ = C | Am |\n$Aメロ x2"),
-            "$Aメロ = C | Am |\n$Aメロ x2"
+            "$Aメロ = C | Am |\n$Aメロ x2 |"
         );
     }
 
@@ -463,7 +466,7 @@ mod tests {
     fn test_define_under_key_roundtrip() {
         assert_eq!(
             roundtrip("key: C\n$a = I | IV |\n$a x2"),
-            "key: C\n$a = I | IV |\n$a x2"
+            "key: C\n$a = I | IV |\n$a x2 |"
         );
     }
 
@@ -487,7 +490,7 @@ mod tests {
         // 小節が `C |` で閉じるのと同じ扱い。`$A x2` だけが `|` を取らない
         assert_eq!(
             roundtrip("$A = C | Am |\n$B = F | G |\n$A x2\n$B\n$A"),
-            "$A = C | Am |\n$B = F | G |\n$A x2\n$B |\n$A |"
+            "$A = C | Am |\n$B = F | G |\n$A x2 |\n$B |\n$A |"
         );
     }
 
@@ -502,8 +505,16 @@ mod tests {
     }
 
     #[test]
+    fn test_repeat_keeps_bar_separator() {
+        // `xN` の後ろの `|` が書き戻しで落ちないこと。小節の位置にある
+        // リピートは `C x2 |` と同じく `|` で閉じる
+        assert_eq!(roundtrip("$a = C |\n$a x2 | D |"), "$a = C |\n$a x2 | D |");
+        assert_eq!(roundtrip("(C | Am) x2 | D |"), "(C | Am) x2 | D |");
+    }
+
+    #[test]
     fn test_repeat_keeps_line_break() {
-        assert_eq!(roundtrip("(C | Am) x3\nD |"), "(C | Am) x3\nD |");
+        assert_eq!(roundtrip("(C | Am) x3\nD |"), "(C | Am) x3 |\nD |");
     }
 
     #[test]
@@ -513,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_nested_repeat_roundtrip() {
-        assert_eq!(roundtrip("((C | Am) x2) x3"), "((C | Am) x2) x3");
+        assert_eq!(roundtrip("((C | Am) x2) x3"), "((C | Am) x2) x3 |");
     }
 
     /// 書き戻した結果をもう一度書き戻しても変わらないこと。
@@ -546,6 +557,10 @@ mod tests {
             "$a = C |\n# riff\n$a",
             "$eight = \"o.o.o.o.\"  # 8分の刻み\npat($eight, C)",
             "$a = C |  # riff\n$b = D |  # other\n$a | $b |",
+            // `xN` の後ろの `|`
+            "$a = C |\n$a x2 | D |",
+            "(C | Am) x2 | D |",
+            "((C | Am) x2) x3 | D |",
         ] {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);

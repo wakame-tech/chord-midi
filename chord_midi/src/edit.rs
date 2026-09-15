@@ -309,24 +309,27 @@ mod tests {
     #[test]
     fn test_shift_key_transposes_inside_repeat() {
         assert_eq!(shift_key("C x4 |", 1), "C# x4 |");
-        assert_eq!(shift_key("(C | Am) x2", 1), "(C# | A#m) x2");
+        assert_eq!(shift_key("(C | Am) x2 |", 1), "(C# | A#m) x2 |");
     }
 
     #[test]
     fn test_shift_key_round_trip_with_defines() {
-        let src = "key: C\n$a = I | IV |\n$a x2";
+        // 小節の位置のリピートは行末でも `|` で閉じるので、src も
+        // 正規化済みの形にしてある。これで往復が完全に元へ戻る
+        let src = "key: C\n$a = I | IV |\n$a x2 |";
         assert_eq!(shift_key(&shift_key(src, 1), -1), src);
     }
 
     #[test]
     fn test_shift_key_keeps_song_structure() {
         // 移調ボタンを押しても曲構成の行が潰れないこと。
-        // 小節の位置の参照は行末でも `|` で閉じるので、src も正規化済みの
-        // 形 (`$B |`) にしてある。これで往復が完全に元へ戻る
-        let src = "$A = C | Am |\n$B = F | G |\n$A x2\n$B |\n$A |";
+        // 小節の位置の参照とリピートは行末でも `|` で閉じるので、src も
+        // 正規化済みの形 (`$A x2 |` / `$B |`) にしてある。
+        // これで往復が完全に元へ戻る
+        let src = "$A = C | Am |\n$B = F | G |\n$A x2 |\n$B |\n$A |";
         assert_eq!(
             shift_key(src, 1),
-            "$A = C# | A#m |\n$B = F# | G# |\n$A x2\n$B |\n$A |"
+            "$A = C# | A#m |\n$B = F# | G# |\n$A x2 |\n$B |\n$A |"
         );
         // 往復して元に戻る
         assert_eq!(shift_key(&shift_key(src, 1), -1), src);
