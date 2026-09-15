@@ -1,3 +1,9 @@
+# このクレート自身を workspace のルートにする。root の Cargo.toml が
+# chord_midi_web を exclude しているため、これが無いと git worktree の
+# 中で cargo が親ディレクトリへ登り、メインリポジトリの Cargo.toml を
+# workspace と誤認してビルドできなくなる
+[workspace]
+
 [package]
 name = "chord_midi_web"
 version = "0.1.0"
