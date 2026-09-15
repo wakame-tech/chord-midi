@@ -740,6 +740,154 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     border-radius: 4px;
 }
 
+/* ---- 運指タブ（逆引き） ---- */
+
+.fretboard-help {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0 0 12px;
+}
+
+/* 12フレットぶんは横に長いので、狭い画面では横スクロールさせる */
+.fretboard-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.fb-grid {
+    display: grid;
+    grid-template-columns: 56px repeat(13, 34px);
+    grid-auto-rows: 28px;
+    width: max-content;
+}
+
+.fb-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 8px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1;
+}
+
+.fb-value {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+}
+
+/* 弦はセルの中央を横切る線、フレットはセルの右の縦線 */
+.fb-cell {
+    position: relative;
+    cursor: pointer;
+    border-right: 1px solid #8a9099;
+    background: linear-gradient(#8a9099, #8a9099) 0 50% / 100% 1px no-repeat;
+}
+
+.fb-cell:hover {
+    background-color: var(--hover);
+}
+
+/* 0列は開放弦。ナットの左なのでフレット線は引かない */
+.fb-cell.is-open {
+    border-right: none;
+}
+
+.fb-cell.is-nut {
+    border-left: 3px solid var(--ink);
+}
+
+.fb-dot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.fb-numbers {
+    display: grid;
+    grid-template-columns: 56px repeat(13, 34px);
+    width: max-content;
+    margin-top: 3px;
+}
+
+.fb-number {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.fb-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.fb-card {
+    min-width: 200px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.fb-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.fb-card-name {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.fb-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--active);
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.fb-badge.is-data {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.fb-alias {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.fb-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.fb-notation {
+    font-family: var(--mono);
+    font-size: 13px;
+}
+
+.fb-note {
+    margin-top: 4px;
+    color: var(--danger);
+    font-size: 11px;
+}
+
 @media (max-width: 640px) {
     .app-header {
         padding: 10px 14px;
