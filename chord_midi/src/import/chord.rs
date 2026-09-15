@@ -7,6 +7,7 @@ use crate::model::scale::Degree;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::character::complete::one_of;
 use nom::combinator::{map, opt};
 use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
@@ -83,8 +84,11 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
             many0(modifier_parser),
             opt(tensions_parser),
             opt(preceded(tag("/"), key_parser)),
+            // `@N` は押さえ方への指示。1〜6 以外は読まないので、`A@7` は
+            // "@7" が余って measure のパースごと失敗する
+            opt(preceded(tag("@"), one_of("123456"))),
         )),
-        |(key, modifiers, tensions, on)| ChordNode {
+        |(key, modifiers, tensions, on, root_string)| ChordNode {
             key,
             modifiers: BTreeSet::from_iter(
                 vec![Modifier::Major(5)]
@@ -93,6 +97,7 @@ fn chord_node_parser(s: Span) -> IResult<Span, ChordNode> {
                     .chain(tensions.into_iter().flatten()),
             ),
             on,
+            root_string: root_string.map(|c| c as u8 - b'0'),
         },
     )(s)
 }
@@ -336,5 +341,30 @@ mod tests {
                 text
             );
         }
+    }
+
+    #[test]
+    fn test_root_string_parser() {
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        let (_r, node) = chord_node_parser(span("A@6")).unwrap();
+        assert_eq!(node.root_string, Some(6));
+
+        // @N は /on より後ろ
+        let (_r, node) = chord_node_parser(span("A/E@6")).unwrap();
+        assert_eq!(node.on, Some(Key::Absolute(Pitch::E)));
+        assert_eq!(node.root_string, Some(6));
+
+        let (_r, node) = chord_node_parser(span("A")).unwrap();
+        assert_eq!(node.root_string, None);
+    }
+
+    #[test]
+    fn test_root_string_out_of_range_is_rejected() {
+        use crate::import::{Importer, RechordImporter};
+        // 1〜6 以外は読めず、余りが残るのでパース全体が失敗する
+        assert!(RechordImporter.import("A@0 |\n").is_err());
+        assert!(RechordImporter.import("A@7 |\n").is_err());
     }
 }

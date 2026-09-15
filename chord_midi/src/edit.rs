@@ -222,4 +222,10 @@ mod tests {
         // パターン文字列は移調で変わらない
         assert_eq!(shift_key("pat(\"o.o.\", C)", 1), "pat(\"o.o.\", C#)");
     }
+
+    #[test]
+    fn test_shift_key_keeps_root_string() {
+        assert_eq!(shift_key("pow(A@6)", 1), "pow(A#@6)");
+        assert_eq!(shift_key("pow(A#@6)", -1), "pow(A@6)");
+    }
 }

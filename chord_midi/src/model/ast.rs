@@ -75,7 +75,12 @@ fn transform_chord(key: Key, extra: &[Modifier], on: Option<Key>) -> ChordNode {
     for m in extra {
         modifiers.insert(m.clone());
     }
-    ChordNode { key, modifiers, on }
+    ChordNode {
+        key,
+        modifiers,
+        on,
+        root_string: None,
+    }
 }
 
 impl Transform {
@@ -117,6 +122,9 @@ pub struct ChordNode {
     pub key: Key,
     pub modifiers: BTreeSet<Modifier>,
     pub on: Option<Key>,
+    /// `@N` で指定された「最低音を取る弦」。1 = 1弦, 6 = 6弦。
+    /// 押さえ方検索にだけ効き、音程には影響しない
+    pub root_string: Option<u8>,
 }
 
 impl ChordNode {
@@ -125,6 +133,7 @@ impl ChordNode {
             key: Key::Absolute(pitch),
             modifiers: BTreeSet::new(),
             on: None,
+            root_string: None,
         }
     }
 
@@ -133,6 +142,7 @@ impl ChordNode {
             key: Key::Relative(degree),
             modifiers: BTreeSet::new(),
             on: None,
+            root_string: None,
         }
     }
 
@@ -186,6 +196,7 @@ mod tests {
             key: Key::Absolute(Pitch::G),
             modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Dominant(7)]),
             on: None,
+            root_string: None,
         };
         let subbed = Transform::Sub.expand(g.clone(), Pitch::C, Scale::Major);
         assert_eq!(subbed.len(), 1);
@@ -196,6 +207,7 @@ mod tests {
             key: Key::Absolute(Pitch::D),
             modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Minor(7)]),
             on: None,
+            root_string: None,
         };
         let dommed = Transform::Dom.expand(dm7, Pitch::C, Scale::Major);
         assert!(matches!(&dommed[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
@@ -209,6 +221,7 @@ mod tests {
             key: Key::Absolute(Pitch::G),
             modifiers: BTreeSet::from_iter([Modifier::Major(5), Modifier::Dominant(7)]),
             on: None,
+            root_string: None,
         };
         let nodes = Transform::S25.expand(g, Pitch::C, Scale::Major);
         assert_eq!(nodes.len(), 2);
