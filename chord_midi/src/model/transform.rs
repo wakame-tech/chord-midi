@@ -4,6 +4,7 @@ use crate::{
     model::pitch::Pitch,
     model::scale::Scale,
 };
+use anyhow::Result;
 
 fn chordnode_into_degree(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
     ChordNode {
@@ -50,10 +51,24 @@ impl Expr {
             Expr::Apply(func, inner, br) => {
                 Expr::Apply(func, Box::new(inner.into_degree(tonic, scale)), br)
             }
+            // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
+            Expr::Define(name, body, br) => {
+                Expr::Define(name, Box::new(body.into_degree(tonic, scale)), br)
+            }
+            // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
+            Expr::Repeat(inner, n, br) => {
+                Expr::Repeat(Box::new(inner.into_degree(tonic, scale)), n, br)
+            }
+            // 展開の跡。名前は残したまま中身だけ変換する
+            Expr::Section(name, inner) => {
+                Expr::Section(name, Box::new(inner.into_degree(tonic, scale)))
+            }
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
-            other => other,
+            // 音程を持たないものはそのまま。catch-all を置かないのは、
+            // Expr に variant が増えたときにコンパイラへ拾わせるため
+            e @ (Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _)) => e,
         }
     }
 
@@ -83,26 +98,45 @@ impl Expr {
             Expr::Apply(func, inner, br) => {
                 Expr::Apply(func, Box::new(inner.into_pitch(tonic, scale)), br)
             }
+            // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
+            Expr::Define(name, body, br) => {
+                Expr::Define(name, Box::new(body.into_pitch(tonic, scale)), br)
+            }
+            // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
+            Expr::Repeat(inner, n, br) => {
+                Expr::Repeat(Box::new(inner.into_pitch(tonic, scale)), n, br)
+            }
+            // 展開の跡。名前は残したまま中身だけ変換する。`Keyed` を包んだ
+            // ままでも、その `Keyed` は中身へ潜る途中で消える
+            Expr::Section(name, inner) => {
+                Expr::Section(name, Box::new(inner.into_pitch(tonic, scale)))
+            }
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
             Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),
-            other => other,
+            // 音程を持たないものはそのまま。catch-all を置かないのは、
+            // Expr に variant が増えたときにコンパイラへ拾わせるため
+            e @ (Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _)) => e,
         }
     }
 
-    /// key/scale のスコープを解いて度数を実音にし、Comment を落とした
-    /// 再生可能な AST を返す。Transform は MIDI 解釈時に展開する。
+    /// 定義を展開し、key/scale のスコープを解いて度数を実音にし、
+    /// Comment を落とした再生可能な AST を返す。Transform は MIDI 解釈時に展開する。
     ///
     /// `key:` が無いときの tonic は C。度数表記の進行 (プリセット等) が
     /// 常に実音に解決されて鳴るようにするため。
-    pub fn resolve(self) -> Expr {
-        let transposed = self.into_pitch(Pitch::C, Scale::Major);
+    ///
+    /// 展開に失敗する (未定義の参照、循環参照、小節数の上限超過など) と `Err`。
+    pub fn resolve(self) -> Result<Expr> {
+        // 参照が残ったまま先へ流れないよう、いちばん先に展開する
+        let expanded = crate::model::expand::expand(self)?;
+        let transposed = expanded.into_pitch(Pitch::C, Scale::Major);
         // pow は音程の話なのでここで潰す。pat はリズムの話なので残す
         let desugared = desugar_shapes(transposed)
             .into_iter()
             .next()
             .expect("desugar_shapes always yields at least one node for a Seq");
-        strip_comments(desugared)
+        Ok(strip_comments(desugared))
     }
 }
 
@@ -123,7 +157,17 @@ fn strip_comments(expr: Expr) -> Expr {
                 .collect(),
         ),
         Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(strip_comments(*inner)), br),
-        other => other,
+        Expr::Section(name, inner) => Expr::Section(name, Box::new(strip_comments(*inner))),
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Measure(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => e,
     }
 }
 
@@ -164,7 +208,22 @@ fn desugar_shapes(ast: Expr) -> Vec<Expr> {
             );
             vec![Expr::Apply(func, Box::new(inner), br)]
         }
-        other => vec![other],
+        Expr::Section(name, inner) => desugar_shapes(*inner)
+            .into_iter()
+            .flat_map(splice)
+            .map(|it| Expr::Section(name.clone(), Box::new(it)))
+            .collect(),
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため。ここに catch-all があったせいで
+        // `$riff = pow(...)` の Power 修飾が届かないバグを見逃していた
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Measure(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => vec![e],
     }
 }
 
@@ -186,7 +245,18 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
                 .collect(),
         ),
         Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(mark(*inner, modifier)), br),
-        other => other,
+        // Section は `$a` を展開した跡。ここに潜らないと `pow($a)` の
+        // パワーコード化が定義の中身に届かない
+        Expr::Section(name, inner) => Expr::Section(name, Box::new(mark(*inner, modifier))),
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => e,
     }
 }
 
@@ -231,11 +301,40 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_expands_refs() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter
+            .import("$riff = C | E |\n$riff | D |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
+        fn count_measures(e: &Expr) -> usize {
+            match e {
+                Expr::Measure(_, _) => 1,
+                Expr::Seq(items) => items.iter().map(count_measures).sum(),
+                Expr::Apply(_, inner, _) => count_measures(inner),
+                // 展開の跡。中身の小節を数える
+                Expr::Section(_, inner) => count_measures(inner),
+                _ => 0,
+            }
+        }
+        assert_eq!(count_measures(&ast), 3);
+    }
+
+    #[test]
+    fn test_resolve_reports_undefined_ref() {
+        use crate::import::{Importer, RechordImporter};
+        let e = RechordImporter.import("$nope | C |\n").unwrap().resolve();
+        assert!(e.is_err());
+    }
+
+    #[test]
     fn test_resolve_transposes_degrees() {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Node};
         let ast = RechordImporter.import("key: C\nV7 |\n").unwrap();
-        let resolved = ast.resolve();
+        let resolved = ast.resolve().unwrap();
         let Expr::Seq(items) = &resolved else {
             panic!()
         };
@@ -284,7 +383,8 @@ mod tests {
         let ast = RechordImporter
             .import("key: C\nI |\nkey: D\nI |\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let mut got = Vec::new();
         first_pitches(&ast, &mut got);
         assert_eq!(got, vec![Pitch::C, Pitch::D]);
@@ -304,7 +404,11 @@ mod tests {
             }
         }
 
-        let ast = RechordImporter.import("key: C\nI |\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("key: C\nI |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         assert!(!has_wrapper(&ast), "resolve 後に Keyed/Scaled が残っている");
     }
 
@@ -326,7 +430,7 @@ mod tests {
         use crate::model::ast::Node;
 
         fn semitones(code: &str) -> Vec<u8> {
-            let ast = RechordImporter.import(code).unwrap().resolve();
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
             let Expr::Seq(items) = &ast else {
                 panic!("not a score")
             };
@@ -353,7 +457,11 @@ mod tests {
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
 
-        let ast = RechordImporter.import("pow(C/E)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("pow(C/E)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -370,7 +478,11 @@ mod tests {
     fn test_pow_flattens_all_measures() {
         use crate::import::{Importer, RechordImporter};
 
-        let ast = RechordImporter.import("pow(C | E D)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("pow(C | E D)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -387,7 +499,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", C)\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -403,7 +516,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", pow(C))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -430,6 +544,50 @@ mod tests {
     }
 
     #[test]
+    fn test_pow_reaches_through_a_reference() {
+        // `pow($a)` の修飾が Section の壁を越えて定義の中身に届くこと。
+        // mark に Section の腕が無いと三和音のまま鳴る (catch-all が隠していた)
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{ChordNode, Node};
+
+        fn first_chord(e: &Expr) -> Option<&ChordNode> {
+            match e {
+                Expr::Measure(nodes, _) => nodes.iter().find_map(|n| match n {
+                    Node::Chord(c) => Some(c),
+                    _ => None,
+                }),
+                Expr::Seq(items) => items.iter().find_map(first_chord),
+                Expr::Apply(_, inner, _) => first_chord(inner),
+                Expr::Section(_, inner) => first_chord(inner),
+                _ => None,
+            }
+        }
+
+        fn semitones(code: &str) -> Vec<u8> {
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
+            first_chord(&ast)
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect()
+        }
+
+        // 直接書いた pow と、参照経由の pow が同じになること
+        assert_eq!(semitones("pow(C)\n"), vec![0, 7]);
+        assert_eq!(semitones("$a = C\npow($a)\n"), vec![0, 7]);
+        assert_eq!(semitones("oct(A)\n"), vec![0]);
+        assert_eq!(semitones("$b = A\noct($b)\n"), vec![0]);
+
+        // 入れ子の向きが逆の場合。定義の本体が pow(...) で、参照がその外側にある。
+        // `Section(Apply(Pow, ..))` になるので、desugar_shapes に Section の腕が
+        // 無いと Apply が潰されず三和音のまま鳴る
+        assert_eq!(semitones("$c = pow(C)\n$c\n"), vec![0, 7]);
+        assert_eq!(semitones("$d = oct(A)\n$d\n"), vec![0]);
+    }
+
+    #[test]
     fn test_pat_inside_pow_is_marked() {
         // pow が外側にあるとき、内側の pat が包む Seq の向こうまで
         // Power 修飾が届くことを確認する (mark の Seq 対応の回帰テスト)
@@ -439,7 +597,8 @@ mod tests {
         let ast = RechordImporter
             .import("pow(pat(\"oxox\", C))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -471,7 +630,7 @@ mod tests {
         use crate::model::ast::Node;
 
         fn semitones(code: &str) -> Vec<u8> {
-            let ast = RechordImporter.import(code).unwrap().resolve();
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
             let Expr::Seq(items) = &ast else {
                 panic!("not a score")
             };
@@ -498,7 +657,11 @@ mod tests {
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
 
-        let ast = RechordImporter.import("oct(A/E)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("oct(A/E)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -519,7 +682,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", oct(A))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };

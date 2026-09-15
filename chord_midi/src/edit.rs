@@ -68,7 +68,19 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
             }
         }
         Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
+        // 定義の本体にもコードが入るので潜る。参照は名前だけなので触らない
+        Expr::Define(_, body, _) => shift_ast(body, delta, seen),
+        // リピートの中身にもコードが入るので潜る。回数は移調で変わらない
+        Expr::Repeat(inner, _, _) => shift_ast(inner, delta, seen),
+        // 展開の跡。移調は編集中の AST に掛かるので普通は現れないが、
+        // 現れたら中身のコードを動かす
+        Expr::Section(_, inner) => shift_ast(inner, delta, seen),
+        Expr::Ref(_, _) => {}
         Expr::Comment(_) => {}
+        // パターン文字列は移調で変わらない。`Func::Pat` の引数としてしか
+        // 現れず、ここでは Apply の中身 (`inner`) を辿るだけなので実際には
+        // 素通りしない経路だが、網羅性のため明示しておく
+        Expr::Pattern(_) => {}
     }
 }
 
@@ -275,5 +287,124 @@ mod tests {
         let original = "key: C\npow(C | E D)\nkey: D\nI |";
         let shifted = shift_key(original, 1);
         assert_eq!(shift_key(&shifted, -1), original);
+    }
+
+    #[test]
+    fn test_shift_key_transposes_inside_define() {
+        assert_eq!(
+            shift_key("$riff = C | E |\n$riff | D |", 1),
+            "$riff = C# | F |\n$riff | D# |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_keeps_pattern_define() {
+        // リズムの定義は移調の対象外
+        assert_eq!(
+            shift_key("$eight = \"o.o.o.o.\"\npat($eight, C)", 1),
+            "$eight = \"o.o.o.o.\"\npat($eight, C#)"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_transposes_inside_repeat() {
+        assert_eq!(shift_key("C x4 |", 1), "C# x4 |");
+        assert_eq!(shift_key("(C | Am) x2 |", 1), "(C# | A#m) x2 |");
+    }
+
+    #[test]
+    fn test_shift_key_round_trip_with_defines() {
+        // 小節の位置のリピートは行末でも `|` で閉じるので、src も
+        // 正規化済みの形にしてある。これで往復が完全に元へ戻る
+        let src = "key: C\n$a = I | IV |\n$a x2 |";
+        assert_eq!(shift_key(&shift_key(src, 1), -1), src);
+    }
+
+    #[test]
+    fn test_shift_key_keeps_song_structure() {
+        // 移調ボタンを押しても曲構成の行が潰れないこと。
+        // 小節の位置の参照とリピートは行末でも `|` で閉じるので、src も
+        // 正規化済みの形 (`$A x2 |` / `$B |`) にしてある。
+        // これで往復が完全に元へ戻る
+        let src = "$A = C | Am |\n$B = F | G |\n$A x2 |\n$B |\n$A |";
+        assert_eq!(
+            shift_key(src, 1),
+            "$A = C# | A#m |\n$B = F# | G# |\n$A x2 |\n$B |\n$A |"
+        );
+        // 往復して元に戻る
+        assert_eq!(shift_key(&shift_key(src, 1), -1), src);
+    }
+
+    #[test]
+    fn test_shift_ast_descends_into_define_and_repeat() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Node};
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        let mut ast = RechordImporter
+            .import("$riff = C | E |\n$riff x2 | D |\n")
+            .unwrap();
+        let mut seen = Seen::default();
+        shift_ast(&mut ast, 1, &mut seen);
+
+        fn pitches(e: &Expr, out: &mut Vec<Pitch>) {
+            match e {
+                Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
+                Expr::Define(_, body, _) => pitches(body, out),
+                Expr::Repeat(inner, _, _) => pitches(inner, out),
+                Expr::Section(_, inner) => pitches(inner, out),
+                Expr::Apply(_, inner, _) => pitches(inner, out),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
+                Expr::Measure(nodes, _) => {
+                    for n in nodes {
+                        if let Node::Chord(c) = n {
+                            if let Key::Absolute(p) = c.key {
+                                out.push(p);
+                            }
+                        }
+                    }
+                }
+                Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _) => {}
+            }
+        }
+
+        let mut got = Vec::new();
+        pitches(&ast, &mut got);
+        // 定義の本体 C E が C# F に、外の D が D# に
+        assert_eq!(got, vec![Pitch::Cs, Pitch::F, Pitch::Ds]);
+    }
+
+    #[test]
+    fn test_shift_ast_sets_relative_seen_inside_define() {
+        // 定義の本体が度数表記のときも seen.relative が立つこと。
+        // これが立たないと、度数だけの定義を移調したときに key: が
+        // 補われなくなってしまう
+        use crate::import::{Importer, RechordImporter};
+
+        let mut ast = RechordImporter.import("$a = I | IV |\n$a\n").unwrap();
+        let mut seen = Seen::default();
+        shift_ast(&mut ast, 1, &mut seen);
+        assert!(seen.relative);
+        assert!(!seen.key_directive);
+    }
+
+    #[test]
+    fn test_shift_key_inserts_key_when_only_define_is_relative() {
+        // 度数表記が定義の中にしか無くても key: が補われること
+        assert_eq!(
+            shift_key("$a = I | IV |\n$a", 1),
+            "key: C#\n$a = I | IV |\n$a |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_preserves_key_directive_scope_across_ref() {
+        // key: のスコープは「使う位置」で効く。度数表記の定義の本体は
+        // 移調で変わらず、各 key: だけがずれる
+        assert_eq!(
+            shift_key("key: C\n$a = I | IV |\nkey: D\n$a", 1),
+            "key: C#\n$a = I | IV |\nkey: D#\n$a |"
+        );
     }
 }

@@ -137,8 +137,11 @@ mod tests {
         // 最終的な音が同じであることは resolve() 後に確認する
         let score = SexpImporter.import("(score (keyed C (I IV)) (keyed D (I IV)))")?;
         assert_eq!(
-            score.resolve(),
-            SexpImporter.import("(score (C F) (D G))")?.resolve()
+            score.resolve().unwrap(),
+            SexpImporter
+                .import("(score (C F) (D G))")?
+                .resolve()
+                .unwrap()
         );
         Ok(())
     }
@@ -166,7 +169,7 @@ mod tests {
         use crate::model::ast::{ChordNode, Node};
         use crate::model::pitch::Pitch;
         let ast = SexpImporter.import("(score (keyed C (keyed D (I IV))))")?;
-        let resolved = ast.resolve();
+        let resolved = ast.resolve().unwrap();
         let expected = Expr::Seq(vec![Expr::Measure(
             vec![
                 Node::Chord(ChordNode::absolute(Pitch::D)),
@@ -185,7 +188,7 @@ mod tests {
         use crate::model::ast::{ChordNode, Node};
         use crate::model::pitch::Pitch;
         let ast = SexpImporter.import("(score (keyed C (I IV)))")?;
-        let resolved = ast.resolve();
+        let resolved = ast.resolve().unwrap();
         let expected = Expr::Seq(vec![Expr::Measure(
             vec![
                 Node::Chord(ChordNode::absolute(Pitch::C)),

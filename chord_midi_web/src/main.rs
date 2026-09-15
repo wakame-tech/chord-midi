@@ -3,6 +3,7 @@ use chord_midi::{
     export::{Exporter, MidiExporter},
     fingering::{self, MeasureRef},
     import::{Importer, RechordImporter},
+    lint::lint,
     model::scale::Scale,
     presets,
 };
@@ -43,6 +44,10 @@ struct AstViews {
     text: String,
 }
 
+/// 記法エラーではなく、読みにくさへの助言。表示はエラーと別スタイルにし、
+/// 出ていても再生は止めない
+type Warnings = Vec<String>;
+
 /// 入力の末尾に1行足す。空なら line だけ、それ以外は改行してから足す。
 /// 進行プリセットのボタンと運指タブの挿入、両方が使う共通の結合規則
 fn append_line(cur: &str, line: &str) -> String {
@@ -53,16 +58,19 @@ fn append_line(cur: &str, line: &str) -> String {
     }
 }
 
-fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>), String> {
+fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>, Warnings), String> {
     let ast = RechordImporter
         .import(&format!("{}\n", input))
         .map_err(|e| e.to_string())?;
+    // パース直後 (resolve/展開前) の木を見る。lint 自体は AST も MIDI も
+    // 変えないので、ここで見ても resolve 後の結果には影響しない
+    let warnings = lint(&ast);
     // テキスト表示は度数表記のまま出したいので resolve する前に文字列化する
     let text = format!("{}", ast);
     let syntax = serde_json::to_string_pretty(&ast).map_err(|e| e.to_string())?;
     // resolve() も export() も self を consume するので、解決済みの AST を
     // 使い回す。MidiExporter は内部でもう一度 resolve() を呼ぶが冪等。
-    let resolved = ast.resolve();
+    let resolved = ast.resolve().map_err(|e| e.to_string())?;
     let expanded = serde_json::to_string_pretty(&resolved).map_err(|e| e.to_string())?;
     let measures = fingering::measure_refs(&resolved).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(Vec::new());
@@ -78,6 +86,7 @@ fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>),
         },
         measures,
         bytes,
+        warnings,
     ))
 }
 
@@ -103,6 +112,8 @@ fn app() -> Html {
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
+    // lint の警告。エラーと違って再生は止めないので、MIDI 生成の成否とは別に持つ
+    let warning = use_state(String::new);
     let url = use_state(String::new);
     let playing = use_mut_ref(|| false);
     let pending = use_mut_ref(|| None::<String>);
@@ -118,6 +129,7 @@ fn app() -> Html {
         let result = result.clone();
         let measures = measures.clone();
         let error = error.clone();
+        let warning = warning.clone();
         let url = url.clone();
         let playing = playing.clone();
         let pending = pending.clone();
@@ -125,6 +137,7 @@ fn app() -> Html {
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
+                warning.set(String::new());
                 result.set(AstViews::default());
                 measures.set(Vec::new());
                 let old_pending = pending.borrow_mut().take();
@@ -142,8 +155,9 @@ fn app() -> Html {
                 return;
             }
             match compile(input, *bpm) {
-                Ok((views, ms, bytes)) => {
+                Ok((views, ms, bytes, warnings)) => {
                     error.set(String::new());
+                    warning.set(warnings.join("\n"));
                     result.set(views);
                     measures.set(ms);
                     let blob = new_blob(&bytes, "audio/midi");
@@ -164,6 +178,7 @@ fn app() -> Html {
                 }
                 Err(e) => {
                     error.set(e);
+                    warning.set(String::new());
                     measures.set(Vec::new());
                 }
             }
@@ -362,6 +377,7 @@ fn app() -> Html {
     };
 
     let has_error = !(*error).is_empty();
+    let has_warning = !(*warning).is_empty();
 
     let editor = html! {
         <>
@@ -384,6 +400,9 @@ fn app() -> Html {
             </div>
             if has_error {
                 <p class="error">{(*error).clone()}</p>
+            }
+            if has_warning {
+                <p class="warning">{(*warning).clone()}</p>
             }
 
             <div class="controls">

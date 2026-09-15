@@ -487,7 +487,8 @@ mod tests {
         let ast = RechordImporter
             .import(&input)
             .unwrap_or_else(|e| panic!("{} がパースできない: {}", notation, e))
-            .resolve();
+            .resolve()
+            .unwrap();
         chord_refs(&ast).unwrap()
     }
 

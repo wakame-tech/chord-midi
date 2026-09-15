@@ -216,11 +216,13 @@ impl Score {
                 }
                 Ok(())
             }
-            Expr::Apply(Func::Pat(pattern), inner, _) => {
-                let pattern = pattern.clone();
+            Expr::Apply(Func::Pat(arg), inner, _) => {
+                let pattern = arg.as_pattern()?.clone();
                 self.interpret_with_pattern(*inner, &pattern)
             }
             Expr::Apply(_, inner, _) => self.interpret(*inner),
+            // 展開の跡。どの定義から来たかは音に関係しないので中身へ潜るだけ
+            Expr::Section(_, inner) => self.interpret(*inner),
             Expr::Measure(measure, _) => {
                 let dur = Self::measure_unit_size(measure.len()).unwrap();
                 for node in measure {
@@ -229,6 +231,25 @@ impl Score {
                 log::debug!("---");
                 Ok(())
             }
+            // `Func::Pat` の引数としてしか現れない。上の Apply(Func::Pat, ..)
+            // の腕で消費されるので、ここに来るのは AST が壊れているとき
+            Expr::Pattern(_) => Err(anyhow::anyhow!(
+                "Expr::Pattern は pat() の引数以外の場所に現れてはいけない"
+            )),
+            // 定義と参照は expand が消す。ここに来るのは expand を通していないとき
+            Expr::Define(name, _, _) => Err(anyhow::anyhow!(
+                "定義 ${} が展開されていない。expand を通すこと",
+                name
+            )),
+            Expr::Ref(name, _) => Err(anyhow::anyhow!(
+                "参照 ${} が展開されていない。expand を通すこと",
+                name
+            )),
+            // リピートも expand が消す
+            Expr::Repeat(_, n, _) => Err(anyhow::anyhow!(
+                "リピート x{} が展開されていない。expand を通すこと",
+                n
+            )),
         }
     }
 
@@ -244,11 +265,14 @@ impl Score {
                 Ok(())
             }
             // 内側の pat が優先される
-            Expr::Apply(Func::Pat(inner_pattern), items, _) => {
-                let inner_pattern = inner_pattern.clone();
+            Expr::Apply(Func::Pat(arg), items, _) => {
+                let inner_pattern = arg.as_pattern()?.clone();
                 self.interpret_with_pattern(*items, &inner_pattern)
             }
             Expr::Apply(_, items, _) => self.interpret_with_pattern(*items, pattern),
+            // 展開の跡。ここで `interpret` に落とすと `pat()` のリズムが
+            // 定義由来の小節にだけ掛からなくなるので、パターンを持ったまま潜る
+            Expr::Section(_, inner) => self.interpret_with_pattern(*inner, pattern),
             other => self.interpret(other),
         }
     }
@@ -304,7 +328,7 @@ fn write_notes(
 
 impl Exporter for MidiExporter {
     fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()> {
-        let ast = ast.resolve();
+        let ast = ast.resolve()?;
         let mut score = Score::new();
         score.interpret(ast)?;
         dump_notes(f, &score.notes, self.bpm)
@@ -363,7 +387,7 @@ mod tests {
             .import("IVM7 | V7 | IIIm7 | VIm7 |\n")
             .unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         assert!(!score.notes.is_empty());
     }
 
@@ -373,7 +397,7 @@ mod tests {
             .import("key: C\nI | IV | V | I |\n")
             .unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         assert!(!score.notes.is_empty());
     }
 
@@ -431,7 +455,7 @@ mod tests {
         // degree + key + transform: key C, s25(V7) -> Dm7 G7 (2 chords)
         let ast = RechordImporter.import("key: C\ns25(V7) |\n").unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         let chord_notes: Vec<_> = score.notes.iter().filter(|n| n.chord.is_some()).collect();
         assert_eq!(chord_notes.len(), 2);
     }
@@ -439,7 +463,7 @@ mod tests {
     fn resolved_notes_of(code: &str) -> Vec<Note> {
         let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         score.notes
     }
 

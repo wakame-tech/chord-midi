@@ -9,7 +9,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeSet;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Expr {
     Comment(String),
     /// `key:` 以降を包む
@@ -23,6 +23,24 @@ pub enum Expr {
     Apply(Func, Box<Expr>, bool),
     /// `|` / 改行で連結した式の列。ファイル全体もこれ
     Seq(Vec<Expr>),
+    /// `"o.ox"` のリズムパターン。`pat` の第1引数になる値
+    Pattern(Pattern),
+    /// `$name = ...`。本体は1行。`expand` が環境に畳んで消す。
+    /// 3つ目は「この定義の後ろで入力が改行されている」。行末コメント
+    /// (`$a = C |  # riff`) が続くときだけ偽になる
+    Define(String, Box<Expr>, bool),
+    /// `$name`。`expand` が定義の本体に置き換えて消す。
+    /// 2つ目は「この参照の後ろで入力が改行されている」
+    Ref(String, bool),
+    /// `xN`。N は 2〜32。`expand` が中身を N 個に並べて消す。
+    /// 3つ目は「このリピートの後ろで入力が改行されている」。
+    /// 中身 (`Measure` / `Apply` / `Ref`) が持つ行末フラグではなく、
+    /// こちらが行末の真実。`xN` は必ず中身の直後に来るので、
+    /// 行が終わるのは常にリピート全体の後ろになる
+    Repeat(Box<Expr>, u8, bool),
+    /// `$name` を展開した跡。どの定義から来た小節かを残す。
+    /// パーサは作らない。`expand` だけが作る
+    Section(String, Box<Expr>),
 }
 
 /// 小節列に掛ける関数
@@ -32,8 +50,8 @@ pub enum Func {
     Pow,
     /// オクターブ奏法化
     Oct,
-    /// リズムパターン
-    Pat(Pattern),
+    /// リズムパターン。引数は `Expr::Pattern` か `Expr::Ref`
+    Pat(Box<Expr>),
 }
 
 /// リズムパターン。長さは 1/2/4/8/16 のいずれか
@@ -48,6 +66,20 @@ pub enum Beat {
     Rest,
     /// `x` ブラッシング
     Brush,
+}
+
+impl Expr {
+    /// `Func::Pat` の引数からリズムパターンを取り出す。
+    /// `expand` を通した後は必ず `Expr::Pattern` になっている
+    pub fn as_pattern(&self) -> Result<&Pattern> {
+        match self {
+            Expr::Pattern(p) => Ok(p),
+            other => Err(anyhow::anyhow!(
+                "pat の第1引数がリズムパターンではない: {:?}",
+                other
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
