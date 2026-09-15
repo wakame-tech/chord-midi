@@ -81,19 +81,14 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
             // 以降は inner が飲み切っている
             break;
         }
-        // `$name = ...` は以降に効く定義。`key:` と同じく、後ろをひとまとまり
-        // として読む。alt に混ぜずにここで先に試すことで、`$a = ...` の `$a`
-        // だけを ref_parser に食われないようにしている
+        // `$name = ...` の定義。`key:` と違ってスコープの包みではなく、
+        // 0小節を返す単位元なので、後ろを包まずそのまま平らに並べる。
+        // alt に混ぜずにここで先に試すことで、`$a = ...` の `$a` だけを
+        // ref_parser に食われないようにしている
         if let Ok((r, def)) = define_parser(rest) {
             items.push(def);
-            let (r2, inner) = seq_parser(r)?;
-            // 定義しかない入力で空の Seq が残らないようにする
-            if !matches!(&inner, Expr::Seq(v) if v.is_empty()) {
-                items.push(inner);
-            }
-            rest = r2;
-            // 以降は inner が飲み切っている
-            break;
+            rest = r;
+            continue;
         }
         match alt((comment_parser, apply_parser, ref_parser, measure_parser))(rest) {
             Ok((r, item)) => {
@@ -567,12 +562,32 @@ mod tests {
             .import("$riff = pow(C | E D)\n$riff | C |\n")
             .unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        assert_eq!(items.len(), 2, "定義1つと小節列1つ: {:?}", items);
+        // 定義は 0 小節を返す単位元。スコープ包みではないので平らに並ぶ
         let Expr::Define(name, body) = &items[0] else {
             panic!("1つ目は Define: {:?}", items[0])
         };
         assert_eq!(name, "riff");
         assert!(matches!(body.as_ref(), Expr::Apply(_, _, _)));
+        // 定義の後ろが入れ子 Seq になっていないこと
+        assert!(
+            !matches!(&items[1], Expr::Seq(_)),
+            "定義の後ろは入れ子 Seq にしない: {:?}", items[1]
+        );
+    }
+
+    #[test]
+    fn test_multiple_defines_stay_flat() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("$a = C\n$b = D\nC |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        // 定義2つと小節。ネストしない
+        let defines = items.iter().filter(|e| matches!(e, Expr::Define(_, _))).count();
+        assert_eq!(defines, 2, "定義が平らに並ばない: {:?}", items);
+        assert!(
+            items.iter().all(|e| !matches!(e, Expr::Seq(_))),
+            "入れ子 Seq が残っている: {:?}", items
+        );
     }
 
     #[test]
@@ -644,7 +659,8 @@ mod tests {
         // 定義の本体は1行。次の行を飲み込まないこと
         let ast = RechordImporter.import("$a = C | E |\nAm | F |\n").unwrap();
         let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        assert_eq!(items.len(), 2, "定義と、その後ろの小節列: {:?}", items);
+        // 定義は平らに並ぶので、後ろの Am / F はトップに2小節として残る
+        assert_eq!(items.len(), 3, "定義と、その後ろの2小節: {:?}", items);
         let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
         fn count_measures(e: &Expr) -> usize {
             match e {
