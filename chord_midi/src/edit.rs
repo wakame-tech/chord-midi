@@ -69,6 +69,10 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
         }
         Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
         Expr::Comment(_) => {}
+        // パターン文字列は移調で変わらない。`Func::Pat` の引数としてしか
+        // 現れず、ここでは Apply の中身 (`inner`) を辿るだけなので実際には
+        // 素通りしない経路だが、網羅性のため明示しておく
+        Expr::Pattern(_) => {}
     }
 }
 

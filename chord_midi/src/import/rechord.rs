@@ -177,7 +177,7 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
                         tag(","),
                         space0,
                     )),
-                    |(_, _, pattern, _, _, _)| Func::Pat(pattern),
+                    |(_, _, pattern, _, _, _)| Func::Pat(Box::new(Expr::Pattern(pattern))),
                 ),
             )),
             many1(alt((apply_parser, measure_parser))),
@@ -390,8 +390,11 @@ mod tests {
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
-        let Expr::Apply(Func::Pat(pattern), inner, _) = &items[0] else {
+        let Expr::Apply(Func::Pat(arg), inner, _) = &items[0] else {
             panic!("not a pat apply: {:?}", items[0])
+        };
+        let Expr::Pattern(pattern) = arg.as_ref() else {
+            panic!("pat の第1引数は Expr::Pattern: {:?}", arg)
         };
         assert_eq!(
             pattern.0,
@@ -445,5 +448,20 @@ mod tests {
     fn test_pattern_rejects_unknown_char() {
         use crate::import::{Importer, RechordImporter};
         assert!(RechordImporter.import("pat(\"o.oz\", C)\n").is_err());
+    }
+
+    #[test]
+    fn test_pat_argument_is_a_pattern_expr() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Func};
+        let ast = RechordImporter.import("pat(\"oxox\", C)\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Apply(Func::Pat(arg), _, _) = &items[0] else {
+            panic!("not a pat apply: {:?}", items[0])
+        };
+        let Expr::Pattern(p) = arg.as_ref() else {
+            panic!("pat の第1引数は Expr::Pattern: {:?}", arg)
+        };
+        assert_eq!(p.to_string(), "oxox");
     }
 }

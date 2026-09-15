@@ -9,7 +9,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeSet;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Expr {
     Comment(String),
     /// `key:` 以降を包む
@@ -23,6 +23,8 @@ pub enum Expr {
     Apply(Func, Box<Expr>, bool),
     /// `|` / 改行で連結した式の列。ファイル全体もこれ
     Seq(Vec<Expr>),
+    /// `"o.ox"` のリズムパターン。`pat` の第1引数になる値
+    Pattern(Pattern),
 }
 
 /// 小節列に掛ける関数
@@ -32,8 +34,8 @@ pub enum Func {
     Pow,
     /// オクターブ奏法化
     Oct,
-    /// リズムパターン
-    Pat(Pattern),
+    /// リズムパターン。引数は `Expr::Pattern` か `Expr::Ref`
+    Pat(Box<Expr>),
 }
 
 /// リズムパターン。長さは 1/2/4/8/16 のいずれか
@@ -48,6 +50,20 @@ pub enum Beat {
     Rest,
     /// `x` ブラッシング
     Brush,
+}
+
+impl Expr {
+    /// `Func::Pat` の引数からリズムパターンを取り出す。
+    /// `expand` を通した後は必ず `Expr::Pattern` になっている
+    pub fn as_pattern(&self) -> Result<&Pattern> {
+        match self {
+            Expr::Pattern(p) => Ok(p),
+            other => Err(anyhow::anyhow!(
+                "pat の第1引数がリズムパターンではない: {:?}",
+                other
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

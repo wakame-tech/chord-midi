@@ -39,7 +39,10 @@ impl Display for Expr {
                 match func {
                     Func::Pow => write!(f, "pow({})", inner)?,
                     Func::Oct => write!(f, "oct({})", inner)?,
-                    Func::Pat(pattern) => write!(f, "pat(\"{}\", {})", pattern, inner)?,
+                    Func::Pat(arg) => match arg.as_ref() {
+                        Expr::Pattern(p) => write!(f, "pat(\"{}\", {})", p, inner)?,
+                        other => write!(f, "pat({}, {})", other, inner)?,
+                    },
                 }
                 if *br {
                     writeln!(f)
@@ -63,6 +66,7 @@ impl Display for Expr {
                 }
                 Ok(())
             }
+            Expr::Pattern(p) => write!(f, "\"{}\"", p),
         }
     }
 }

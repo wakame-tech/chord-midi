@@ -173,15 +173,22 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
             });
         }
         Expr::Apply(func, inner, _) => {
+            let owned;
             let next = match func {
-                Func::Pat(p) => Some(p),
-                _ => pattern,
+                Func::Pat(arg) => {
+                    owned = arg.as_pattern()?.clone();
+                    Some(&owned)
+                }
+                Func::Pow | Func::Oct => pattern,
             };
             collect_ast(inner, next, out)?;
         }
         // resolve() 済みなら包みは消えている。念のため中身へ潜る
         Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => collect_ast(inner, pattern, out)?,
         Expr::Comment(_) => {}
+        // `Func::Pat` の引数としてしか現れない。Apply の腕で処理済みなので
+        // ここに直接来ることはない
+        Expr::Pattern(_) => {}
     }
     Ok(())
 }

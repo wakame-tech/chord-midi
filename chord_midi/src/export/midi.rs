@@ -216,8 +216,8 @@ impl Score {
                 }
                 Ok(())
             }
-            Expr::Apply(Func::Pat(pattern), inner, _) => {
-                let pattern = pattern.clone();
+            Expr::Apply(Func::Pat(arg), inner, _) => {
+                let pattern = arg.as_pattern()?.clone();
                 self.interpret_with_pattern(*inner, &pattern)
             }
             Expr::Apply(_, inner, _) => self.interpret(*inner),
@@ -229,6 +229,11 @@ impl Score {
                 log::debug!("---");
                 Ok(())
             }
+            // `Func::Pat` の引数としてしか現れない。上の Apply(Func::Pat, ..)
+            // の腕で消費されるので、ここに来るのは AST が壊れているとき
+            Expr::Pattern(_) => Err(anyhow::anyhow!(
+                "Expr::Pattern は pat() の引数以外の場所に現れてはいけない"
+            )),
         }
     }
 
@@ -244,8 +249,8 @@ impl Score {
                 Ok(())
             }
             // 内側の pat が優先される
-            Expr::Apply(Func::Pat(inner_pattern), items, _) => {
-                let inner_pattern = inner_pattern.clone();
+            Expr::Apply(Func::Pat(arg), items, _) => {
+                let inner_pattern = arg.as_pattern()?.clone();
                 self.interpret_with_pattern(*items, &inner_pattern)
             }
             Expr::Apply(_, items, _) => self.interpret_with_pattern(*items, pattern),
