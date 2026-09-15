@@ -307,9 +307,16 @@ pub enum Expr {
 
 ```bash
 cd /Users/kmt/dev/chord-midi
-grep -rl 'Ast' --include='*.rs' chord_midi/src chord_midi_cli/src chord_midi_web/src \
-  | xargs sed -i '' -e 's/\bAst::Score\b/Expr::Seq/g' -e 's/\bAst\b/Expr/g'
+grep -rl 'Ast' --include='*.rs' chord_midi/src chord_midi/tests chord_midi_cli/src chord_midi_web/src \
+  | xargs perl -pi -e 's/\bAst::Score\b/Expr::Seq/g; s/\bAst\b/Expr/g'
 ```
+
+**`sed` を使わないこと。** macOS の BSD sed は `\b` (単語境界) を解釈せず、
+**エラーを出さずに0件置換で終わる**。静かに「何も起きない」ので気づけない。
+`perl -pi -e` は `\b` をネイティブに解釈する。
+
+この置換は `Ast::` が付いた参照しか拾わない。`ast.rs` の enum 定義本体
+(`Score(...)` → `Seq(...)`) は裸の識別子なので手で直す。
 
 `ast.rs` のモジュール名 (`model::ast`) は変えない。ファイル名も据え置く。
 
