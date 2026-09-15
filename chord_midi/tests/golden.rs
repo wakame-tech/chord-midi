@@ -50,6 +50,10 @@ const SAMPLES: &[(&str, &str)] = &[
     ("root_string", "pow(A@6 | D@5 | E@5)\n"),
     ("comment", "# memo\nkey: C\nC | F |\n"),
     ("multiline", "C | Am |\nF | G |\n"),
+    // 入れ子の変換
+    ("nested_arp_blk", "arp(blk(F))\n"),
+    ("nested_blk_sub", "blk(sub(G7))\n"),
+    ("nested_s25_blk", "s25(blk(F))\n"),
 ];
 
 /// `code` を1回パースして MIDI バイト列にする。
@@ -224,6 +228,41 @@ fn transforms_survive_brush_beats() {
             (Ok(_), Ok(_)) => failures.push(format!(
                 "[{}] ブラッシングのスロットで変換が捨てられている (素のコードと同じ音)",
                 name
+            )),
+            (Err(e), _) | (_, Err(e)) => failures.push(format!("[{}] {}", name, e)),
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// 入れ子の変換が、中を手で置き換えた形と同じ MIDI を出すこと。
+///
+/// `blk(F) ≡ Baug/F` / `sub(G7) ≡ Db7` / `dom(Dm7) ≡ D7` は実測で確認済み。
+/// 入れ子は「中の変換を既知の等価形に置き換えたもの」と一致するはず。
+#[test]
+fn nested_transforms_match_hand_substitution() {
+    let pairs: &[(&str, &str, &str)] = &[
+        ("arp_blk", "arp(blk(F))\n", "arp(Baug/F)\n"),
+        ("arp_sub", "arp(sub(G7))\n", "arp(Db7)\n"),
+        ("arp_dom", "arp(dom(Dm7))\n", "arp(D7)\n"),
+        ("blk_sub", "blk(sub(G7))\n", "blk(Db7)\n"),
+        ("arp_blk_sub", "arp(blk(sub(G7)))\n", "arp(blk(Db7))\n"),
+        ("s25_blk", "s25(blk(F))\n", "s25(Baug/F)\n"),
+        (
+            "pat_arp_blk",
+            "pat(\"o.ox\", arp(blk(F)))\n",
+            "pat(\"o.ox\", arp(Baug/F))\n",
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (name, nested, substituted) in pairs {
+        match (midi_bytes(name, nested), midi_bytes(name, substituted)) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (Ok(a), Ok(b)) => failures.push(format!(
+                "[{}] 入れ子と手で置き換えた形の MIDI が違う ({} bytes vs {} bytes)",
+                name,
+                a.len(),
+                b.len()
             )),
             (Err(e), _) | (_, Err(e)) => failures.push(format!("[{}] {}", name, e)),
         }
