@@ -645,8 +645,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 
 .diagram {
     display: flex;
-    align-items: flex-start;
-    gap: 3px;
+    flex-direction: column;
     margin-top: 6px;
 }
 
@@ -696,10 +695,19 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     text-align: center;
 }
 
-.fret-label {
+/* 指板の下のフレット番号。実ギターのポジションマークと同じ位置に出す */
+.fret-numbers {
+    display: grid;
+    grid-template-columns: 14px repeat(5, 22px);
+    margin-top: 3px;
+}
+
+.fret-number {
     color: var(--muted);
-    font-size: 10px;
-    margin-top: 2px;
+    font-size: 9px;
+    line-height: 1.2;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 押さえ方が無いときも幅と高さを揃えて並びを崩さない */
