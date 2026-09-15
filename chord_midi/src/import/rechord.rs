@@ -465,11 +465,16 @@ mod tests {
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
         // III resolves differently per scale: Major -> E, Dorian -> D#/Ds
-        let major = RechordImporter.import("key: C\nIII |\n").unwrap().resolve();
+        let major = RechordImporter
+            .import("key: C\nIII |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let dorian = RechordImporter
             .import("key: C\nscale: dorian\nIII |\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let first_key = |ast: &Expr| -> Key {
             let Expr::Seq(items) = ast else { panic!() };
             for it in items {

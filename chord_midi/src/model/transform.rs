@@ -4,6 +4,7 @@ use crate::{
     model::pitch::Pitch,
     model::scale::Scale,
 };
+use anyhow::Result;
 
 fn chordnode_into_degree(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
     ChordNode {
@@ -102,19 +103,23 @@ impl Expr {
         }
     }
 
-    /// key/scale のスコープを解いて度数を実音にし、Comment を落とした
-    /// 再生可能な AST を返す。Transform は MIDI 解釈時に展開する。
+    /// 定義を展開し、key/scale のスコープを解いて度数を実音にし、
+    /// Comment を落とした再生可能な AST を返す。Transform は MIDI 解釈時に展開する。
     ///
     /// `key:` が無いときの tonic は C。度数表記の進行 (プリセット等) が
     /// 常に実音に解決されて鳴るようにするため。
-    pub fn resolve(self) -> Expr {
-        let transposed = self.into_pitch(Pitch::C, Scale::Major);
+    ///
+    /// 展開に失敗する (未定義の参照、循環参照、小節数の上限超過など) と `Err`。
+    pub fn resolve(self) -> Result<Expr> {
+        // 参照が残ったまま先へ流れないよう、いちばん先に展開する
+        let expanded = crate::model::expand::expand(self)?;
+        let transposed = expanded.into_pitch(Pitch::C, Scale::Major);
         // pow は音程の話なのでここで潰す。pat はリズムの話なので残す
         let desugared = desugar_shapes(transposed)
             .into_iter()
             .next()
             .expect("desugar_shapes always yields at least one node for a Seq");
-        strip_comments(desugared)
+        Ok(strip_comments(desugared))
     }
 }
 
@@ -243,11 +248,38 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_expands_refs() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter
+            .import("$riff = C | E |\n$riff | D |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
+        fn count_measures(e: &Expr) -> usize {
+            match e {
+                Expr::Measure(_, _) => 1,
+                Expr::Seq(items) => items.iter().map(count_measures).sum(),
+                Expr::Apply(_, inner, _) => count_measures(inner),
+                _ => 0,
+            }
+        }
+        assert_eq!(count_measures(&ast), 3);
+    }
+
+    #[test]
+    fn test_resolve_reports_undefined_ref() {
+        use crate::import::{Importer, RechordImporter};
+        let e = RechordImporter.import("$nope | C |\n").unwrap().resolve();
+        assert!(e.is_err());
+    }
+
+    #[test]
     fn test_resolve_transposes_degrees() {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Node};
         let ast = RechordImporter.import("key: C\nV7 |\n").unwrap();
-        let resolved = ast.resolve();
+        let resolved = ast.resolve().unwrap();
         let Expr::Seq(items) = &resolved else {
             panic!()
         };
@@ -296,7 +328,8 @@ mod tests {
         let ast = RechordImporter
             .import("key: C\nI |\nkey: D\nI |\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let mut got = Vec::new();
         first_pitches(&ast, &mut got);
         assert_eq!(got, vec![Pitch::C, Pitch::D]);
@@ -316,7 +349,11 @@ mod tests {
             }
         }
 
-        let ast = RechordImporter.import("key: C\nI |\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("key: C\nI |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         assert!(!has_wrapper(&ast), "resolve 後に Keyed/Scaled が残っている");
     }
 
@@ -338,7 +375,7 @@ mod tests {
         use crate::model::ast::Node;
 
         fn semitones(code: &str) -> Vec<u8> {
-            let ast = RechordImporter.import(code).unwrap().resolve();
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
             let Expr::Seq(items) = &ast else {
                 panic!("not a score")
             };
@@ -365,7 +402,11 @@ mod tests {
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
 
-        let ast = RechordImporter.import("pow(C/E)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("pow(C/E)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -382,7 +423,11 @@ mod tests {
     fn test_pow_flattens_all_measures() {
         use crate::import::{Importer, RechordImporter};
 
-        let ast = RechordImporter.import("pow(C | E D)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("pow(C | E D)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -399,7 +444,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", C)\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -415,7 +461,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", pow(C))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -451,7 +498,8 @@ mod tests {
         let ast = RechordImporter
             .import("pow(pat(\"oxox\", C))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -483,7 +531,7 @@ mod tests {
         use crate::model::ast::Node;
 
         fn semitones(code: &str) -> Vec<u8> {
-            let ast = RechordImporter.import(code).unwrap().resolve();
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
             let Expr::Seq(items) = &ast else {
                 panic!("not a score")
             };
@@ -510,7 +558,11 @@ mod tests {
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
 
-        let ast = RechordImporter.import("oct(A/E)\n").unwrap().resolve();
+        let ast = RechordImporter
+            .import("oct(A/E)\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };
@@ -531,7 +583,8 @@ mod tests {
         let ast = RechordImporter
             .import("pat(\"oxox\", oct(A))\n")
             .unwrap()
-            .resolve();
+            .resolve()
+            .unwrap();
         let Expr::Seq(items) = &ast else {
             panic!("not a score")
         };

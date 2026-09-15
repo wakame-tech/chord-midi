@@ -323,7 +323,7 @@ fn write_notes(
 
 impl Exporter for MidiExporter {
     fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()> {
-        let ast = ast.resolve();
+        let ast = ast.resolve()?;
         let mut score = Score::new();
         score.interpret(ast)?;
         dump_notes(f, &score.notes, self.bpm)
@@ -382,7 +382,7 @@ mod tests {
             .import("IVM7 | V7 | IIIm7 | VIm7 |\n")
             .unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         assert!(!score.notes.is_empty());
     }
 
@@ -392,7 +392,7 @@ mod tests {
             .import("key: C\nI | IV | V | I |\n")
             .unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         assert!(!score.notes.is_empty());
     }
 
@@ -450,7 +450,7 @@ mod tests {
         // degree + key + transform: key C, s25(V7) -> Dm7 G7 (2 chords)
         let ast = RechordImporter.import("key: C\ns25(V7) |\n").unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         let chord_notes: Vec<_> = score.notes.iter().filter(|n| n.chord.is_some()).collect();
         assert_eq!(chord_notes.len(), 2);
     }
@@ -458,7 +458,7 @@ mod tests {
     fn resolved_notes_of(code: &str) -> Vec<Note> {
         let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
         let mut score = Score::new();
-        score.interpret(ast.resolve()).unwrap();
+        score.interpret(ast.resolve().unwrap()).unwrap();
         score.notes
     }
 

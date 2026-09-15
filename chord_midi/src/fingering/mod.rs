@@ -357,7 +357,7 @@ mod tests {
 
     fn refs(input: &str) -> Vec<ChordRef> {
         use crate::import::{Importer, RechordImporter};
-        let ast = RechordImporter.import(input).unwrap().resolve();
+        let ast = RechordImporter.import(input).unwrap().resolve().unwrap();
         chord_refs(&ast).unwrap()
     }
 
@@ -413,7 +413,7 @@ mod tests {
 
     fn measures(input: &str) -> Vec<MeasureRef> {
         use crate::import::{Importer, RechordImporter};
-        let ast = RechordImporter.import(input).unwrap().resolve();
+        let ast = RechordImporter.import(input).unwrap().resolve().unwrap();
         measure_refs(&ast).unwrap()
     }
 

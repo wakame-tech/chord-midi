@@ -47,7 +47,10 @@ fn midi_bytes_with(name: &str, code: &str, pre_resolve: bool) -> Result<Vec<u8>,
         .map_err(|e| format!("[{name}] parse に失敗した (code={code:?}): {e}"))?;
     let mut writer = BufWriter::new(Vec::new());
     let export_result = if pre_resolve {
-        MidiExporter { bpm: 120 }.export(&mut writer, ast.resolve())
+        let resolved = ast
+            .resolve()
+            .map_err(|e| format!("[{name}] resolve に失敗した (code={code:?}): {e}"))?;
+        MidiExporter { bpm: 120 }.export(&mut writer, resolved)
     } else {
         MidiExporter { bpm: 120 }.export(&mut writer, ast)
     };

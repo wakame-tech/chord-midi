@@ -111,7 +111,7 @@ fn edit_source(code: String, args: &Cli) -> Result<String> {
 
 /// 押さえ方を小節ごとに書く。`|` で小節を区切り、入力の改行もそのまま出す
 fn print_fingerings(ast: Expr) -> Result<()> {
-    let resolved = ast.resolve();
+    let resolved = ast.resolve()?;
     for measure in fingering::measure_refs(&resolved)? {
         for chord in &measure.chords {
             print!("{}", diagram::render(&chord.label, fingering::find(chord)));
@@ -175,7 +175,7 @@ fn main() -> Result<()> {
         match form {
             AstForm::Syntax => println!("{}", serde_json::to_string_pretty(&ast)?),
             AstForm::Expanded => {
-                println!("{}", serde_json::to_string_pretty(&ast.resolve())?)
+                println!("{}", serde_json::to_string_pretty(&ast.resolve()?)?)
             }
             AstForm::Text => print!("{}", ast),
         }

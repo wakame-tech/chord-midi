@@ -62,7 +62,7 @@ fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>),
     let syntax = serde_json::to_string_pretty(&ast).map_err(|e| e.to_string())?;
     // resolve() も export() も self を consume するので、解決済みの AST を
     // 使い回す。MidiExporter は内部でもう一度 resolve() を呼ぶが冪等。
-    let resolved = ast.resolve();
+    let resolved = ast.resolve().map_err(|e| e.to_string())?;
     let expanded = serde_json::to_string_pretty(&resolved).map_err(|e| e.to_string())?;
     let measures = fingering::measure_refs(&resolved).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(Vec::new());
