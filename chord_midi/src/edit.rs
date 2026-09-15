@@ -70,6 +70,8 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
         Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
         // 定義の本体にもコードが入るので潜る。参照は名前だけなので触らない
         Expr::Define(_, body) => shift_ast(body, delta, seen),
+        // リピートの中身にもコードが入るので潜る。回数は移調で変わらない
+        Expr::Repeat(inner, _) => shift_ast(inner, delta, seen),
         Expr::Ref(_) => {}
         Expr::Comment(_) => {}
         // パターン文字列は移調で変わらない。`Func::Pat` の引数としてしか

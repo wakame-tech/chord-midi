@@ -243,6 +243,11 @@ impl Score {
                 "参照 ${} が展開されていない。expand を通すこと",
                 name
             )),
+            // リピートも expand が消す
+            Expr::Repeat(_, n) => Err(anyhow::anyhow!(
+                "リピート x{} が展開されていない。expand を通すこと",
+                n
+            )),
         }
     }
 

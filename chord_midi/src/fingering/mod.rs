@@ -202,6 +202,13 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
                 name
             ))
         }
+        // リピートも expand が消す
+        Expr::Repeat(_, n) => {
+            return Err(anyhow::anyhow!(
+                "リピート x{} が展開されていない。expand を通すこと",
+                n
+            ))
+        }
     }
     Ok(())
 }

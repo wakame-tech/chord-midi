@@ -29,6 +29,8 @@ pub enum Expr {
     Define(String, Box<Expr>),
     /// `$name`。`expand` が定義の本体に置き換えて消す
     Ref(String),
+    /// `xN`。N は 2〜32。`expand` が中身を N 個に並べて消す
+    Repeat(Box<Expr>, u8),
 }
 
 /// 小節列に掛ける関数

@@ -70,6 +70,8 @@ impl Display for Expr {
             // Task 6 で正式化する。いまは往復できる最低限の形だけ出す
             Expr::Define(name, body) => writeln!(f, "${} = {}", name, body),
             Expr::Ref(name) => write!(f, "${} ", name),
+            // Task 6 で `( )` の導出も含めて正式化する。いまは最低限の形だけ
+            Expr::Repeat(inner, n) => write!(f, "{} x{}", inner, n),
         }
     }
 }

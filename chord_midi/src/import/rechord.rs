@@ -7,7 +7,7 @@ use crate::model::scale::Scale;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while1};
-use nom::character::complete::{line_ending, not_line_ending, space0};
+use nom::character::complete::{digit1, line_ending, not_line_ending, space0};
 use nom::combinator::{eof, map, map_res, opt, peek, value};
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
@@ -90,7 +90,16 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
             rest = r;
             continue;
         }
-        match alt((comment_parser, apply_parser, ref_parser, measure_parser))(rest) {
+        // `apply_parser` は `group_parser` より先。逆だと `pow(C)` の `(C)` が
+        // グループとして食われる
+        match alt((
+            comment_parser,
+            apply_parser,
+            group_parser,
+            ref_parser,
+            measure_parser,
+        ))(rest)
+        {
             Ok((r, item)) => {
                 // 入力が減らないまま成功するパーサがあると無限ループになる。
                 // 念のため「進んでいない」ときは打ち切る
@@ -199,10 +208,11 @@ fn ref_parser(s: Span) -> IResult<Span, Expr> {
         tuple((
             ref_atom,
             space0,
+            opt(repeat_suffix),
             opt(measure_sep),
             space_or_line_ending_many0,
         )),
-        |(r, _, _, _)| r,
+        |(r, _, n, _, _)| repeated(r, n),
     )(s)
 }
 
@@ -235,7 +245,14 @@ fn define_body_parser(s: Span) -> IResult<Span, Expr> {
     let mut items: Vec<Expr> = Vec::new();
     let mut rest = s;
     while !rest.fragment().trim_start().is_empty() {
-        match alt((apply_parser, ref_parser, pattern_atom, measure_parser))(rest) {
+        match alt((
+            apply_parser,
+            group_parser,
+            ref_parser,
+            pattern_atom,
+            measure_parser,
+        ))(rest)
+        {
             Ok((r, item)) => {
                 // 入力が減らないまま成功するパーサがあると無限ループになる
                 if r.fragment().len() >= rest.fragment().len() {
@@ -263,6 +280,54 @@ fn define_body_parser(s: Span) -> IResult<Span, Expr> {
     Ok((rest, body))
 }
 
+/// `xN` の接尾辞。2〜32 だけ受け付ける。
+/// `x0` / `x1` は「繰り返し」として意味がなく、大きすぎる N は
+/// 打ち間違いの可能性が高いので、どちらもここで弾く
+fn repeat_suffix(s: Span) -> IResult<Span, u8> {
+    map_res(
+        tuple((tag("x"), digit1, space0)),
+        |(_, n, _): (Span, Span, Span)| -> Result<u8> {
+            let n: u32 = n.fragment().parse()?;
+            if (2..=32).contains(&n) {
+                Ok(n as u8)
+            } else {
+                Err(anyhow::anyhow!("x{} は 2〜32 の範囲外", n))
+            }
+        },
+    )(s)
+}
+
+/// `xN` が付いていたら包む。付いていなければそのまま
+fn repeated(expr: Expr, n: Option<u8>) -> Expr {
+    match n {
+        Some(n) => Expr::Repeat(Box::new(expr), n),
+        None => expr,
+    }
+}
+
+/// `( <小節列> )` のグループ。リピートの範囲を明示するための括弧で、
+/// `Group` という型は持たない。`( )` は Display 側で導出する。
+///
+/// `pow(` などの関数は `apply_parser` が先に食う必要があるので、
+/// 呼ぶ側の `alt` では必ず `apply_parser` を先に置くこと
+#[tracable_parser]
+fn group_parser(s: Span) -> IResult<Span, Expr> {
+    map(
+        tuple((
+            tag("("),
+            space0,
+            many1(alt((apply_parser, group_parser, ref_parser, measure_parser))),
+            space0,
+            tag(")"),
+            space0,
+            opt(repeat_suffix),
+            opt(measure_sep),
+            space_or_line_ending_many0,
+        )),
+        |(_, _, items, _, _, _, n, _, _)| repeated(Expr::Seq(items), n),
+    )(s)
+}
+
 /// `pow( <小節列> )` と `pat( "<パターン>", <小節列> )`
 #[tracable_parser]
 fn apply_parser(s: Span) -> IResult<Span, Expr> {
@@ -288,11 +353,18 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             space0,
             tag(")"),
             space0,
+            // `pow(C) x2` の `x2` は閉じ括弧の後ろ、行末の判定より前
+            opt(repeat_suffix),
             // 閉じ括弧の直後が行末なら、この関数でひと行が終わる
             opt(peek(line_ending)),
             space_or_line_ending_many0,
         )),
-        |(func, items, _, _, _, br, _)| Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some()),
+        |(func, items, _, _, _, n, br, _)| {
+            repeated(
+                Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some()),
+                n,
+            )
+        },
     )(s)
 }
 
@@ -305,10 +377,14 @@ fn measure_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((
             many1(delimited(space0, node_parser, space0)),
+            // `Am x3 |` の `x3` は小節の中身と区切りの間にある。`node_parser`
+            // は `x` で始まるものを受け付けないので、many1 はここで止まり、
+            // `x3` がそのまま残る
+            opt(repeat_suffix),
             measure_sep,
             space_or_line_ending_many0,
         )),
-        |(nodes, br, _)| Expr::Measure(nodes, br),
+        |(nodes, n, br, _)| repeated(Expr::Measure(nodes, br), n),
     )(s)
 }
 
@@ -672,6 +748,130 @@ mod tests {
         }
         // 本体は C と E の2小節だけ。Am / F を飲み込んでいない
         assert_eq!(count_measures(body), 2, "本体が次の行まで伸びている: {:?}", body);
+    }
+
+    #[test]
+    fn test_repeat_on_measure() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("C | Am x3 |\n").unwrap();
+        fn find_repeat(e: &Expr) -> Option<u8> {
+            match e {
+                Expr::Repeat(_, n) => Some(*n),
+                Expr::Seq(items) => items.iter().find_map(find_repeat),
+                _ => None,
+            }
+        }
+        assert_eq!(find_repeat(&ast), Some(3));
+    }
+
+    #[test]
+    fn test_repeat_on_group() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("(C | Am | F | G) x4\n").unwrap();
+        fn find_repeat(e: &Expr) -> Option<(usize, u8)> {
+            match e {
+                Expr::Repeat(inner, n) => match inner.as_ref() {
+                    Expr::Seq(items) => Some((items.len(), *n)),
+                    _ => Some((1, *n)),
+                },
+                Expr::Seq(items) => items.iter().find_map(find_repeat),
+                _ => None,
+            }
+        }
+        assert_eq!(find_repeat(&ast), Some((4, 4)));
+    }
+
+    #[test]
+    fn test_repeat_on_ref() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("$a = C\n$a x2\n").unwrap();
+        fn has_repeat_of_ref(e: &Expr) -> bool {
+            match e {
+                Expr::Repeat(inner, 2) => matches!(inner.as_ref(), Expr::Ref(n) if n == "a"),
+                Expr::Seq(items) => items.iter().any(has_repeat_of_ref),
+                _ => false,
+            }
+        }
+        assert!(has_repeat_of_ref(&ast), "{:?}", ast);
+    }
+
+    #[test]
+    fn test_repeat_rejects_out_of_range() {
+        use crate::import::{Importer, RechordImporter};
+        // x0 / x1 は意味がないのでエラー
+        assert!(RechordImporter.import("C x0 |\n").is_err());
+        assert!(RechordImporter.import("C x1 |\n").is_err());
+        // 33 以上もエラー
+        assert!(RechordImporter.import("C x33 |\n").is_err());
+    }
+
+    #[test]
+    fn test_group_without_repeat() {
+        use crate::import::{Importer, RechordImporter};
+        assert!(RechordImporter.import("(C | Am)\n").is_ok());
+    }
+
+    #[test]
+    fn test_paren_is_not_confused_with_func() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Func};
+        // pow( は関数、( はグループ
+        let ast = RechordImporter.import("pow(C) (D | E) x2\n").unwrap();
+        fn has_pow(e: &Expr) -> bool {
+            match e {
+                Expr::Apply(Func::Pow, _, _) => true,
+                Expr::Seq(items) => items.iter().any(has_pow),
+                Expr::Repeat(inner, _) => has_pow(inner),
+                _ => false,
+            }
+        }
+        assert!(has_pow(&ast), "{:?}", ast);
+    }
+
+    #[test]
+    fn test_repeat_in_define_body() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        // 定義の本体にもリピートが書ける
+        let ast = RechordImporter.import("$a = C x2 | D |\n$a\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
+        fn has_repeat(e: &Expr) -> bool {
+            match e {
+                Expr::Repeat(_, _) => true,
+                Expr::Seq(items) => items.iter().any(has_repeat),
+                _ => false,
+            }
+        }
+        assert!(has_repeat(body), "定義の本体にリピートが無い: {:?}", body);
+    }
+
+    #[test]
+    fn test_nested_group() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        // グループは入れ子にできる
+        let ast = RechordImporter.import("((C | Am) x2 | D) x3\n").unwrap();
+        fn outer(e: &Expr) -> Option<&Expr> {
+            match e {
+                Expr::Repeat(_, _) => Some(e),
+                Expr::Seq(items) => items.iter().find_map(outer),
+                _ => None,
+            }
+        }
+        let Some(Expr::Repeat(inner, 3)) = outer(&ast) else {
+            panic!("外側の x3 が無い: {:?}", ast)
+        };
+        let Expr::Seq(items) = inner.as_ref() else {
+            panic!("外側の中身は Seq: {:?}", inner)
+        };
+        // 内側の (C | Am) x2 と D の2項目
+        assert_eq!(items.len(), 2, "{:?}", items);
+        assert!(matches!(&items[0], Expr::Repeat(_, 2)), "{:?}", items[0]);
+        assert!(matches!(&items[1], Expr::Measure(_, _)), "{:?}", items[1]);
     }
 
     #[test]
