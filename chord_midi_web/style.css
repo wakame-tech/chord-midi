@@ -606,10 +606,26 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 /* 1小節分のカードをまとめ、右端に小節線を引く */
 .measure {
     display: flex;
-    align-items: flex-start;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
     padding: 0 12px;
     border-right: 2px solid var(--line);
+}
+
+.measure-cards {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+/* pat() が掛かっている小節に、そのリズムをそのまま出す */
+.rhythm {
+    min-height: 15px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 15px;
+    letter-spacing: 2px;
+    color: var(--muted);
 }
 
 /* 入力の改行位置でカードの並びを折り返す */
