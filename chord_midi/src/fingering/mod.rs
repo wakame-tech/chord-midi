@@ -174,6 +174,61 @@ fn pitch_class(key: &Key) -> Result<u8> {
     }
 }
 
+/// ビット集合に立っているピッチクラスを、root からの半音数にして返す
+fn relative_semitones(mask: u16, root: u8) -> impl Iterator<Item = u8> {
+    (0..12u8)
+        .filter(move |p| ((mask >> *p) & 1) == 1)
+        .map(move |p| (p + 12 - root) % 12)
+}
+
+/// 構成音にあるのに押さえ方に無い音のコスト。ルートからの半音数で引く
+fn missing_cost(semitone: u8) -> u32 {
+    match semitone {
+        0 => 4,       // ルート
+        3 | 4 => 3,   // 3rd
+        10 | 11 => 2, // 7th
+        _ => 1,       // 5th とテンション
+    }
+}
+
+/// 押さえ方にあるのに構成音に無い音のコスト。ルートからの半音数で引く
+fn extra_cost(semitone: u8) -> u32 {
+    match semitone {
+        10 | 11 | 2 | 5 | 9 => 1, // b7 / M7 / 9th / 11th / 13th は自然に足せる
+        0 | 7 => 2,               // ルート / 5th
+        3 | 4 => 3,               // 3rd
+        _ => 4,                   // b9 / b5 / b6 はコードの性格を壊す
+    }
+}
+
+/// コードに一番合う押さえ方を返す。
+///
+/// 構成音に無い音を1つまで許容する。原典は `B` を `B7`、`F#m` を `F#m7` で
+/// 代用させる構成なので、部分集合だけに絞ると素の三和音が軒並み引けなくなる。
+pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
+    let expected_bass = chord.bass.unwrap_or(chord.root);
+    FINGERINGS
+        .iter()
+        .filter(|f| (f.pitch_classes & !chord.pitch_classes).count_ones() <= 1)
+        .min_by_key(|f| {
+            let extra: u32 = relative_semitones(f.pitch_classes & !chord.pitch_classes, chord.root)
+                .map(extra_cost)
+                .sum();
+            let missing: u32 =
+                relative_semitones(chord.pitch_classes & !f.pitch_classes, chord.root)
+                    .map(missing_cost)
+                    .sum();
+            (
+                extra + missing,
+                u8::from(f.bass != expected_bass),
+                // 鳴る弦は多い方が良い
+                std::cmp::Reverse(f.sounding_strings()),
+                // 同点ならローポジション優先
+                f.max_fret().unwrap_or(0),
+            )
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +367,62 @@ mod tests {
         // G = 3x000x。1本指のときは中指
         let g = FINGERINGS.iter().find(|f| f.tab == "3x000x").unwrap();
         assert_eq!(g.fingers[0], Some(Finger::Middle));
+    }
+
+    fn tab_of(input: &str) -> &'static str {
+        let r = refs(input);
+        find(&r[0]).expect("no fingering found").tab
+    }
+
+    #[test]
+    fn find_picks_the_matching_shape() {
+        assert_eq!(tab_of("C |\n"), "x3201x");
+        assert_eq!(tab_of("D |\n"), "xx0232");
+        assert_eq!(tab_of("E |\n"), "022100");
+        assert_eq!(tab_of("F |\n"), "xx321x");
+        assert_eq!(tab_of("G |\n"), "3x000x");
+        assert_eq!(tab_of("A |\n"), "x0222x");
+        assert_eq!(tab_of("Am7 |\n"), "x0201x");
+        assert_eq!(tab_of("Em7 |\n"), "020000");
+        assert_eq!(tab_of("Dm7 |\n"), "xx0211");
+    }
+
+    #[test]
+    fn find_prefers_the_fuller_chord() {
+        // CM7 には C の形 (x3201x) ではなく C△7 の形が選ばれる
+        assert_eq!(tab_of("CM7 |\n"), "x3x000");
+    }
+
+    #[test]
+    fn find_falls_back_to_the_substitute_shape() {
+        // 原典は B を B7、F#m を F#m7 で代用させる構成になっている
+        assert_eq!(tab_of("B |\n"), "x2120x");
+        assert_eq!(tab_of("Am |\n"), "x0201x");
+        assert_eq!(tab_of("Em |\n"), "020000");
+        assert_eq!(tab_of("F#m |\n"), "2x22xx");
+        assert_eq!(tab_of("C#m |\n"), "x4x400");
+    }
+
+    #[test]
+    fn find_rejects_two_extra_notes() {
+        // Cm7 (x3x34x) は C に対して Eb と Bb の2音が余分なので候補に入らない
+        assert_ne!(tab_of("C |\n"), "x3x34x");
+    }
+
+    #[test]
+    fn find_honors_slash_bass() {
+        assert_eq!(tab_of("D/F# |\n"), "2x023x");
+    }
+
+    #[test]
+    fn find_returns_none_when_nothing_fits() {
+        // C# 1音だけの集合に対しては、どの押さえ方も余分な音が2つ以上になる
+        let c = ChordRef {
+            label: "test".to_string(),
+            root: 1,
+            pitch_classes: 1u16 << 1,
+            bass: None,
+        };
+        assert!(find(&c).is_none());
     }
 }
