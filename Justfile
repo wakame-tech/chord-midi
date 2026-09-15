@@ -7,3 +7,7 @@ rechord file:
 gen-fingerings:
     python3 scripts/gen_fingerings.py
     rustfmt --edition 2021 chord_midi/src/fingering/data.rs
+
+gen-presets:
+    python3 scripts/gen_presets.py
+    rustfmt --edition 2021 chord_midi_web/src/presets.rs
