@@ -247,7 +247,7 @@ mod tests {
         // parse -> Display -> parse must preserve the chord tones
         for code in [
             "C", "C7", "Cmaj7", "Cm7", "Csus2", "Csus4", "Cdim7", "Caug7", "C7(b9)", "C7(#9)",
-            "C7(b13)",
+            "C7(b13)", "C7(9)", "C7(9,13)", "CM7(9)",
         ] {
             let (_r, node) = chord_node_parser(span(code)).unwrap();
             let text = format!("{}", node);

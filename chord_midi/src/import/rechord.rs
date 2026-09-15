@@ -63,7 +63,9 @@ fn directive_parser(s: Span) -> IResult<Span, Ast> {
 fn comment_parser(s: Span) -> IResult<Span, Ast> {
     map(
         tuple((tag("#"), not_line_ending, line_ending)),
-        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.to_string()),
+        // `# ` の後ろの空白は落とす。Display 側が `# ` を付けて出すので、
+        // 残したままだと書き戻すたびに空白が1つずつ増えていく
+        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.trim().to_string()),
     )(s)
 }
 

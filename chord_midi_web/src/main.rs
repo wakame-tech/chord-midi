@@ -43,6 +43,13 @@ fn compile(input: &str, bpm: u8) -> Result<(String, Vec<MeasureRef>, Vec<u8>), S
     Ok((ast_str, measures, bytes))
 }
 
+/// 画面のタブ。プレイヤーはタブの外に置くので、切り替えても再生は止まらない
+#[derive(Clone, Copy, PartialEq)]
+enum Tab {
+    Editor,
+    Preview,
+}
+
 #[function_component(App)]
 fn app() -> Html {
     let input = use_state(String::new);
@@ -50,6 +57,9 @@ fn app() -> Html {
     let loop_on = use_state(|| false);
     let result = use_state(String::new);
     let measures = use_state(Vec::<MeasureRef>::new);
+    let tab = use_state(|| Tab::Editor);
+    // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
+    let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
     let url = use_state(String::new);
     let playing = use_mut_ref(|| false);
@@ -59,6 +69,7 @@ fn app() -> Html {
     // otherwise be a stale first-render snapshot (so its prev-URL revoke never ran).
     let applied = use_mut_ref(|| String::new());
     let player_ref = use_node_ref();
+    let gutter_ref = use_node_ref();
 
     // input か bpm が変わるたびに再計算
     {
@@ -146,6 +157,11 @@ fn app() -> Html {
         let applied = applied.clone();
         use_effect_with((), move |_| {
             if let Some(el) = player_ref.cast::<web_sys::Element>() {
+                // visualizer 属性を付け直して紐付けをやり直す。Yew はツリーを
+                // 組み立てる途中でこの属性をセットするので、その時点では
+                // フッタの #visualizer がまだ document に無く解決に失敗する
+                let _ = el.remove_attribute("visualizer");
+                let _ = el.set_attribute("visualizer", "#visualizer");
                 {
                     let playing = playing.clone();
                     let cb = Closure::<dyn FnMut()>::new(move || {
@@ -188,6 +204,16 @@ fn app() -> Html {
             input.set(ta.value());
         })
     };
+    // 行番号ガターをテキストエリアのスクロールに追従させる
+    let on_scroll = {
+        let gutter_ref = gutter_ref.clone();
+        Callback::from(move |e: Event| {
+            let ta: HtmlTextAreaElement = e.target_unchecked_into();
+            if let Some(gutter) = gutter_ref.cast::<web_sys::Element>() {
+                gutter.set_scroll_top(ta.scroll_top());
+            }
+        })
+    };
     let on_bpm = {
         let bpm = bpm.clone();
         Callback::from(move |e: InputEvent| {
@@ -214,10 +240,12 @@ fn app() -> Html {
     };
     let on_scale = {
         let input = input.clone();
+        let scale_name = scale_name.clone();
         Callback::from(move |e: Event| {
             let el: HtmlSelectElement = e.target_unchecked_into();
             if let Ok(scale) = Scale::from_str(&el.value()) {
                 input.set(set_scale(input.as_str(), scale));
+                scale_name.set(el.value());
             }
         })
     };
@@ -257,64 +285,159 @@ fn app() -> Html {
         rows
     };
 
-    html! {
-        <div>
-            <h1>{"chord_midi_web"}</h1>
-            <textarea rows=8 cols=50 oninput={on_input}
-                value={(*input).clone()}></textarea>
-            <div>
-                <label>{format!("BPM: {}", *bpm)}</label>
-                <input type="range" min="40" max="240" value={bpm.to_string()}
-                    oninput={on_bpm} />
+    let on_editor_tab = {
+        let tab = tab.clone();
+        Callback::from(move |_| tab.set(Tab::Editor))
+    };
+    let on_preview_tab = {
+        let tab = tab.clone();
+        Callback::from(move |_| tab.set(Tab::Preview))
+    };
+
+    let has_error = !(*error).is_empty();
+
+    let editor = html! {
+        <>
+            <div class="editor-wrap">
+                <div class="gutter" ref={gutter_ref}>
+                    { for (1..=(*input).split('\n').count()).map(|n| html! {
+                        <div class="gutter-line">{n}</div>
+                    }) }
+                </div>
+                <textarea
+                    class="editor"
+                    rows=10
+                    spellcheck="false"
+                    wrap="off"
+                    placeholder="key: C\nC | Am | F | G |"
+                    oninput={on_input}
+                    onscroll={on_scroll}
+                    value={(*input).clone()}
+                ></textarea>
             </div>
-            <div>
-                <label>
-                    <input type="checkbox" checked={*loop_on} onchange={on_loop} />
-                    {"loop"}
-                </label>
+            if has_error {
+                <p class="error">{(*error).clone()}</p>
+            }
+
+            <div class="controls">
+                <div class="field">
+                    <label for="bpm">{"BPM"}</label>
+                    <input id="bpm" type="range" min="40" max="240"
+                        style={format!("--fill: {}%", (*bpm as f32 - 40.0) / 2.0)}
+                        value={bpm.to_string()} oninput={on_bpm} />
+                    <output class="field-value">{*bpm}</output>
+                </div>
+                <div class="field">
+                    <label class="switch">
+                        <input type="checkbox" checked={*loop_on} onchange={on_loop} />
+                        <span class="switch-track"></span>
+                        <span class="switch-label">{"ループ再生"}</span>
+                    </label>
+                </div>
+                <div class="field">
+                    <label>{"キー"}</label>
+                    <button class="btn btn-icon" onclick={on_key_down} title="半音下げる">{"♭"}</button>
+                    <button class="btn btn-icon" onclick={on_key_up} title="半音上げる">{"♯"}</button>
+                </div>
+                <div class="field">
+                    <label for="scale">{"スケール"}</label>
+                    <select id="scale" onchange={on_scale}>
+                        { for ["major","minor","dorian","phrygian","lydian","mixolydian","locrian"]
+                            .iter().map(|s| html!{
+                                <option value={*s} selected={*s == scale_name.as_str()}>{*s}</option>
+                            }) }
+                    </select>
+                </div>
             </div>
-            <div>
-                <button onclick={on_key_down}>{"♭ key"}</button>
-                <button onclick={on_key_up}>{"key ♯"}</button>
+
+            <div class="block">
+                <span class="block-label">{"進行プリセット"}</span>
+                <div class="presets">
+                    { for presets::PRESETS.iter().map(|(name, degrees)| {
+                        let input = input.clone();
+                        let degrees = degrees.to_string();
+                        let onclick = Callback::from(move |_| {
+                            let cur = (*input).clone();
+                            let next = if cur.trim().is_empty() { degrees.clone() }
+                                       else { format!("{}\n{}", cur.trim_end(), degrees) };
+                            input.set(next);
+                        });
+                        html!{ <button class="btn" {onclick}>{name}</button> }
+                    }) }
+                </div>
             </div>
-            <div>
-                <label>{"scale: "}</label>
-                <select onchange={on_scale}>
-                    { for ["major","minor","dorian","phrygian","lydian","mixolydian","locrian"]
-                        .iter().map(|s| html!{ <option value={*s}>{*s}</option> }) }
-                </select>
-            </div>
-            <div>
-                { for presets::PRESETS.iter().map(|(name, degrees)| {
-                    let input = input.clone();
-                    let degrees = degrees.to_string();
-                    let onclick = Callback::from(move |_| {
-                        let cur = (*input).clone();
-                        let next = if cur.trim().is_empty() { degrees.clone() }
-                                   else { format!("{}\n{}", cur.trim_end(), degrees) };
-                        input.set(next);
-                    });
-                    html!{ <button {onclick}>{name}</button> }
-                }) }
-            </div>
-            <div class="fingerings">{cards}</div>
-            <div>
+
+            <div class="block">
                 {
                     if (*url).is_empty() {
-                        html! { <button disabled=true>{"MIDIを保存"}</button> }
+                        html! { <button class="btn" disabled=true>{"MIDIを保存"}</button> }
                     } else {
                         html! {
-                            <a href={(*url).clone()} download="chord.mid">{"MIDIを保存"}</a>
+                            <a class="btn btn-primary" href={(*url).clone()}
+                                download="chord.mid">{"MIDIを保存"}</a>
                         }
                     }
                 }
             </div>
-            <p style="color: red">{(*error).clone()}</p>
-            <pre>{(*result).clone()}</pre>
 
-            <midi-player ref={player_ref} visualizer="#visualizer" />
-            <midi-visualizer type="piano-roll" id="visualizer" />
-        </div>
+            <details class="ast">
+                <summary>{"解釈結果"}</summary>
+                <pre>{(*result).clone()}</pre>
+            </details>
+        </>
+    };
+
+    let preview = if cards.is_empty() {
+        html! {
+            <p class="empty">
+                {"エディタタブでコード進行を入力すると、ここに押さえ方が出ます。"}
+            </p>
+        }
+    } else {
+        html! { <div class="fingerings">{cards}</div> }
+    };
+
+    html! {
+        <>
+            <header class="app-header">
+                <div class="app-title">
+                    <span class="app-name">{"chord-midi"}</span>
+                    <span class="app-tagline">{"コード進行から MIDI とギターの押さえ方を作る"}</span>
+                </div>
+            </header>
+
+            <nav class="tabs">
+                <button
+                    class={classes!("tab", (*tab == Tab::Editor).then_some("is-active"))}
+                    onclick={on_editor_tab}
+                >
+                    {"エディタ"}
+                    if has_error {
+                        <span class="tab-badge" title="入力にエラーがあります">{"!"}</span>
+                    }
+                </button>
+                <button
+                    class={classes!("tab", (*tab == Tab::Preview).then_some("is-active"))}
+                    onclick={on_preview_tab}
+                >
+                    {"プレビュー"}
+                </button>
+            </nav>
+
+            <main class="panel">
+                if *tab == Tab::Editor { {editor} } else { {preview} }
+            </main>
+
+            // プレイヤーはタブの外に固定で置く。タブを切り替えても再生は止まらない
+            <footer class="app-footer">
+                // 何も読み込んでいないときは高さを潰す。要素は外さない（player の参照先なので）
+                <midi-visualizer type="piano-roll" id="visualizer"
+                    class={if (*url).is_empty() { "is-empty" } else { "" }} />
+                <div class="footer-inner">
+                    <midi-player ref={player_ref} visualizer="#visualizer" />
+                </div>
+            </footer>
+        </>
     }
 }
 
