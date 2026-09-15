@@ -72,6 +72,9 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
         Expr::Define(_, body) => shift_ast(body, delta, seen),
         // リピートの中身にもコードが入るので潜る。回数は移調で変わらない
         Expr::Repeat(inner, _, _) => shift_ast(inner, delta, seen),
+        // 展開の跡。移調は編集中の AST に掛かるので普通は現れないが、
+        // 現れたら中身のコードを動かす
+        Expr::Section(_, inner) => shift_ast(inner, delta, seen),
         Expr::Ref(_, _) => {}
         Expr::Comment(_) => {}
         // パターン文字列は移調で変わらない。`Func::Pat` の引数としてしか
@@ -347,6 +350,7 @@ mod tests {
                 Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
                 Expr::Define(_, body) => pitches(body, out),
                 Expr::Repeat(inner, _, _) => pitches(inner, out),
+                Expr::Section(_, inner) => pitches(inner, out),
                 Expr::Apply(_, inner, _) => pitches(inner, out),
                 Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
                 Expr::Measure(nodes, _) => {

@@ -141,6 +141,9 @@ pub struct MeasureRef {
     pub line_break: bool,
     /// この小節を囲んでいる `pat()` のリズム。無ければ None
     pub pattern: Option<Pattern>,
+    /// この小節が由来する `$name`。定義の外なら None。
+    /// 入れ子の定義では外側 (曲構成の単位) の名前が付く
+    pub section: Option<String>,
 }
 
 /// AST に現れるコードを小節ごとにまとめて取り出す。
@@ -148,17 +151,26 @@ pub struct MeasureRef {
 /// 呼ぶ前に [`Expr::resolve`] を通しておくこと。
 pub fn measure_refs(ast: &Expr) -> Result<Vec<MeasureRef>> {
     let mut out = Vec::new();
-    collect_ast(ast, None, &mut out)?;
+    collect_ast(ast, None, None, &mut out)?;
     Ok(out)
 }
 
 /// `pattern` は外側の `pat()` から降ってきたリズム。
-/// 内側の `pat()` が優先されるのは export/midi.rs の解釈と同じ
-fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>) -> Result<()> {
+/// 内側の `pat()` が優先されるのは export/midi.rs の解釈と同じ。
+///
+/// `section` は外側の `$name` から降ってきた定義の名前。リズムとは逆に
+/// **外側が優先される**。`$verse = $riff | $riff | F | G` のとき、カードに
+/// 出したいのは曲構成の単位である `$verse` であって、その部品の `$riff` ではない
+fn collect_ast(
+    ast: &Expr,
+    pattern: Option<&Pattern>,
+    section: Option<&str>,
+    out: &mut Vec<MeasureRef>,
+) -> Result<()> {
     match ast {
         Expr::Seq(items) => {
             for item in items {
-                collect_ast(item, pattern, out)?;
+                collect_ast(item, pattern, section, out)?;
             }
         }
         Expr::Measure(nodes, line_break) => {
@@ -170,6 +182,7 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
                 chords,
                 line_break: *line_break,
                 pattern: pattern.cloned(),
+                section: section.map(str::to_string),
             });
         }
         Expr::Apply(func, inner, _) => {
@@ -181,10 +194,17 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
                 }
                 Func::Pow | Func::Oct => pattern,
             };
-            collect_ast(inner, next, out)?;
+            collect_ast(inner, next, section, out)?;
+        }
+        // 展開の跡。まだ名前が付いていなければ付ける。既に付いているなら
+        // そちらが外側なので触らない
+        Expr::Section(name, inner) => {
+            collect_ast(inner, pattern, Some(section.unwrap_or(name)), out)?
         }
         // resolve() 済みなら包みは消えている。念のため中身へ潜る
-        Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => collect_ast(inner, pattern, out)?,
+        Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => {
+            collect_ast(inner, pattern, section, out)?
+        }
         Expr::Comment(_) => {}
         // `Func::Pat` の引数としてしか現れない。Apply の腕で処理済みなので
         // ここに直接来ることはない
@@ -463,6 +483,49 @@ mod tests {
             two_lines.iter().map(|m| m.line_break).collect::<Vec<_>>(),
             vec![true, true]
         );
+    }
+
+    #[test]
+    fn measure_refs_carry_section_name() {
+        let ms = measures("$A = C | Am |\n$A | F |\n");
+        assert_eq!(ms.len(), 3);
+        assert_eq!(ms[0].section.as_deref(), Some("A"));
+        assert_eq!(ms[1].section.as_deref(), Some("A"));
+        // $A の外の小節には名前が付かない
+        assert_eq!(ms[2].section, None);
+    }
+
+    #[test]
+    fn measure_refs_name_both_repeated_sets() {
+        // xN は $A の中身を並べ直すだけ。どちらのセットも $A 由来
+        let ms = measures("$A = C | Am |\n$A x2\n");
+        assert_eq!(ms.len(), 4);
+        assert!(
+            ms.iter().all(|m| m.section.as_deref() == Some("A")),
+            "{:?}",
+            ms.iter().map(|m| &m.section).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn measure_refs_use_the_outer_section_name() {
+        // $b の中で $a を使っている。カードに出したいのは曲構成の単位である $b
+        let ms = measures("$a = C\n$b = $a | $a |\n$b | F |\n");
+        assert_eq!(ms.len(), 3);
+        assert_eq!(ms[0].section.as_deref(), Some("b"));
+        assert_eq!(ms[1].section.as_deref(), Some("b"));
+        assert_eq!(ms[2].section, None);
+    }
+
+    #[test]
+    fn measure_refs_keep_both_pattern_and_section() {
+        // pat() のリズムは内側が、定義の名前は外側が勝つ。互いに潰し合わない
+        let ms = measures("$A = C | Am |\npat(\"o.o.\", $A)\n");
+        assert_eq!(ms.len(), 2);
+        for m in &ms {
+            assert_eq!(m.section.as_deref(), Some("A"));
+            assert_eq!(m.pattern.as_ref().unwrap().to_string(), "o.o.");
+        }
     }
 
     #[test]

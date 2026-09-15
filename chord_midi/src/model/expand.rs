@@ -47,6 +47,8 @@ fn measures_in(expr: &Expr) -> usize {
         Expr::Seq(items) => items.iter().map(measures_in).sum(),
         Expr::Apply(_, inner, _) => measures_in(inner),
         Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => measures_in(inner),
+        // 展開の跡。小節を増やしも減らしもしない
+        Expr::Section(_, inner) => measures_in(inner),
         Expr::Comment(_) | Expr::Pattern(_) => 0,
         // 展開後には残らない
         Expr::Define(_, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => 0,
@@ -86,7 +88,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             };
             // 複製する前に、複製で増える小節を計上する
             env.charge(measures)?;
-            Ok(env.defs[&name].body.clone())
+            Ok(section(&name, env.defs[&name].body.clone()))
         }
         Expr::Repeat(inner, n, _) => {
             let inner = expand_in(*inner, env)?;
@@ -106,7 +108,9 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
                 Expr::Ref(name, _) => Some(format!("${}", name)),
                 _ => None,
             };
-            let arg = expand_in(*arg, env)?;
+            // 第1引数は小節ではなく値なので、由来の名前を持ち回っても意味が無い。
+            // `Section` を被せたままだと `as_pattern` が中身を見られなくなる
+            let arg = strip_sections(expand_in(*arg, env)?);
             if !matches!(arg, Expr::Pattern(_)) {
                 return Err(match given {
                     Some(name) => anyhow!(
@@ -134,6 +138,9 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             "${} の定義が式の位置にある。定義は行の先頭に書くこと",
             name
         )),
+        // 既に展開済みの跡。`resolve` を2度通しても中身を数え直すだけで、
+        // `Section` が二重に被ることはない
+        Expr::Section(name, inner) => Ok(Expr::Section(name, Box::new(expand_in(*inner, env)?))),
         Expr::Comment(c) => Ok(Expr::Comment(c)),
         Expr::Measure(nodes, br) => {
             env.charge(1)?;
@@ -161,6 +168,27 @@ fn define(name: String, body: Expr, env: &mut Env) -> Result<()> {
     Ok(())
 }
 
+/// 展開した本体に「`$name` から来た」という跡を付ける。
+///
+/// 本体が小節列なら、包みを1つ被せるのではなく要素ごとに包む。
+/// まとめて包むと `push_flat` が畳めない `Seq` が残り、
+/// 「小節が平らに並んだ `Seq`」という形が崩れてしまう
+fn section(name: &str, body: Expr) -> Expr {
+    match body {
+        Expr::Seq(items) => Expr::Seq(items.into_iter().map(|it| section(name, it)).collect()),
+        other => Expr::Section(name.to_string(), Box::new(other)),
+    }
+}
+
+/// `Section` の包みを剥がして中身を取り出す。入れ子の定義を辿ると
+/// 何重にも被ることがあるので、無くなるまで剥がす
+fn strip_sections(mut expr: Expr) -> Expr {
+    while let Expr::Section(_, inner) = expr {
+        expr = *inner;
+    }
+    expr
+}
+
 /// 展開の結果を親のリストへ差し込む。`Ref` と `Repeat` が置いていく入れ子の
 /// `Seq` をここで畳み、「小節が平らに並んだ `Seq`」という形を保つ
 fn push_flat(out: &mut Vec<Expr>, expr: Expr) {
@@ -183,6 +211,7 @@ fn describe(expr: &Expr) -> &'static str {
         Expr::Define(_, _) => "定義",
         Expr::Ref(_, _) => "参照",
         Expr::Repeat(_, _, _) => "リピート",
+        Expr::Section(_, _) => "展開済みの参照",
     }
 }
 
@@ -215,6 +244,7 @@ mod tests {
                 arg_ok && is_clean(inner)
             }
             Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => is_clean(inner),
+            Expr::Section(_, inner) => is_clean(inner),
             _ => true,
         }
     }
@@ -225,6 +255,7 @@ mod tests {
             Expr::Seq(items) => items.iter().map(count_measures).sum(),
             Expr::Apply(_, inner, _) => count_measures(inner),
             Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => count_measures(inner),
+            Expr::Section(_, inner) => count_measures(inner),
             _ => 0,
         }
     }
@@ -276,6 +307,23 @@ mod tests {
         assert!(pat_arg_is_pattern(&e), "{:?}", e);
     }
 
+    /// 参照の参照でも `pat` の第1引数はリズムパターンのまま取り出せること。
+    /// `Section` は値の位置では意味が無いので、何重に被っていても剥がす
+    #[test]
+    fn test_pattern_ref_chain_in_pat() {
+        use crate::model::ast::Func;
+        let e = expanded("$eight = \"o.o.o.o.\"\n$same = $eight\npat($same, C)\n");
+        fn pat_arg(e: &Expr) -> Option<&Expr> {
+            match e {
+                Expr::Apply(Func::Pat(a), _, _) => Some(a.as_ref()),
+                Expr::Seq(items) => items.iter().find_map(pat_arg),
+                _ => None,
+            }
+        }
+        let arg = pat_arg(&e).unwrap_or_else(|| panic!("no pat: {:?}", e));
+        assert!(matches!(arg, Expr::Pattern(_)), "{:?}", arg);
+    }
+
     #[test]
     fn test_undefined_ref_errors() {
         assert!(err("$nope | C |\n").contains("nope"));
@@ -325,6 +373,61 @@ mod tests {
         );
     }
 
+    /// 参照を展開しても `Seq` は平らなまま。`Section` は小節列をまとめて
+    /// 包むのではなく、小節1つずつに被せる
+    #[test]
+    fn test_section_does_not_nest_seq() {
+        let e = expanded("$a = C | Am |\n$a x2\n");
+        let Expr::Seq(items) = &e else {
+            panic!("not a seq: {:?}", e)
+        };
+        assert_eq!(items.len(), 4, "{:?}", items);
+        assert!(
+            items.iter().all(|it| matches!(
+                it,
+                Expr::Section(name, inner)
+                    if name == "a" && matches!(inner.as_ref(), Expr::Measure(_, _))
+            )),
+            "{:?}",
+            items
+        );
+    }
+
+    /// 入れ子の定義では `Section` も入れ子になる。深さは定義の入れ子の分だけで、
+    /// 同じ名前が何重にも重なったりはしない
+    #[test]
+    fn test_nested_defines_nest_sections_once_each() {
+        let e = expanded("$a = C\n$b = $a | $a |\n$b\n");
+        let Expr::Seq(items) = &e else {
+            panic!("not a seq: {:?}", e)
+        };
+        assert_eq!(items.len(), 2, "{:?}", items);
+        for item in items {
+            let Expr::Section(outer, inner) = item else {
+                panic!("not a section: {:?}", item)
+            };
+            assert_eq!(outer, "b");
+            let Expr::Section(inner_name, body) = inner.as_ref() else {
+                panic!("not a nested section: {:?}", inner)
+            };
+            assert_eq!(inner_name, "a");
+            assert!(matches!(body.as_ref(), Expr::Measure(_, _)), "{:?}", body);
+        }
+    }
+
+    /// `resolve()` を2度通しても `Section` が二重に被らないこと。
+    /// 1度目で `Ref` は消えているので、2度目の展開は中身を数え直すだけ
+    #[test]
+    fn test_resolve_does_not_re_wrap_sections() {
+        let once = RechordImporter
+            .import("$a = C\n$b = $a | $a |\n$b | F |\n")
+            .unwrap()
+            .resolve()
+            .unwrap();
+        let twice = once.clone().resolve().unwrap();
+        assert_eq!(once, twice);
+    }
+
     /// `expand` は度数を実音に変えない。`Ref` を度数のままの本体に置き換えるだけで、
     /// 解決は後から `into_pitch` が `Keyed` のスコープを降りながら行う。
     /// 度数表記のリフをキーを変えて使い回せるのはこの順序のおかげ
@@ -345,6 +448,7 @@ mod tests {
                 Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
                 Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
                 Expr::Apply(_, inner, _) => pitches(inner, out),
+                Expr::Section(_, inner) => pitches(inner, out),
                 Expr::Measure(nodes, _) => {
                     for n in nodes {
                         if let crate::model::ast::Node::Chord(c) = n {

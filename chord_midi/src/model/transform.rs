@@ -59,6 +59,10 @@ impl Expr {
             Expr::Repeat(inner, n, br) => {
                 Expr::Repeat(Box::new(inner.into_degree(tonic, scale)), n, br)
             },
+            // 展開の跡。名前は残したまま中身だけ変換する
+            Expr::Section(name, inner) => {
+                Expr::Section(name, Box::new(inner.into_degree(tonic, scale)))
+            }
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
@@ -100,6 +104,11 @@ impl Expr {
             Expr::Repeat(inner, n, br) => {
                 Expr::Repeat(Box::new(inner.into_pitch(tonic, scale)), n, br)
             },
+            // 展開の跡。名前は残したまま中身だけ変換する。`Keyed` を包んだ
+            // ままでも、その `Keyed` は中身へ潜る途中で消える
+            Expr::Section(name, inner) => {
+                Expr::Section(name, Box::new(inner.into_pitch(tonic, scale)))
+            }
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
             Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),
@@ -265,6 +274,8 @@ mod tests {
                 Expr::Measure(_, _) => 1,
                 Expr::Seq(items) => items.iter().map(count_measures).sum(),
                 Expr::Apply(_, inner, _) => count_measures(inner),
+                // 展開の跡。中身の小節を数える
+                Expr::Section(_, inner) => count_measures(inner),
                 _ => 0,
             }
         }

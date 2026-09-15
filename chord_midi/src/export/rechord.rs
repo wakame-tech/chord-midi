@@ -132,6 +132,10 @@ impl Display for Expr {
             // 区切りも行末も付けない素の形。`pat($a, C)` の引数にも使われる。
             // 小節の位置に置かれたときの `|` と改行は `Seq` 側が出す
             Expr::Ref(name, _) => write!(f, "${}", name),
+            // `expand` が置いた跡。書き戻す記法は `$name` 側にあるので、
+            // ここは展開された中身をそのまま出す。`resolve()` 前の AST に
+            // `Section` は現れないので round-trip には効かない
+            Expr::Section(_, inner) => write!(f, "{}", inner),
             Expr::Repeat(inner, n, br) => {
                 // 1項目だけの `Seq` は素の式と区別が付かない。`(C) x2` が
                 // `C x2` と同じ意味になるよう、括弧の判定の前に剥がす

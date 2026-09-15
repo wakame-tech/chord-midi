@@ -221,6 +221,8 @@ impl Score {
                 self.interpret_with_pattern(*inner, &pattern)
             }
             Expr::Apply(_, inner, _) => self.interpret(*inner),
+            // 展開の跡。どの定義から来たかは音に関係しないので中身へ潜るだけ
+            Expr::Section(_, inner) => self.interpret(*inner),
             Expr::Measure(measure, _) => {
                 let dur = Self::measure_unit_size(measure.len()).unwrap();
                 for node in measure {
@@ -268,6 +270,9 @@ impl Score {
                 self.interpret_with_pattern(*items, &inner_pattern)
             }
             Expr::Apply(_, items, _) => self.interpret_with_pattern(*items, pattern),
+            // 展開の跡。ここで `interpret` に落とすと `pat()` のリズムが
+            // 定義由来の小節にだけ掛からなくなるので、パターンを持ったまま潜る
+            Expr::Section(_, inner) => self.interpret_with_pattern(*inner, pattern),
             other => self.interpret(other),
         }
     }
