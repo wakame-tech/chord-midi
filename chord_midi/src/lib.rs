@@ -5,4 +5,5 @@ pub mod import;
 pub mod lint;
 pub mod model;
 pub mod presets;
+pub mod reference;
 pub mod textedit;
