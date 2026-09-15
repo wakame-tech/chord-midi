@@ -491,9 +491,19 @@ fn desugar_shapes(expr: Expr) -> Vec<Expr> {
 }
 ```
 
-`mark` / `into_pitch` / `into_degree` の `Apply` の腕も `Box<Expr>` に合わせる:
+`mark` / `into_pitch` / `into_degree` の `Apply` の腕も `Box<Expr>` に合わせる。
+**`mark` には `Seq` の腕も要る** — `Apply` の中身が `Seq` になったので、
+腕が無いと `pow(pat(...))` のように pow が外側のとき、修飾が `Seq` の壁で
+止まって内側のコードに届かない:
 
 ```rust
+        // `Apply` の中身は常に `Seq` なので、その中の各要素へ潜って印を付け直す
+        Expr::Seq(items) => Expr::Seq(
+            items
+                .into_iter()
+                .map(|item| mark(item, modifier.clone()))
+                .collect(),
+        ),
         Expr::Apply(func, inner, br) => Expr::Apply(
             func,
             Box::new(mark(*inner, modifier)),
@@ -545,9 +555,16 @@ fn desugar_shapes(expr: Expr) -> Vec<Expr> {
             Expr::Apply(_, inner, _) => self.interpret(*inner),
 ```
 
-同 `interpret_with_pattern`:
+同 `interpret_with_pattern`。**`Seq` の腕が要る** — 無いと `other` に落ちて
+`interpret` に回り、パターンが子へ伝播しなくなる:
 
 ```rust
+            Expr::Seq(items) => {
+                for item in items {
+                    self.interpret_with_pattern(item, pattern)?;
+                }
+                Ok(())
+            }
             Expr::Apply(Func::Pat(inner_pattern), items, _) => {
                 let inner_pattern = inner_pattern.clone();
                 self.interpret_with_pattern(*items, &inner_pattern)
@@ -1549,6 +1566,64 @@ git commit -m "docs: key: のスコープと --print-ast の使い方を書く"
 
 ---
 
+## Task 13: 整形パス
+
+**このリポジトリは元から fmt-clean ではない** (`253ebf5` の時点で `edit.rs` に5箇所)。
+Task 3 の `Box` 除去で行が短くなり、`cargo fmt --check` の指摘は約40箇所に増えている。
+大半は折り返しの解消で意味的な問題はない。
+
+**個別タスクの中で `cargo fmt` を走らせないこと。** 整形差分が混ざると
+「アサーションの意味が変わっていないか」をレビューで追えなくなる。
+Phase 1 の全タスクが終わってから、整形だけのコミットを1本立てる。
+
+- [ ] **Step 1: 整形前のテストを確認**
+
+```bash
+cargo test --workspace
+```
+
+Expected: PASS (整形の前後で結果が変わらないことを確かめるための基準)
+
+- [ ] **Step 2: 整形する**
+
+```bash
+cargo fmt --all
+```
+
+- [ ] **Step 3: 差分が整形だけであることを確認**
+
+```bash
+git diff --stat
+git diff | grep -E "^[+-]" | grep -v "^[+-][+-]" | grep -vE "^\s*[+-]\s*$" | head -40
+```
+
+意味のある変更 (識別子・リテラル・制御構造) が混ざっていないこと。
+
+- [ ] **Step 4: テストとゴールデンを確認**
+
+```bash
+cargo test --workspace && git diff --stat HEAD -- chord_midi/tests/golden/
+```
+
+Expected: PASS、ゴールデンの差分は空
+
+- [ ] **Step 5: CI に fmt チェックを足す**
+
+`.github/workflows/test.yml` の `cargo test --workspace` の前に:
+
+```yaml
+      - run: cargo fmt --all -- --check
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "style: cargo fmt を当て、CI に fmt チェックを足す"
+```
+
+---
+
 ## 完了条件
 
 - `cargo test --workspace` が通る
@@ -1557,6 +1632,7 @@ git commit -m "docs: key: のスコープと --print-ast の使い方を書く"
 - web で入力 → 再生 → MIDI 保存 → 移調 → スケール変更 → 押さえ方表示が今までどおり動く
 - `Expr` に `Directive` が無く、`Keyed` / `Scaled` がある
 - `resolve()` の後に `Keyed` / `Scaled` / `Comment` が残らない
+- `cargo fmt --all -- --check` が通り、CI がそれを検査している
 
 ## Phase 2 / Phase 3
 
