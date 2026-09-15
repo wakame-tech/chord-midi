@@ -349,7 +349,10 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
                     |(_, _, arg, _, _, _)| Func::Pat(Box::new(arg)),
                 ),
             )),
-            many1(alt((apply_parser, ref_parser, measure_parser))),
+            // group_parser も並べる。`pow((C | D) x2)` のように関数の中で
+            // グループを使えるようにする。`apply_parser` を先に試すので
+            // `pow(` のタグが `(` のグループに食われることはない
+            many1(alt((apply_parser, group_parser, ref_parser, measure_parser))),
             space0,
             tag(")"),
             space0,
@@ -847,6 +850,23 @@ mod tests {
             }
         }
         assert!(has_repeat(body), "定義の本体にリピートが無い: {:?}", body);
+    }
+
+    #[test]
+    fn test_group_inside_func() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Func};
+        // 関数の中にグループとリピートを書ける
+        let ast = RechordImporter.import("pow((C | D) x2)\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Apply(Func::Pow, inner, _) = &items[0] else {
+            panic!("not a pow: {:?}", items[0])
+        };
+        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        assert!(
+            matches!(&inner[0], Expr::Repeat(_, 2)),
+            "関数の中のグループがリピートされていない: {:?}", inner[0]
+        );
     }
 
     #[test]
