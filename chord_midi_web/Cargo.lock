@@ -127,6 +127,7 @@ name = "chord_midi_web"
 version = "0.1.0"
 dependencies = [
  "chord_midi",
+ "serde_json",
  "web-sys",
  "yew",
 ]
