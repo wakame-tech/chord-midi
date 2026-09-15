@@ -1,5 +1,6 @@
 use super::{Exporter, RechordExporter};
 use crate::model::ast::{Ast, ChordNode, Directive, Node};
+use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
 impl Exporter for RechordExporter {
@@ -68,18 +69,35 @@ fn transform_prefix(t: &crate::model::ast::Transform) -> &'static str {
 
 impl Display for ChordNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mods = self
+        // テンションはまとめて `(9,b13)` の形で出す。パーサが読むのはこの形
+        // だけなので、素で並べると `C7(9)` が `C79` になって読み戻せない
+        let (tensions, mods): (Vec<_>, Vec<_>) = self
             .modifiers
+            .iter()
+            .partition(|m| matches!(m, Modifier::Tension(_)));
+        let mods = mods
             .iter()
             .map(|m| format!("{}", m))
             .collect::<Vec<_>>()
             .join("");
+        let tensions = if tensions.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "({})",
+                tensions
+                    .iter()
+                    .map(|m| format!("{}", m))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
         let on = self
             .on
             .as_ref()
             .map(|p| format!("/{}", p))
             .unwrap_or("".to_string());
-        write!(f, "{}{}{}", self.key, mods, on)
+        write!(f, "{}{}{}{}", self.key, mods, tensions, on)
     }
 }
 
