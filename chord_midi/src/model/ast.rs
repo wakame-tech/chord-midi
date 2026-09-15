@@ -27,10 +27,15 @@ pub enum Expr {
     Pattern(Pattern),
     /// `$name = ...`。本体は1行。`expand` が環境に畳んで消す
     Define(String, Box<Expr>),
-    /// `$name`。`expand` が定義の本体に置き換えて消す
-    Ref(String),
-    /// `xN`。N は 2〜32。`expand` が中身を N 個に並べて消す
-    Repeat(Box<Expr>, u8),
+    /// `$name`。`expand` が定義の本体に置き換えて消す。
+    /// 2つ目は「この参照の後ろで入力が改行されている」
+    Ref(String, bool),
+    /// `xN`。N は 2〜32。`expand` が中身を N 個に並べて消す。
+    /// 3つ目は「このリピートの後ろで入力が改行されている」。
+    /// 中身 (`Measure` / `Apply` / `Ref`) が持つ行末フラグではなく、
+    /// こちらが行末の真実。`xN` は必ず中身の直後に来るので、
+    /// 行が終わるのは常にリピート全体の後ろになる
+    Repeat(Box<Expr>, u8, bool),
 }
 
 /// 小節列に掛ける関数

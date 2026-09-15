@@ -56,7 +56,9 @@ impl Expr {
                 Expr::Define(name, Box::new(body.into_degree(tonic, scale)))
             }
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
-            Expr::Repeat(inner, n) => Expr::Repeat(Box::new(inner.into_degree(tonic, scale)), n),
+            Expr::Repeat(inner, n, br) => {
+                Expr::Repeat(Box::new(inner.into_degree(tonic, scale)), n, br)
+            },
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
@@ -95,7 +97,9 @@ impl Expr {
                 Expr::Define(name, Box::new(body.into_pitch(tonic, scale)))
             }
             // リピートは小節の並べ方の話。中身のコードは同じスコープで変換する
-            Expr::Repeat(inner, n) => Expr::Repeat(Box::new(inner.into_pitch(tonic, scale)), n),
+            Expr::Repeat(inner, n, br) => {
+                Expr::Repeat(Box::new(inner.into_pitch(tonic, scale)), n, br)
+            },
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
             Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),

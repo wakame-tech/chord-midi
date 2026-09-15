@@ -71,8 +71,8 @@ fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
         // 定義の本体にもコードが入るので潜る。参照は名前だけなので触らない
         Expr::Define(_, body) => shift_ast(body, delta, seen),
         // リピートの中身にもコードが入るので潜る。回数は移調で変わらない
-        Expr::Repeat(inner, _) => shift_ast(inner, delta, seen),
-        Expr::Ref(_) => {}
+        Expr::Repeat(inner, _, _) => shift_ast(inner, delta, seen),
+        Expr::Ref(_, _) => {}
         Expr::Comment(_) => {}
         // パターン文字列は移調で変わらない。`Func::Pat` の引数としてしか
         // 現れず、ここでは Apply の中身 (`inner`) を辿るだけなので実際には
@@ -316,6 +316,20 @@ mod tests {
     }
 
     #[test]
+    fn test_shift_key_keeps_song_structure() {
+        // 移調ボタンを押しても曲構成の行が潰れないこと。
+        // 小節の位置の参照は行末でも `|` で閉じるので、src も正規化済みの
+        // 形 (`$B |`) にしてある。これで往復が完全に元へ戻る
+        let src = "$A = C | Am |\n$B = F | G |\n$A x2\n$B |\n$A |";
+        assert_eq!(
+            shift_key(src, 1),
+            "$A = C# | A#m |\n$B = F# | G# |\n$A x2\n$B |\n$A |"
+        );
+        // 往復して元に戻る
+        assert_eq!(shift_key(&shift_key(src, 1), -1), src);
+    }
+
+    #[test]
     fn test_shift_ast_descends_into_define_and_repeat() {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Node};
@@ -332,7 +346,7 @@ mod tests {
             match e {
                 Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
                 Expr::Define(_, body) => pitches(body, out),
-                Expr::Repeat(inner, _) => pitches(inner, out),
+                Expr::Repeat(inner, _, _) => pitches(inner, out),
                 Expr::Apply(_, inner, _) => pitches(inner, out),
                 Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
                 Expr::Measure(nodes, _) => {
@@ -344,7 +358,7 @@ mod tests {
                         }
                     }
                 }
-                Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_) => {}
+                Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _) => {}
             }
         }
 

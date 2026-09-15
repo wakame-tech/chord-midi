@@ -20,6 +20,20 @@ fn inline(expr: &Expr) -> String {
     s.strip_suffix('|').unwrap_or(s).trim_end().to_string()
 }
 
+/// 本体を書いて、行末なら改行を、そうでなければ次の式との空白を1つ置く
+fn write_tail(
+    f: &mut std::fmt::Formatter<'_>,
+    body: std::fmt::Arguments<'_>,
+    br: bool,
+) -> std::fmt::Result {
+    write!(f, "{}", body)?;
+    if br {
+        writeln!(f)
+    } else {
+        write!(f, " ")
+    }
+}
+
 /// 小節を1つ書く。
 ///
 /// `xN` は小節の中身と区切りの間に置く (`C x4 |`)。パーサもその位置で
@@ -85,9 +99,13 @@ impl Display for Expr {
                     write!(f, "{}", node)?;
                     // 小節の位置に置かれた参照は `$a | C |` のように `|` で
                     // 閉じる。`Ref` 自身の Display が `$a` だけなのは、
-                    // `pat($a, C)` の引数としても使われるため
-                    if matches!(node, Expr::Ref(_)) {
+                    // `pat($a, C)` の引数としても使われるため。
+                    // 行末フラグも、区切りを出すこの場所でしか見られない
+                    if let Expr::Ref(_, br) = node {
                         write!(f, " | ")?;
+                        if *br {
+                            writeln!(f)?;
+                        }
                     }
                 }
                 Ok(())
@@ -111,8 +129,10 @@ impl Display for Expr {
                 // 行末の空白だけ落として `$a = C | Am |` の形に揃える
                 writeln!(f, "${} = {}", name, body.to_string().trim_end())
             }
-            Expr::Ref(name) => write!(f, "${}", name),
-            Expr::Repeat(inner, n) => {
+            // 区切りも行末も付けない素の形。`pat($a, C)` の引数にも使われる。
+            // 小節の位置に置かれたときの `|` と改行は `Seq` 側が出す
+            Expr::Ref(name, _) => write!(f, "${}", name),
+            Expr::Repeat(inner, n, br) => {
                 // 1項目だけの `Seq` は素の式と区別が付かない。`(C) x2` が
                 // `C x2` と同じ意味になるよう、括弧の判定の前に剥がす
                 let mut target = inner.as_ref();
@@ -123,16 +143,22 @@ impl Display for Expr {
                         break;
                     }
                 }
+                // 行末は必ず `xN` の後ろに来るので、中身が持つフラグではなく
+                // リピート自身の `br` を見る。`(C) x2` のように 1項目の `Seq`
+                // を剥がした後は、中身のフラグはそもそも当てにならない
                 match target {
                     // 小節 / 関数 / 参照の繰り返しに括弧は要らない
-                    Expr::Measure(nodes, br) => write_measure(f, nodes, Some(*n), *br),
-                    Expr::Apply(func, body, br) => write_apply(f, func, body, Some(*n), *br),
+                    Expr::Measure(nodes, _) => write_measure(f, nodes, Some(*n), *br),
+                    Expr::Apply(func, body, _) => write_apply(f, func, body, Some(*n), *br),
+                    // 参照の繰り返しは `|` で閉じない。`$a` が何小節に
+                    // 展開されるかは定義次第で、区切りを足す位置が決まらない
+                    Expr::Ref(name, _) => write_tail(f, format_args!("${} x{}", name, n), *br),
                     // 2小節以上のまとまりと、入れ子の繰り返しにだけ `( )` を
                     // 出す。括弧が無いと `xN` がどこに掛かるか読み戻せない
-                    Expr::Seq(_) | Expr::Repeat(_, _) => {
-                        write!(f, "({}) x{} ", inline(target), n)
+                    Expr::Seq(_) | Expr::Repeat(_, _, _) => {
+                        write_tail(f, format_args!("({}) x{}", inline(target), n), *br)
                     }
-                    other => write!(f, "{} x{} ", inline(other), n),
+                    other => write_tail(f, format_args!("{} x{}", inline(other), n), *br),
                 }
             }
         }
@@ -414,6 +440,37 @@ mod tests {
     }
 
     #[test]
+    fn test_song_structure_keeps_line_breaks() {
+        // 曲構成の行が潰れないこと。Phase 2 の中心的な用途。
+        // 小節の位置に置かれた参照は行末でも `|` で閉じる (`$B` -> `$B |`)。
+        // 小節が `C |` で閉じるのと同じ扱い。`$A x2` だけが `|` を取らない
+        assert_eq!(
+            roundtrip("$A = C | Am |\n$B = F | G |\n$A x2\n$B\n$A"),
+            "$A = C | Am |\n$B = F | G |\n$A x2\n$B |\n$A |"
+        );
+    }
+
+    #[test]
+    fn test_ref_keeps_line_break() {
+        assert_eq!(roundtrip("$a = C |\n$a\nD |"), "$a = C |\n$a |\nD |");
+    }
+
+    #[test]
+    fn test_ref_without_line_break_stays_inline() {
+        assert_eq!(roundtrip("$a = C |\n$a | D |"), "$a = C |\n$a | D |");
+    }
+
+    #[test]
+    fn test_repeat_keeps_line_break() {
+        assert_eq!(roundtrip("(C | Am) x3\nD |"), "(C | Am) x3\nD |");
+    }
+
+    #[test]
+    fn test_repeat_without_line_break_stays_inline() {
+        assert_eq!(roundtrip("C x2 | D |"), "C x2 | D |");
+    }
+
+    #[test]
     fn test_nested_repeat_roundtrip() {
         assert_eq!(roundtrip("((C | Am) x2) x3"), "((C | Am) x2) x3");
     }
@@ -436,6 +493,13 @@ mod tests {
             "pow(C) x2\nAm |",
             "$a = C |\n$a x2\nD |",
             "# memo\nkey: C\n$a = C | Am |\n$a x2 D |",
+            // 行末フラグが入って揺れやすくなった形
+            "$A = C | Am |\n$B = F | G |\n$A x2\n$B\n$A",
+            "$a = C |\n$a\nD |",
+            "$a = C |\n$a |\nD |",
+            "(C | Am) x3\nD |",
+            "(C) x2\nD |",
+            "$a = C |\n$a x2\n$a\nD |",
         ] {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);

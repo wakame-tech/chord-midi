@@ -196,14 +196,14 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
                 name
             ))
         }
-        Expr::Ref(name) => {
+        Expr::Ref(name, _) => {
             return Err(anyhow::anyhow!(
                 "参照 ${} が展開されていない。expand を通すこと",
                 name
             ))
         }
         // リピートも expand が消す
-        Expr::Repeat(_, n) => {
+        Expr::Repeat(_, n, _) => {
             return Err(anyhow::anyhow!(
                 "リピート x{} が展開されていない。expand を通すこと",
                 n

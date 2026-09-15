@@ -49,7 +49,7 @@ fn measures_in(expr: &Expr) -> usize {
         Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => measures_in(inner),
         Expr::Comment(_) | Expr::Pattern(_) => 0,
         // 展開後には残らない
-        Expr::Define(_, _) | Expr::Ref(_) | Expr::Repeat(_, _) => 0,
+        Expr::Define(_, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => 0,
     }
 }
 
@@ -76,7 +76,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             }
             Ok(Expr::Seq(out))
         }
-        Expr::Ref(name) => {
+        Expr::Ref(name, _) => {
             let Some(measures) = env.defs.get(&name).map(|def| def.measures) else {
                 return Err(if env.defining.as_deref() == Some(name.as_str()) {
                     anyhow!("${} の定義が自分自身を参照している (循環参照)", name)
@@ -88,7 +88,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             env.charge(measures)?;
             Ok(env.defs[&name].body.clone())
         }
-        Expr::Repeat(inner, n) => {
+        Expr::Repeat(inner, n, _) => {
             let inner = expand_in(*inner, env)?;
             // 中身は既に1つぶん計上されている。増えるのは残りの n-1 個
             let per = measures_in(&inner);
@@ -103,7 +103,7 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
         Expr::Apply(Func::Pat(arg), inner, br) => {
             // 何を渡されたかを言えるよう、参照なら名前を控えておく
             let given = match arg.as_ref() {
-                Expr::Ref(name) => Some(format!("${}", name)),
+                Expr::Ref(name, _) => Some(format!("${}", name)),
                 _ => None,
             };
             let arg = expand_in(*arg, env)?;
@@ -181,8 +181,8 @@ fn describe(expr: &Expr) -> &'static str {
         Expr::Seq(_) => "小節列",
         Expr::Pattern(_) => "リズムパターン",
         Expr::Define(_, _) => "定義",
-        Expr::Ref(_) => "参照",
-        Expr::Repeat(_, _) => "リピート",
+        Expr::Ref(_, _) => "参照",
+        Expr::Repeat(_, _, _) => "リピート",
     }
 }
 
@@ -205,7 +205,7 @@ mod tests {
     /// 展開後に Define / Ref / Repeat が残っていないこと
     fn is_clean(e: &Expr) -> bool {
         match e {
-            Expr::Define(_, _) | Expr::Ref(_) | Expr::Repeat(_, _) => false,
+            Expr::Define(_, _) | Expr::Ref(_, _) | Expr::Repeat(_, _, _) => false,
             Expr::Seq(items) => items.iter().all(is_clean),
             Expr::Apply(func, inner, _) => {
                 let arg_ok = match func {

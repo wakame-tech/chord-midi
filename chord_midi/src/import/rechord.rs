@@ -196,23 +196,28 @@ fn name_parser(s: Span) -> IResult<Span, String> {
     )(s)
 }
 
-/// `$name` の参照。後ろの区切りは飲まない。関数の引数のように式の内側で使う
+/// `$name` の参照。後ろの区切りは飲まない。関数の引数のように式の内側で使う。
+/// 区切りを見ていないので行末フラグは常に false
 fn ref_atom(s: Span) -> IResult<Span, Expr> {
-    map(name_parser, Expr::Ref)(s)
+    map(name_parser, |name| Expr::Ref(name, false))(s)
 }
 
-/// `$name` の参照。小節の位置に置けるよう、後ろの区切り (`|` / 改行) まで飲む
+/// `$name` の参照。小節の位置に置けるよう、後ろの区切り (`|` / 改行) まで飲む。
+/// `measure_parser` と同じく、飲んだ区切りが行末かどうかを式に載せる
 #[tracable_parser]
 fn ref_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((
-            ref_atom,
+            name_parser,
             space0,
             opt(repeat_suffix),
             opt(measure_sep),
             space_or_line_ending_many0,
         )),
-        |(r, _, n, _, _)| repeated(r, n),
+        |(name, _, n, br, _)| {
+            let br = br.unwrap_or(false);
+            repeated(Expr::Ref(name, br), n, br)
+        },
     )(s)
 }
 
@@ -297,10 +302,11 @@ fn repeat_suffix(s: Span) -> IResult<Span, u8> {
     )(s)
 }
 
-/// `xN` が付いていたら包む。付いていなければそのまま
-fn repeated(expr: Expr, n: Option<u8>) -> Expr {
+/// `xN` が付いていたら包む。付いていなければそのまま。
+/// `br` は「`xN` まで含めた全体の後ろで行が終わる」かどうか
+fn repeated(expr: Expr, n: Option<u8>, br: bool) -> Expr {
     match n {
-        Some(n) => Expr::Repeat(Box::new(expr), n),
+        Some(n) => Expr::Repeat(Box::new(expr), n, br),
         None => expr,
     }
 }
@@ -324,7 +330,9 @@ fn group_parser(s: Span) -> IResult<Span, Expr> {
             opt(measure_sep),
             space_or_line_ending_many0,
         )),
-        |(_, _, items, _, _, _, n, _, _)| repeated(Expr::Seq(items), n),
+        |(_, _, items, _, _, _, n, br, _)| {
+            repeated(Expr::Seq(items), n, br.unwrap_or(false))
+        },
     )(s)
 }
 
@@ -366,6 +374,7 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             repeated(
                 Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some()),
                 n,
+                br.is_some(),
             )
         },
     )(s)
@@ -387,7 +396,7 @@ fn measure_parser(s: Span) -> IResult<Span, Expr> {
             measure_sep,
             space_or_line_ending_many0,
         )),
-        |(nodes, n, br, _)| repeated(Expr::Measure(nodes, br), n),
+        |(nodes, n, br, _)| repeated(Expr::Measure(nodes, br), n, br),
     )(s)
 }
 
@@ -692,7 +701,7 @@ mod tests {
         // Ref が木のどこかに現れること
         fn has_ref(e: &Expr, want: &str) -> bool {
             match e {
-                Expr::Ref(n) => n == want,
+                Expr::Ref(n, _) => n == want,
                 Expr::Seq(items) => items.iter().any(|i| has_ref(i, want)),
                 Expr::Apply(_, inner, _) => has_ref(inner, want),
                 Expr::Define(_, body) => has_ref(body, want),
@@ -723,7 +732,7 @@ mod tests {
             }
         }
         let arg = find_pat_arg(&ast).expect("pat が見つからない");
-        assert!(matches!(arg, Expr::Ref(n) if n == "eight"), "{:?}", arg);
+        assert!(matches!(arg, Expr::Ref(n, _) if n == "eight"), "{:?}", arg);
     }
 
     #[test]
@@ -765,7 +774,7 @@ mod tests {
         let ast = RechordImporter.import("C | Am x3 |\n").unwrap();
         fn find_repeat(e: &Expr) -> Option<u8> {
             match e {
-                Expr::Repeat(_, n) => Some(*n),
+                Expr::Repeat(_, n, _) => Some(*n),
                 Expr::Seq(items) => items.iter().find_map(find_repeat),
                 _ => None,
             }
@@ -780,7 +789,7 @@ mod tests {
         let ast = RechordImporter.import("(C | Am | F | G) x4\n").unwrap();
         fn find_repeat(e: &Expr) -> Option<(usize, u8)> {
             match e {
-                Expr::Repeat(inner, n) => match inner.as_ref() {
+                Expr::Repeat(inner, n, _) => match inner.as_ref() {
                     Expr::Seq(items) => Some((items.len(), *n)),
                     _ => Some((1, *n)),
                 },
@@ -798,7 +807,7 @@ mod tests {
         let ast = RechordImporter.import("$a = C\n$a x2\n").unwrap();
         fn has_repeat_of_ref(e: &Expr) -> bool {
             match e {
-                Expr::Repeat(inner, 2) => matches!(inner.as_ref(), Expr::Ref(n) if n == "a"),
+                Expr::Repeat(inner, 2, _) => matches!(inner.as_ref(), Expr::Ref(n, _) if n == "a"),
                 Expr::Seq(items) => items.iter().any(has_repeat_of_ref),
                 _ => false,
             }
@@ -832,7 +841,7 @@ mod tests {
             match e {
                 Expr::Apply(Func::Pow, _, _) => true,
                 Expr::Seq(items) => items.iter().any(has_pow),
-                Expr::Repeat(inner, _) => has_pow(inner),
+                Expr::Repeat(inner, _, _) => has_pow(inner),
                 _ => false,
             }
         }
@@ -849,7 +858,7 @@ mod tests {
         let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
         fn has_repeat(e: &Expr) -> bool {
             match e {
-                Expr::Repeat(_, _) => true,
+                Expr::Repeat(_, _, _) => true,
                 Expr::Seq(items) => items.iter().any(has_repeat),
                 _ => false,
             }
@@ -869,7 +878,7 @@ mod tests {
         };
         let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
         assert!(
-            matches!(&inner[0], Expr::Repeat(_, 2)),
+            matches!(&inner[0], Expr::Repeat(_, 2, _)),
             "関数の中のグループがリピートされていない: {:?}", inner[0]
         );
     }
@@ -882,12 +891,12 @@ mod tests {
         let ast = RechordImporter.import("((C | Am) x2 | D) x3\n").unwrap();
         fn outer(e: &Expr) -> Option<&Expr> {
             match e {
-                Expr::Repeat(_, _) => Some(e),
+                Expr::Repeat(_, _, _) => Some(e),
                 Expr::Seq(items) => items.iter().find_map(outer),
                 _ => None,
             }
         }
-        let Some(Expr::Repeat(inner, 3)) = outer(&ast) else {
+        let Some(Expr::Repeat(inner, 3, _)) = outer(&ast) else {
             panic!("外側の x3 が無い: {:?}", ast)
         };
         let Expr::Seq(items) = inner.as_ref() else {
@@ -895,7 +904,7 @@ mod tests {
         };
         // 内側の (C | Am) x2 と D の2項目
         assert_eq!(items.len(), 2, "{:?}", items);
-        assert!(matches!(&items[0], Expr::Repeat(_, 2)), "{:?}", items[0]);
+        assert!(matches!(&items[0], Expr::Repeat(_, 2, _)), "{:?}", items[0]);
         assert!(matches!(&items[1], Expr::Measure(_, _)), "{:?}", items[1]);
     }
 
