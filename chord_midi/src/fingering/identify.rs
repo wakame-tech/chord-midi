@@ -154,10 +154,21 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             continue;
         };
         for (qi, quality) in QUALITIES.iter().enumerate() {
-            let node = node(root_pitch, quality, None);
-            let Ok(r) = chord_ref(&node) else { continue };
-            let Some(s) = score(&played, &r) else { continue };
-            scored.push((s, qi, node, r));
+            // `on` 無しと、最低音がルートと違うときの `on` 付きを両方試す。
+            // `C/E` と `C` はどちらも正しい呼び方なので、どちらが上に来るかは
+            // 採点に任せる
+            let mut ons: Vec<Option<Pitch>> = vec![None];
+            if played.bass != root {
+                if let Ok(bass) = Pitch::try_from(played.bass) {
+                    ons.push(Some(bass));
+                }
+            }
+            for on in ons {
+                let node = node(root_pitch, quality, on);
+                let Ok(r) = chord_ref(&node) else { continue };
+                let Some(s) = score(&played, &r) else { continue };
+                scored.push((s, qi, node, r));
+            }
         }
     }
     scored.sort_by_key(|(s, qi, _, _)| (*s, *qi));
@@ -231,6 +242,25 @@ mod tests {
     #[test]
     fn identify_caps_the_number_of_candidates() {
         assert!(identify(frets("x3201x")).len() <= 5);
+    }
+
+    #[test]
+    fn identify_offers_a_slash_chord_when_the_bass_is_not_the_root() {
+        // x32010 は 5弦3fr(C) が最低音なので C のまま。1弦を開放にした
+        // "332010" は 6弦3fr = G が最低音になる C/G
+        let c = identify(frets("332010"));
+        assert!(
+            c.iter().any(|x| x.name == "C/G"),
+            "C/G が候補に無い: {:?}",
+            c.iter().map(|x| &x.name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn identify_prefers_the_slash_name_when_the_bass_is_not_the_root() {
+        // xx0232 は D。4弦開放(D) が最低音なのでスラッシュにはならない
+        let d = identify(frets("xx0232"));
+        assert_eq!(d[0].name, "D");
     }
 
     #[test]
