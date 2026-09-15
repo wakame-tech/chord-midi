@@ -232,4 +232,42 @@ mod tests {
         assert_eq!(shift_key("pow(A@6)", 1), "pow(A#@6)");
         assert_eq!(shift_key("pow(A#@6)", -1), "pow(A@6)");
     }
+
+    #[test]
+    fn test_shift_key_transposes_every_key_directive() {
+        // 途中転調も両方ずれる
+        assert_eq!(
+            shift_key("key: C\nI |\nkey: D\nI |", 1),
+            "key: C#\nI |\nkey: D#\nI |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_scale_directive_survives() {
+        assert_eq!(
+            shift_key("key: C\nscale: dorian\nI |", 1),
+            "key: C#\nscale: dorian\nI |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_transposes_inside_pow_under_key() {
+        // Keyed -> Apply -> Measure の2段階の潜り込みでも移調される
+        assert_eq!(
+            shift_key("key: C\npow(C | E D)", 1),
+            "key: C#\npow(C# | F D#)"
+        );
+        assert_eq!(
+            shift_key("key: C#\npow(C# | F D#)", -1),
+            "key: C\npow(C | E D)"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_round_trips_with_mid_song_key_change_and_apply() {
+        // 途中転調 + Apply を含む形でも往復で元に戻ること
+        let original = "key: C\npow(C | E D)\nkey: D\nI |";
+        let shifted = shift_key(original, 1);
+        assert_eq!(shift_key(&shifted, -1), original);
+    }
 }
