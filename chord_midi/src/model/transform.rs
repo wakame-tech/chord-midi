@@ -66,7 +66,9 @@ impl Expr {
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
-            other => other,
+            // 音程を持たないものはそのまま。catch-all を置かないのは、
+            // Expr に variant が増えたときにコンパイラへ拾わせるため
+            e @ (Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _)) => e,
         }
     }
 
@@ -112,7 +114,9 @@ impl Expr {
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
             Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),
-            other => other,
+            // 音程を持たないものはそのまま。catch-all を置かないのは、
+            // Expr に variant が増えたときにコンパイラへ拾わせるため
+            e @ (Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_, _)) => e,
         }
     }
 
@@ -153,7 +157,17 @@ fn strip_comments(expr: Expr) -> Expr {
                 .collect(),
         ),
         Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(strip_comments(*inner)), br),
-        other => other,
+        Expr::Section(name, inner) => Expr::Section(name, Box::new(strip_comments(*inner))),
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Measure(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => e,
     }
 }
 
@@ -216,7 +230,18 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
                 .collect(),
         ),
         Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(mark(*inner, modifier)), br),
-        other => other,
+        // Section は `$a` を展開した跡。ここに潜らないと `pow($a)` の
+        // パワーコード化が定義の中身に届かない
+        Expr::Section(name, inner) => Expr::Section(name, Box::new(mark(*inner, modifier))),
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => e,
     }
 }
 
@@ -501,6 +526,44 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 7]
         );
+    }
+
+    #[test]
+    fn test_pow_reaches_through_a_reference() {
+        // `pow($a)` の修飾が Section の壁を越えて定義の中身に届くこと。
+        // mark に Section の腕が無いと三和音のまま鳴る (catch-all が隠していた)
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{ChordNode, Node};
+
+        fn first_chord(e: &Expr) -> Option<&ChordNode> {
+            match e {
+                Expr::Measure(nodes, _) => nodes.iter().find_map(|n| match n {
+                    Node::Chord(c) => Some(c),
+                    _ => None,
+                }),
+                Expr::Seq(items) => items.iter().find_map(first_chord),
+                Expr::Apply(_, inner, _) => first_chord(inner),
+                Expr::Section(_, inner) => first_chord(inner),
+                _ => None,
+            }
+        }
+
+        fn semitones(code: &str) -> Vec<u8> {
+            let ast = RechordImporter.import(code).unwrap().resolve().unwrap();
+            first_chord(&ast)
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect()
+        }
+
+        // 直接書いた pow と、参照経由の pow が同じになること
+        assert_eq!(semitones("pow(C)\n"), vec![0, 7]);
+        assert_eq!(semitones("$a = C\npow($a)\n"), vec![0, 7]);
+        assert_eq!(semitones("oct(A)\n"), vec![0]);
+        assert_eq!(semitones("$b = A\noct($b)\n"), vec![0]);
     }
 
     #[test]

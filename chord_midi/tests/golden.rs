@@ -28,6 +28,10 @@ const SAMPLES: &[(&str, &str)] = &[
     // 修飾が pat の包む Seq を越えて内側のコードまで届くかを見る
     ("pow_pat", "pow(pat(\"oxox\", C))\n"),
     ("oct_pat", "oct(pat(\"oxox\", A))\n"),
+    // 参照の中身にも関数の修飾が届くこと。mark が Section を越えられないと
+    // パワーコードが三和音のまま鳴る
+    ("pow_ref", "$a = C\npow($a)\n"),
+    ("oct_ref", "$b = A\noct($b)\n"),
     ("root_string", "pow(A@6 | D@5 | E@5)\n"),
     ("comment", "# memo\nkey: C\nC | F |\n"),
     ("multiline", "C | Am |\nF | G |\n"),
