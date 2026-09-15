@@ -98,6 +98,8 @@ pub struct ChordRef {
     pub pitch_classes: u16,
     /// スラッシュコードのベース。無ければ None
     pub bass: Option<u8>,
+    /// `@N` の指定。`Fingering.lowest_string` に合わせて 0 = 6弦 に正規化する
+    pub root_string: Option<u8>,
 }
 
 /// AST に現れるコードを出現順に取り出す。
@@ -191,6 +193,8 @@ fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         root,
         pitch_classes,
         bass,
+        // 記法は 1 = 1弦。Fingering.lowest_string は 0 = 6弦 なので変換する
+        root_string: node.root_string.map(|n| 6 - n),
     })
 }
 
@@ -239,12 +243,16 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
     // 可動パワーコード形は2音しか無いので、無条件に候補へ入れると
     // 3rd や 7th が欠けた形が本来のコードを押しのける。ルートと5th
-    // ちょうどのときだけ候補にする（`@N` での解放は Task 4 で足す）
+    // ちょうどのときか、弦指定があるときだけ候補にする
     let power_target =
         chord.pitch_classes == (1u16 << chord.root) | (1u16 << ((chord.root + 7) % 12));
     FINGERINGS
         .iter()
-        .filter(|f| !f.is_power || power_target)
+        .filter(|f| !f.is_power || power_target || chord.root_string.is_some())
+        .filter(|f| match chord.root_string {
+            Some(string) => f.lowest_string == string,
+            None => true,
+        })
         .filter(|f| (f.pitch_classes & !chord.pitch_classes).count_ones() <= 1)
         .min_by_key(|f| {
             let extra: u32 = relative_semitones(f.pitch_classes & !chord.pitch_classes, chord.root)
@@ -506,6 +514,7 @@ mod tests {
             root: 1,
             pitch_classes: 1u16 << 1,
             bass: None,
+            root_string: None,
         };
         assert!(find(&c).is_none());
     }
@@ -585,5 +594,39 @@ mod tests {
                 .expect("no sounding string") as u8;
             assert_eq!(f.lowest_string, expected, "{} {}", f.name, tab(f));
         }
+    }
+
+    #[test]
+    fn find_honors_the_string_hint() {
+        // pow(...) は小節ではないので後ろに `|` は付けない
+        assert_eq!(tab_of("pow(A@6)\n"), "5-7-x-x-x-x");
+        assert_eq!(tab_of("pow(D@5)\n"), "x-5-7-x-x-x");
+        assert_eq!(tab_of("pow(E@5)\n"), "x-7-9-x-x-x");
+        assert_eq!(tab_of("pow(E@6)\n"), "0-2-x-x-x-x");
+    }
+
+    #[test]
+    fn find_picks_low_position_without_a_hint() {
+        // 弦指定が無ければローポジション優先の既存 tie-break が効く
+        assert_eq!(tab_of("pow(E)\n"), "0-2-x-x-x-x");
+        assert_eq!(tab_of("pow(A)\n"), "x-0-2-x-x-x");
+    }
+
+    #[test]
+    fn find_returns_none_when_the_hint_has_no_shape() {
+        // 最低音が1弦になる押さえ方はデータに無い
+        // (既存67件の最低音は6弦/5弦/4弦、パワーコード形は6弦/5弦)
+        let r = refs("C@1 |\n");
+        assert!(find(&r[0]).is_none());
+    }
+
+    #[test]
+    fn power_shapes_do_not_displace_normal_chords() {
+        // 2音しか無いパワーコード形が3rdや7thを持つ形を押しのけないこと
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
+        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
     }
 }
