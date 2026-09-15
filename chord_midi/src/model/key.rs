@@ -2,9 +2,10 @@ use super::{
     pitch::Pitch,
     scale::{Degree, Scale},
 };
+use serde::Serialize;
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum Key {
     Absolute(Pitch),
     Relative(Degree),

@@ -1,7 +1,8 @@
 use anyhow::Result;
+use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize)]
 #[repr(u8)]
 pub enum Pitch {
     C,
@@ -93,7 +94,7 @@ impl Pitch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub enum Accidental {
     Natural,
     Sharp,

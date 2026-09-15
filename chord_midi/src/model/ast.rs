@@ -6,15 +6,16 @@ use crate::model::{
     scale::{Degree, Scale},
 };
 use anyhow::Result;
+use serde::Serialize;
 use std::collections::BTreeSet;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Directive {
     Key(Pitch),
     Scale(Scale),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum Ast {
     Comment(String),
     Directive(Directive),
@@ -27,7 +28,7 @@ pub enum Ast {
 }
 
 /// 小節列に掛ける関数
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Func {
     /// パワーコード化
     Pow,
@@ -38,10 +39,10 @@ pub enum Func {
 }
 
 /// リズムパターン。長さは 1/2/4/8/16 のいずれか
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Pattern(pub Vec<Beat>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Beat {
     /// `o` 打弦
     Hit,
@@ -51,7 +52,7 @@ pub enum Beat {
     Brush,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Node {
     Chord(ChordNode),
     Arpeggio(ChordNode),
@@ -63,7 +64,7 @@ pub enum Node {
     Repeat,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Transform {
     S25,
     Sub,
@@ -119,7 +120,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ChordNode {
     pub key: Key,
     pub modifiers: BTreeSet<Modifier>,
@@ -230,5 +231,15 @@ mod tests {
         assert!(matches!(&nodes[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
         assert_eq!(semis(&nodes[0]), vec![0, 3, 7, 10]);
         assert!(matches!(&nodes[1], Node::Chord(c) if c.key == Key::Absolute(Pitch::G)));
+    }
+
+    #[test]
+    fn test_ast_serializes_to_json() {
+        use crate::import::{Importer, RechordImporter};
+        let ast = RechordImporter.import("key: C\nC | Am |\n").unwrap();
+        let json = serde_json::to_string(&ast).unwrap();
+        // 構造が見えること。コード名とディレクティブが JSON に現れる
+        assert!(json.contains("Measure"), "{}", json);
+        assert!(json.contains("\"C\""), "{}", json);
     }
 }
