@@ -99,7 +99,9 @@ pub enum Modifier {
 
 スラッシュコードの `on` は触らない。`pow(C/E)` はベースに E が残る。
 
-`Modifier::Power` の `Display` は `"5"` とする。これは `Modifier::Dominant(5)` の表示と衝突するが、脱糖後の AST をテキストに戻す経路が無い（web の `<pre>` も `shift_key` も脱糖前の AST を使う）ので実害は無い。デバッグ用と割り切る。
+`Modifier::Power` の `Display` は `"5"` とする。これは `Modifier::Dominant(5)` の表示と衝突するが、脱糖後の AST を**テキストに戻す**経路は無い（web の `<pre>` も `shift_key` も脱糖前の AST を使う）ので、入力テキストが壊れることはない。
+
+ただし押さえ方カードのラベルは脱糖後の `ChordNode::to_string()` を使うので、`pow(C)` のカードには `C5` と出る。`C5` はパワーコードの一般的な表記なので、これは望ましい見え方として受け入れる。
 
 ## pat の展開
 
@@ -135,6 +137,16 @@ struct Note {
 通常の打弦は `Velocity::default()`、ブラッシングは `Velocity::new(40)` とする。1小節が 16 tick しかないため、音の長さを短くしてブラッシングを表現することはできない。ベロシティで差を付ける。
 
 `write_notes` と `dump_notes` に velocity を通す。既存の呼び出しは `Velocity::default()` を渡すので出力は変わらない。
+
+## 関数の後ろの改行
+
+`Ast::Measure` と同じく、`Ast::Apply` も「この関数の後ろで入力が改行されている」を `bool` で持つ。
+
+```rust
+Apply(Func, Vec<Box<Ast>>, bool),
+```
+
+パーサは閉じ括弧の直後に行末があるかを `peek` で見て記録し、`Display` がそれを再現する。これが無いと、`pow(...)` と `pat(...)` を別々の行に書いてキーを上下したとき、書き戻しで1行に潰れる。
 
 ## パースとエラー
 
