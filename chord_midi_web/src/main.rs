@@ -7,17 +7,27 @@ use chord_midi::{
     model::scale::Scale,
     presets,
 };
+use cursor::Edit;
+use defines::DefineChips;
 use diagram::ChordDiagram;
 use fretboard::Fretboard;
+use palette::FuncPalette;
+use rhythm::RhythmGrid;
 use std::io::BufWriter;
 use std::str::FromStr;
+use syntax_ref::SyntaxReference;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
+mod cursor;
+mod defines;
 mod diagram;
 mod fretboard;
+mod palette;
+mod rhythm;
+mod syntax_ref;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     let u8_arr = unsafe { web_sys::js_sys::Uint8Array::view(arr) };
@@ -123,6 +133,10 @@ fn app() -> Html {
     let applied = use_mut_ref(|| String::new());
     let player_ref = use_node_ref();
     let gutter_ref = use_node_ref();
+    let editor_ref = use_node_ref();
+    // 挿入の後にカーソルを戻す位置 (UTF-16)。Yew が textarea の value を
+    // 書き戻すとカーソルが末尾へ飛ぶので、描画の後に当て直す
+    let caret = use_state(|| None::<u32>);
 
     // input か bpm が変わるたびに再計算
     {
@@ -313,6 +327,11 @@ fn app() -> Html {
         ];
         let mut labels: Vec<String> = Vec::new();
         let mut rows: Vec<Html> = Vec::new();
+        // 直前の小節のセクション名。名前は範囲の先頭の小節にだけ出す
+        let mut prev_section: Option<String> = None;
+        // 定義を1つも使っていない進行では帯そのものを出さない。
+        // 空でも枠だけは残る仕組みなので、出すと今までの見た目が変わってしまう
+        let has_section = measures.iter().any(|m| m.section.is_some());
         for measure in measures.iter() {
             let mut cards: Vec<Html> = Vec::new();
             for c in measure.chords.iter() {
@@ -336,8 +355,24 @@ fn app() -> Html {
                 Some(p) => html! { <div class="rhythm">{ p.to_string() }</div> },
                 None => html! { <div class="rhythm"></div> },
             };
+            // $定義 から展開された小節に帯を出す。名前は範囲の先頭だけに
+            // 出し、続きは帯だけにする。枠は常に置いてカードの上端を揃える
+            let is_head = measure.section != prev_section;
+            let section = if !has_section {
+                html! {}
+            } else {
+                match (&measure.section, is_head) {
+                    (Some(name), true) => {
+                        html! { <div class="section">{format!("${}", name)}</div> }
+                    }
+                    _ => html! { <div class="section"></div> },
+                }
+            };
+            prev_section = measure.section.clone();
             rows.push(html! {
-                <div class="measure">
+                <div class={classes!("measure",
+                    measure.section.is_some().then_some("in-section"))}>
+                    { section }
                     { rhythm }
                     <div class="measure-cards">{cards}</div>
                 </div>
@@ -376,127 +411,173 @@ fn app() -> Html {
         })
     };
 
+    // 記法パネルの全部品がここを通る。テキストの持ち主は input なので、
+    // 部品は「何をしたいか」だけを投げてくる
+    let on_edit = {
+        let input = input.clone();
+        let caret = caret.clone();
+        let editor_ref = editor_ref.clone();
+        Callback::from(move |edit: Edit| {
+            let Some(ta) = editor_ref.cast::<HtmlTextAreaElement>() else {
+                return;
+            };
+            let (text, pos) = cursor::insert_at_cursor(&ta, input.as_str(), &edit);
+            // 2つの set は同じコールバックの中なので、次の描画には
+            // どちらも反映される。effect はその描画の後に走る
+            input.set(text);
+            caret.set(Some(pos));
+        })
+    };
+
+    // 描画が終わってからカーソルを戻す。None に戻しておくのは、次に
+    // 同じ位置へ挿入したときも dep が変わって effect が走るようにするため
+    {
+        let editor_ref = editor_ref.clone();
+        let caret = caret.clone();
+        // dep は closure に caret を move する前に読んでおく
+        let dep = *caret;
+        use_effect_with(dep, move |pos| {
+            if let (Some(pos), Some(ta)) = (*pos, editor_ref.cast::<HtmlTextAreaElement>()) {
+                let _ = ta.focus();
+                let _ = ta.set_selection_range(pos, pos);
+                caret.set(None);
+            }
+        });
+    }
+
     let has_error = !(*error).is_empty();
     let has_warning = !(*warning).is_empty();
 
     let editor = html! {
-        <>
-            <div class="editor-wrap">
-                <div class="gutter" ref={gutter_ref}>
-                    { for (1..=(*input).split('\n').count()).map(|n| html! {
-                        <div class="gutter-line">{n}</div>
-                    }) }
+        <div class="editor-tab">
+            <div class="editor-main">
+                <div class="editor-wrap">
+                    <div class="gutter" ref={gutter_ref}>
+                        { for (1..=(*input).split('\n').count()).map(|n| html! {
+                            <div class="gutter-line">{n}</div>
+                        }) }
+                    </div>
+                    <textarea
+                        class="editor"
+                        ref={editor_ref.clone()}
+                        rows=10
+                        spellcheck="false"
+                        wrap="off"
+                        placeholder="key: C\nC | Am | F | G |"
+                        oninput={on_input}
+                        onscroll={on_scroll}
+                        value={(*input).clone()}
+                    ></textarea>
                 </div>
-                <textarea
-                    class="editor"
-                    rows=10
-                    spellcheck="false"
-                    wrap="off"
-                    placeholder="key: C\nC | Am | F | G |"
-                    oninput={on_input}
-                    onscroll={on_scroll}
-                    value={(*input).clone()}
-                ></textarea>
-            </div>
-            if has_error {
-                <p class="error">{(*error).clone()}</p>
-            }
-            if has_warning {
-                <p class="warning">{(*warning).clone()}</p>
-            }
-
-            <div class="controls">
-                <div class="field">
-                    <label for="bpm">{"BPM"}</label>
-                    <input id="bpm" type="range" min="40" max="240"
-                        style={format!("--fill: {}%", (*bpm as f32 - 40.0) / 2.0)}
-                        value={bpm.to_string()} oninput={on_bpm} />
-                    <output class="field-value">{*bpm}</output>
-                </div>
-                <div class="field">
-                    <label class="switch">
-                        <input type="checkbox" checked={*loop_on} onchange={on_loop} />
-                        <span class="switch-track"></span>
-                        <span class="switch-label">{"ループ再生"}</span>
-                    </label>
-                </div>
-                <div class="field">
-                    <label>{"キー"}</label>
-                    <button class="btn btn-icon" onclick={on_key_down} title="半音下げる">{"♭"}</button>
-                    <button class="btn btn-icon" onclick={on_key_up} title="半音上げる">{"♯"}</button>
-                </div>
-                <div class="field">
-                    <label for="scale">{"スケール"}</label>
-                    <select id="scale" onchange={on_scale}>
-                        { for ["major","minor","dorian","phrygian","lydian","mixolydian","locrian"]
-                            .iter().map(|s| html!{
-                                <option value={*s} selected={*s == scale_name.as_str()}>{*s}</option>
-                            }) }
-                    </select>
-                </div>
-            </div>
-
-            <div class="block">
-                <span class="block-label">{"進行プリセット"}</span>
-                <div class="presets">
-                    { for presets::PRESETS.iter().map(|preset| {
-                        let input = input.clone();
-                        let progression = preset.progression.to_string();
-                        let onclick = Callback::from(move |_| {
-                            input.set(append_line(&input, &progression));
-                        });
-                        html!{
-                            <button class="btn preset" {onclick}>
-                                <span class="preset-name">{preset.name}</span>
-                                <span class="preset-degrees">{preset.degrees}</span>
-                            </button>
-                        }
-                    }) }
-                </div>
-            </div>
-
-            <div class="block">
-                {
-                    if (*url).is_empty() {
-                        html! { <button class="btn" disabled=true>{"MIDIを保存"}</button> }
-                    } else {
-                        html! {
-                            <a class="btn btn-primary" href={(*url).clone()}
-                                download="chord.mid">{"MIDIを保存"}</a>
-                        }
-                    }
+                if has_error {
+                    <p class="error">{(*error).clone()}</p>
                 }
-            </div>
+                if has_warning {
+                    <p class="warning">{(*warning).clone()}</p>
+                }
 
-            <details class="ast">
-                <summary>{"解釈結果"}</summary>
-                <div class="ast-forms">
-                    { for [
-                        (AstForm::Syntax, "構文"),
-                        (AstForm::Expanded, "展開後"),
-                        (AstForm::Text, "テキスト"),
-                    ].into_iter().map(|(form, label)| {
-                        let ast_form = ast_form.clone();
-                        let is_active = *ast_form == form;
-                        let onclick = Callback::from(move |_| ast_form.set(form));
-                        html! {
-                            <button
-                                class={classes!("btn", "btn-icon",
-                                    is_active.then_some("is-active"))}
-                                {onclick}
-                            >{label}</button>
-                        }
-                    }) }
+                <div class="controls">
+                    <div class="field">
+                        <label for="bpm">{"BPM"}</label>
+                        <input id="bpm" type="range" min="40" max="240"
+                            style={format!("--fill: {}%", (*bpm as f32 - 40.0) / 2.0)}
+                            value={bpm.to_string()} oninput={on_bpm} />
+                        <output class="field-value">{*bpm}</output>
+                    </div>
+                    <div class="field">
+                        <label class="switch">
+                            <input type="checkbox" checked={*loop_on} onchange={on_loop} />
+                            <span class="switch-track"></span>
+                            <span class="switch-label">{"ループ再生"}</span>
+                        </label>
+                    </div>
+                    <div class="field">
+                        <label>{"キー"}</label>
+                        <button class="btn btn-icon" onclick={on_key_down} title="半音下げる">{"♭"}</button>
+                        <button class="btn btn-icon" onclick={on_key_up} title="半音上げる">{"♯"}</button>
+                    </div>
+                    <div class="field">
+                        <label for="scale">{"スケール"}</label>
+                        <select id="scale" onchange={on_scale}>
+                            { for ["major","minor","dorian","phrygian","lydian","mixolydian","locrian"]
+                                .iter().map(|s| html!{
+                                    <option value={*s} selected={*s == scale_name.as_str()}>{*s}</option>
+                                }) }
+                        </select>
+                    </div>
                 </div>
-                <pre>{
-                    match *ast_form {
-                        AstForm::Syntax => result.syntax.clone(),
-                        AstForm::Expanded => result.expanded.clone(),
-                        AstForm::Text => result.text.clone(),
+
+                <div class="block">
+                    <span class="block-label">{"進行プリセット (末尾に追記)"}</span>
+                    <div class="presets">
+                        { for presets::PRESETS.iter().map(|preset| {
+                            let input = input.clone();
+                            let progression = preset.progression.to_string();
+                            let onclick = Callback::from(move |_| {
+                                input.set(append_line(&input, &progression));
+                            });
+                            html!{
+                                <button class="btn preset" {onclick}>
+                                    <span class="preset-name">{preset.name}</span>
+                                    <span class="preset-degrees">{preset.degrees}</span>
+                                </button>
+                            }
+                        }) }
+                    </div>
+                </div>
+
+                <div class="block">
+                    {
+                        if (*url).is_empty() {
+                            html! { <button class="btn" disabled=true>{"MIDIを保存"}</button> }
+                        } else {
+                            html! {
+                                <a class="btn btn-primary" href={(*url).clone()}
+                                    download="chord.mid">{"MIDIを保存"}</a>
+                            }
+                        }
                     }
-                }</pre>
+                </div>
+
+                <details class="ast">
+                    <summary>{"解釈結果"}</summary>
+                    <div class="ast-forms">
+                        { for [
+                            (AstForm::Syntax, "構文"),
+                            (AstForm::Expanded, "展開後"),
+                            (AstForm::Text, "テキスト"),
+                        ].into_iter().map(|(form, label)| {
+                            let ast_form = ast_form.clone();
+                            let is_active = *ast_form == form;
+                            let onclick = Callback::from(move |_| ast_form.set(form));
+                            html! {
+                                <button
+                                    class={classes!("btn", "btn-icon",
+                                        is_active.then_some("is-active"))}
+                                    {onclick}
+                                >{label}</button>
+                            }
+                        }) }
+                    </div>
+                    <pre>{
+                        match *ast_form {
+                            AstForm::Syntax => result.syntax.clone(),
+                            AstForm::Expanded => result.expanded.clone(),
+                            AstForm::Text => result.text.clone(),
+                        }
+                    }</pre>
+                </details>
+            </div>
+            <details class="side-panel" open=true>
+                <summary>{"記法パネル"}</summary>
+                <div class="side-panel-body">
+                    <DefineChips text={(*input).clone()} on_edit={on_edit.clone()} />
+                    <RhythmGrid on_edit={on_edit.clone()} />
+                    <FuncPalette on_edit={on_edit.clone()} />
+                    <SyntaxReference on_edit={on_edit.clone()} />
+                </div>
             </details>
-        </>
+        </div>
     };
 
     let preview = if cards.is_empty() {

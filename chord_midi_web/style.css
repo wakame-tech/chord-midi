@@ -569,7 +569,9 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     border-radius: var(--radius);
 }
 
-.ast > summary {
+.ast > summary,
+.side-panel > summary,
+.syntax-ref > summary {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -580,11 +582,15 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     list-style: none;
 }
 
-.ast > summary::-webkit-details-marker {
+.ast > summary::-webkit-details-marker,
+.side-panel > summary::-webkit-details-marker,
+.syntax-ref > summary::-webkit-details-marker {
     display: none;
 }
 
-.ast > summary::before {
+.ast > summary::before,
+.side-panel > summary::before,
+.syntax-ref > summary::before {
     content: "";
     width: 0;
     height: 0;
@@ -594,11 +600,15 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     transition: transform 0.12s ease;
 }
 
-.ast[open] > summary::before {
+.ast[open] > summary::before,
+.side-panel[open] > summary::before,
+.syntax-ref[open] > summary::before {
     transform: rotate(90deg);
 }
 
-.ast > summary:hover {
+.ast > summary:hover,
+.side-panel > summary:hover,
+.syntax-ref > summary:hover {
     color: var(--ink);
 }
 
@@ -674,6 +684,22 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     line-height: 15px;
     letter-spacing: 2px;
     color: var(--muted);
+}
+
+/* $定義 から展開された小節。名前は範囲の先頭だけに出し、
+   続きは下線で「どこまでか」を示す。枠は常に置いて上端を揃える */
+.section {
+    min-height: 15px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--accent);
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+}
+
+.measure.in-section .section {
+    border-bottom-color: var(--accent-soft);
 }
 
 /* 入力の改行位置でカードの並びを折り返す */
@@ -956,6 +982,165 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     font-size: 11px;
 }
 
+/* ---- エディタタブの2段組と記法パネル ---- */
+
+.editor-tab {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+    gap: 16px;
+    align-items: start;
+}
+
+/* textarea が grid の列をはみ出さないようにする */
+.editor-main {
+    min-width: 0;
+}
+
+.side-panel {
+    padding: 8px 12px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    /* エディタを見ながら使う。フッタのプレイヤーのぶんを引いて収める */
+    position: sticky;
+    top: 12px;
+    /* 170px はビューポート上端からの見積もりだったが、パネルの実際の上端は
+     ヘッダとタブのぶん約 118px 下にある。スクロール前の状態では
+     118 + max-height がフッタのプレイヤー (最大 145px) を越えて隠れた。
+     118 + 145 + 余白 で 280px 引く */
+  max-height: calc(100vh - 280px);
+    overflow-y: auto;
+}
+
+.side-panel-body > .block:first-child {
+    margin-top: 8px;
+}
+
+/* ---- 記法パネル: 関数ボタン ---- */
+
+.palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* .btn の幅は文字数任せで、記法なので等幅にする */
+.palette .btn {
+    padding: 0 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+}
+
+/* ---- 記法パネル: リズム入力 ---- */
+
+.rhythm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.rhythm-preview {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    overflow-x: auto;
+}
+
+.rhythm-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+/* マスは実ボタン。o / . / x の文字をそのまま出す */
+.rhythm-cell {
+    appearance: none;
+    width: 24px;
+    height: 28px;
+    padding: 0;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rhythm-cell:hover {
+    background: var(--hover);
+}
+
+.rhythm-cell.is-rest {
+    background: var(--gutter-bg);
+    color: var(--muted);
+}
+
+.rhythm-help {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+/* ---- 記法パネル: 定義チップ ---- */
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* 進行プリセットの2段ボタンと区別が付くよう、等幅1段にする */
+.chip {
+    background: var(--accent-soft);
+    border-color: transparent;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-weight: 600;
+}
+
+.chips-empty {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+/* ---- 記法パネル: 記法表 ---- */
+
+.syntax-ref {
+    margin-top: 16px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+}
+
+.syntax-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.syntax-table td {
+    padding: 2px 4px 2px 0;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line);
+}
+
+.syntax-table code {
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.syntax-example {
+    color: var(--muted);
+}
+
 @media (max-width: 640px) {
     .app-header {
         padding: 10px 14px;
@@ -976,4 +1161,23 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     .footer-inner {
         padding: 8px 14px;
     }
+
+    /* 狭い画面ではパネルをエディタの下に回す */
+    .editor-tab {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .side-panel {
+        position: static;
+        max-height: none;
+    }
+}
+
+/* 記法表の例はクリックでカーソル位置に挿入できる。押せると分かる見た目にする */
+.syntax-example {
+    cursor: pointer;
+}
+
+.syntax-example:hover {
+    background: var(--accent-soft, #e8f0f7);
 }
