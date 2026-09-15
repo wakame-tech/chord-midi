@@ -1,0 +1,1998 @@
+{
+  "source": "https://daichan-easyguitar.com/easychord-list/",
+  "description": "daichan easy guitar「超簡単コード一覧」の押さえ方データ。バレーなし / 指1〜3本 / 小指を使わない。",
+  "tuning": [
+    "E2",
+    "A2",
+    "D3",
+    "G3",
+    "B3",
+    "E4"
+  ],
+  "fretsNotation": "frets は 6弦→1弦 の順。数値はフレット番号 (0 = 開放)、null = ミュート。",
+  "strings": [
+    "6",
+    "5",
+    "4",
+    "3",
+    "2",
+    "1"
+  ],
+  "groups": [
+    {
+      "key": "C",
+      "name": "Cコード系",
+      "chords": [
+        {
+          "name": "C",
+          "tab": "x3201x",
+          "frets": [
+            null,
+            3,
+            2,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "C",
+            "E",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1e26209844d82c079fc15db7490cefd3-1.png",
+          "fingers": [
+            null,
+            "ring",
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "C",
+          "tab": "x3x01x",
+          "frets": [
+            null,
+            3,
+            null,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "C",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2f7e0ef65be39a58afe4fbbff7627eee.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "C△7",
+          "tab": "x3x000",
+          "frets": [
+            null,
+            3,
+            null,
+            0,
+            0,
+            0
+          ],
+          "notes": [
+            "C",
+            "G",
+            "B",
+            "E"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-1.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Cadd9",
+          "tab": "x3x03x",
+          "frets": [
+            null,
+            3,
+            null,
+            0,
+            3,
+            null
+          ],
+          "notes": [
+            "C",
+            "G",
+            "D"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c515def52439f1e659f00e4cb0dc4013.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "Csus4",
+          "tab": "x3301x",
+          "frets": [
+            null,
+            3,
+            3,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "C",
+            "F",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d995af39a7c5f6c6bf73b3c53b798766.png",
+          "fingers": [
+            null,
+            "middle",
+            "ring",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "C/E",
+          "tab": "03201x",
+          "frets": [
+            0,
+            3,
+            2,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "E",
+            "C",
+            "E",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bae0f7a3172fa6c4294c59c1f60ef122.png",
+          "fingers": [
+            null,
+            "ring",
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "C/E",
+          "tab": "xx201x",
+          "frets": [
+            null,
+            null,
+            2,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "E",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a476b5c5246d336caaff5d47ef2f138e.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Cm7",
+          "tab": "x3x34x",
+          "frets": [
+            null,
+            3,
+            null,
+            3,
+            4,
+            null
+          ],
+          "notes": [
+            "C",
+            "A#",
+            "D#"
+          ],
+          "minFret": 3,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "C#△7",
+          "tab": "x4x56x",
+          "frets": [
+            null,
+            4,
+            null,
+            5,
+            6,
+            null
+          ],
+          "notes": [
+            "C#",
+            "C",
+            "F"
+          ],
+          "minFret": 4,
+          "maxFret": 6,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/185c18afe45118efce515ef43990f78c-2.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "C#m7",
+          "tab": "x4x400",
+          "frets": [
+            null,
+            4,
+            null,
+            4,
+            0,
+            0
+          ],
+          "notes": [
+            "C#",
+            "B",
+            "B",
+            "E"
+          ],
+          "minFret": 4,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/dca50e3e0a921fb8b8cb9cf490ee5d9d-1.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "C#m7-5",
+          "tab": "x4x000",
+          "frets": [
+            null,
+            4,
+            null,
+            0,
+            0,
+            0
+          ],
+          "notes": [
+            "C#",
+            "G",
+            "B",
+            "E"
+          ],
+          "minFret": 4,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9cdb6b222e9d696f6c749764b5909cad.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "key": "F",
+      "name": "Fコード系",
+      "chords": [
+        {
+          "name": "F",
+          "tab": "xx321x",
+          "frets": [
+            null,
+            null,
+            3,
+            2,
+            1,
+            null
+          ],
+          "notes": [
+            "F",
+            "A",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a1cf40bae048266f740e3d27bc0933a9.png",
+          "fingers": [
+            null,
+            null,
+            "ring",
+            "middle",
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Fadd9",
+          "tab": "xx301x",
+          "frets": [
+            null,
+            null,
+            3,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "F",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3c253f5747c2e3de2b88d2dd0b76c0c6.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Fsus4",
+          "tab": "xx331x",
+          "frets": [
+            null,
+            null,
+            3,
+            3,
+            1,
+            null
+          ],
+          "notes": [
+            "F",
+            "A#",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0eb5d5e0a7a2bdca957eff6b9b9ad714.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Fm",
+          "tab": "xx311x",
+          "frets": [
+            null,
+            null,
+            3,
+            1,
+            1,
+            null
+          ],
+          "notes": [
+            "F",
+            "G#",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/575df4b8cd348f8e42012410198375bb.png",
+          "fingers": [
+            null,
+            null,
+            "ring",
+            "index",
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "Fm7",
+          "tab": "1x11xx",
+          "frets": [
+            1,
+            null,
+            1,
+            1,
+            null,
+            null
+          ],
+          "notes": [
+            "F",
+            "D#",
+            "G#"
+          ],
+          "minFret": 1,
+          "maxFret": 1,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "F#7",
+          "tab": "2x23xx",
+          "frets": [
+            2,
+            null,
+            2,
+            3,
+            null,
+            null
+          ],
+          "notes": [
+            "F#",
+            "E",
+            "A#"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/239939afa160a510bf94ee917221819a.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "F#m7",
+          "tab": "2x22xx",
+          "frets": [
+            2,
+            null,
+            2,
+            2,
+            null,
+            null
+          ],
+          "notes": [
+            "F#",
+            "E",
+            "A"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0aa1e54e53c4e3365bf6bb26f6c662af-1.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "F#m7(11)",
+          "tab": "2x2200",
+          "frets": [
+            2,
+            null,
+            2,
+            2,
+            0,
+            0
+          ],
+          "notes": [
+            "F#",
+            "E",
+            "A",
+            "B",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/66bc928f6619503750f2f4be70c41ef3.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "F#m7-5",
+          "tab": "2x221x",
+          "frets": [
+            2,
+            null,
+            2,
+            2,
+            1,
+            null
+          ],
+          "notes": [
+            "F#",
+            "E",
+            "A",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b292b44eacaca1f9a92365bfdc4d24cd.png",
+          "fingers": [
+            "thumb",
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "key": "G",
+      "name": "Gコード系",
+      "chords": [
+        {
+          "name": "G",
+          "tab": "3x000x",
+          "frets": [
+            3,
+            null,
+            0,
+            0,
+            0,
+            null
+          ],
+          "notes": [
+            "G",
+            "D",
+            "G",
+            "B"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d0bda35ab29747f4abd45fdac91f5f78.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "G",
+          "tab": "3x003x",
+          "frets": [
+            3,
+            null,
+            0,
+            0,
+            3,
+            null
+          ],
+          "notes": [
+            "G",
+            "D",
+            "G",
+            "D"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/9c4ef1a9200899446d237cd1b00fc59c.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "G△7",
+          "tab": "3x44xx",
+          "frets": [
+            3,
+            null,
+            4,
+            4,
+            null,
+            null
+          ],
+          "notes": [
+            "G",
+            "F#",
+            "B"
+          ],
+          "minFret": 3,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/a2bc25aa2bf78122f69d41b93943dc7e.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Gadd9",
+          "tab": "3x023x",
+          "frets": [
+            3,
+            null,
+            0,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "G",
+            "D",
+            "A",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/75c00c2499a777980b95e60b5c8a0efc.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            "index",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "G6(9)",
+          "tab": "3x0230",
+          "frets": [
+            3,
+            null,
+            0,
+            2,
+            3,
+            0
+          ],
+          "notes": [
+            "G",
+            "D",
+            "A",
+            "D",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d7a0e4293c5d6c2ec20e0b00af5f3197.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            "index",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Gsus4",
+          "tab": "3x001x",
+          "frets": [
+            3,
+            null,
+            0,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "G",
+            "D",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3efe51ada10572442194e973a3aef097.png",
+          "fingers": [
+            "middle",
+            null,
+            null,
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "G/B",
+          "tab": "x2000x",
+          "frets": [
+            null,
+            2,
+            0,
+            0,
+            0,
+            null
+          ],
+          "notes": [
+            "B",
+            "D",
+            "G",
+            "B"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7cd70630dbb8408d1624539cad8234a1.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "G/A",
+          "tab": "x0000x",
+          "frets": [
+            null,
+            0,
+            0,
+            0,
+            0,
+            null
+          ],
+          "notes": [
+            "A",
+            "D",
+            "G",
+            "B"
+          ],
+          "minFret": 0,
+          "maxFret": 0,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef980060ff11557e2c6a35de8adc6676-1.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Gm",
+          "tab": "3x033x",
+          "frets": [
+            3,
+            null,
+            0,
+            3,
+            3,
+            null
+          ],
+          "notes": [
+            "G",
+            "D",
+            "A#",
+            "D"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/e13a7a7b74981ce405f46b5c8402c9eb.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "G#7",
+          "tab": "4x45xx",
+          "frets": [
+            4,
+            null,
+            4,
+            5,
+            null,
+            null
+          ],
+          "notes": [
+            "G#",
+            "F#",
+            "C"
+          ],
+          "minFret": 4,
+          "maxFret": 5,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/fe8cb046356ac6084311402752abfd87.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "G#m7-5",
+          "tab": "4x443x",
+          "frets": [
+            4,
+            null,
+            4,
+            4,
+            3,
+            null
+          ],
+          "notes": [
+            "G#",
+            "F#",
+            "B",
+            "D"
+          ],
+          "minFret": 3,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/77d3514065ce0df01f6bf1e9f699a69c.png",
+          "fingers": [
+            "thumb",
+            null,
+            "middle",
+            "ring",
+            "index",
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "key": "A",
+      "name": "Aコード系",
+      "chords": [
+        {
+          "name": "A",
+          "tab": "x0222x",
+          "frets": [
+            null,
+            0,
+            2,
+            2,
+            2,
+            null
+          ],
+          "notes": [
+            "A",
+            "E",
+            "A",
+            "C#"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c4d5ec973fbf0113b7e60c71720544ee.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Aadd9",
+          "tab": "x02200",
+          "frets": [
+            null,
+            0,
+            2,
+            2,
+            0,
+            0
+          ],
+          "notes": [
+            "A",
+            "E",
+            "A",
+            "B",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/065d881dae752965470042ce4c02d3c2.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Asus4",
+          "tab": "x0223x",
+          "frets": [
+            null,
+            0,
+            2,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "A",
+            "E",
+            "A",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ff91ab5f4bfb25feee21312272139053.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "A7/D",
+          "tab": "xx0020",
+          "frets": [
+            null,
+            null,
+            0,
+            0,
+            2,
+            0
+          ],
+          "notes": [
+            "D",
+            "G",
+            "C#",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4003af4304d2abb8605091e60fa5006b.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "A/B",
+          "tab": "x2x22x",
+          "frets": [
+            null,
+            2,
+            null,
+            2,
+            2,
+            null
+          ],
+          "notes": [
+            "B",
+            "A",
+            "C#"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/24fa89e97917f68ec7a440af0dab42f8.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Am7",
+          "tab": "x0201x",
+          "frets": [
+            null,
+            0,
+            2,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "A",
+            "E",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/c0b9b3158d1adb344a6e13f881db5189.png",
+          "fingers": [
+            null,
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Am7/G",
+          "tab": "3x201x",
+          "frets": [
+            3,
+            null,
+            2,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "G",
+            "E",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d71eb93de93e609831936f5bd13cc888.png",
+          "fingers": [
+            "ring",
+            null,
+            "middle",
+            null,
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Am7/D",
+          "tab": "xx0010",
+          "frets": [
+            null,
+            null,
+            0,
+            0,
+            1,
+            0
+          ],
+          "notes": [
+            "D",
+            "G",
+            "C",
+            "E"
+          ],
+          "minFret": 1,
+          "maxFret": 1,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4ee35ffb61c7517dd01189bd7c04a49d.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "Am/D",
+          "tab": "xx0210",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            1,
+            0
+          ],
+          "notes": [
+            "D",
+            "A",
+            "C",
+            "E"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/7398863a20e7cea3ae87356e10ef5692.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "Am7-5",
+          "tab": "x0101x",
+          "frets": [
+            null,
+            0,
+            1,
+            0,
+            1,
+            null
+          ],
+          "notes": [
+            "A",
+            "D#",
+            "G",
+            "C"
+          ],
+          "minFret": 1,
+          "maxFret": 1,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/813387a4566da15ff80b582a4871f66a.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "A#dim",
+          "tab": "x1202x",
+          "frets": [
+            null,
+            1,
+            2,
+            0,
+            2,
+            null
+          ],
+          "notes": [
+            "A#",
+            "E",
+            "G",
+            "C#"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/5e2150a81335f69c6d85f7e13f13206f.png",
+          "fingers": [
+            null,
+            "index",
+            "middle",
+            null,
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "A♭△7",
+          "tab": "4x55xx",
+          "frets": [
+            4,
+            null,
+            5,
+            5,
+            null,
+            null
+          ],
+          "notes": [
+            "G#",
+            "G",
+            "C"
+          ],
+          "minFret": 4,
+          "maxFret": 5,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/107439679f958aa45a749d60d0169b25.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "key": "E",
+      "name": "Eコード系",
+      "chords": [
+        {
+          "name": "E",
+          "tab": "022100",
+          "frets": [
+            0,
+            2,
+            2,
+            1,
+            0,
+            0
+          ],
+          "notes": [
+            "E",
+            "B",
+            "E",
+            "G#",
+            "B",
+            "E"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d6fb5a4334810b445c94f22a7d6100ff.png",
+          "fingers": [
+            null,
+            "middle",
+            "ring",
+            "index",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "E7",
+          "tab": "020100",
+          "frets": [
+            0,
+            2,
+            0,
+            1,
+            0,
+            0
+          ],
+          "notes": [
+            "E",
+            "B",
+            "D",
+            "G#",
+            "B",
+            "E"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b8e3c4861f2c1402f8fc1c80010975a4.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            "index",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "E7/G#",
+          "tab": "4x045x",
+          "frets": [
+            4,
+            null,
+            0,
+            4,
+            5,
+            null
+          ],
+          "notes": [
+            "G#",
+            "D",
+            "B",
+            "E"
+          ],
+          "minFret": 4,
+          "maxFret": 5,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4adcf2112e0cbe5c3cb9f18f6720f8ff.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Eadd9/G#",
+          "tab": "4x4400",
+          "frets": [
+            4,
+            null,
+            4,
+            4,
+            0,
+            0
+          ],
+          "notes": [
+            "G#",
+            "F#",
+            "B",
+            "B",
+            "E"
+          ],
+          "minFret": 4,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/b3dcd185fa11e114e10d13e63098cd8f.png",
+          "fingers": [
+            "index",
+            null,
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Em7",
+          "tab": "020000",
+          "frets": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ],
+          "notes": [
+            "E",
+            "B",
+            "D",
+            "G",
+            "B",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/80b560c1dc076c87a7232519858d8b73.png",
+          "fingers": [
+            null,
+            "middle",
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Em7",
+          "tab": "02003x",
+          "frets": [
+            0,
+            2,
+            0,
+            0,
+            3,
+            null
+          ],
+          "notes": [
+            "E",
+            "B",
+            "D",
+            "G",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/46dbef71d734d79253fd944811ff65f7-1.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "Em7/A",
+          "tab": "x00000",
+          "frets": [
+            null,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "notes": [
+            "A",
+            "D",
+            "G",
+            "B",
+            "E"
+          ],
+          "minFret": 0,
+          "maxFret": 0,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/2282e27581b31f66c4e2822bef83c04f.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "E♭△7",
+          "tab": "xx1x33",
+          "frets": [
+            null,
+            null,
+            1,
+            null,
+            3,
+            3
+          ],
+          "notes": [
+            "D#",
+            "D",
+            "G"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/ef2477f7411ca6591301c846258166ea-1.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            null,
+            "middle",
+            "ring"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D",
+      "name": "Dコード系",
+      "chords": [
+        {
+          "name": "D",
+          "tab": "xx0232",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            3,
+            2
+          ],
+          "notes": [
+            "D",
+            "A",
+            "D",
+            "F#"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1c3a1b61f6391ed1bd7e26dcb795bfcb.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "ring",
+            "middle"
+          ]
+        },
+        {
+          "name": "D",
+          "tab": "xx023x",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "D",
+            "A",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/816ef3b1834d4a1d42b300bf6dfae971.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "Dsus4",
+          "tab": "xx003x",
+          "frets": [
+            null,
+            null,
+            0,
+            0,
+            3,
+            null
+          ],
+          "notes": [
+            "D",
+            "G",
+            "D"
+          ],
+          "minFret": 3,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/859cb9832c4507f2a939b8378207be2c.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            null,
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "D△7(9)",
+          "tab": "xx0220",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            2,
+            0
+          ],
+          "notes": [
+            "D",
+            "A",
+            "C#",
+            "E"
+          ],
+          "minFret": 2,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/1ee026b8a3d52862df000fe325fe8f5e.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "index",
+            "middle",
+            null
+          ]
+        },
+        {
+          "name": "D7(9)",
+          "tab": "xx0210",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            1,
+            0
+          ],
+          "notes": [
+            "D",
+            "A",
+            "C",
+            "E"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0381e3882ef065b8934e143df475e729.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "index",
+            null
+          ]
+        },
+        {
+          "name": "D/F#",
+          "tab": "2x023x",
+          "frets": [
+            2,
+            null,
+            0,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "F#",
+            "D",
+            "A",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4be5a9bd04fa968da142a6ac27d40f23.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Dm7",
+          "tab": "xx0211",
+          "frets": [
+            null,
+            null,
+            0,
+            2,
+            1,
+            1
+          ],
+          "notes": [
+            "D",
+            "A",
+            "C",
+            "F"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/bed19edc6968fe230fbf080bbcc4e2bd.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "ring",
+            "index",
+            "middle"
+          ]
+        },
+        {
+          "name": "Dm/F",
+          "tab": "1x023x",
+          "frets": [
+            1,
+            null,
+            0,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "F",
+            "D",
+            "A",
+            "D"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/99922b2a8ea46f050ddce1a3102da463.png",
+          "fingers": [
+            "index",
+            null,
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "D#dim",
+          "tab": "xx12x2",
+          "frets": [
+            null,
+            null,
+            1,
+            2,
+            null,
+            2
+          ],
+          "notes": [
+            "D#",
+            "A",
+            "F#"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/3ad52691798ecab31807b69d8b7f4372.png",
+          "fingers": [
+            null,
+            null,
+            "index",
+            "middle",
+            null,
+            "ring"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "B",
+      "name": "Bコード系",
+      "chords": [
+        {
+          "name": "B7",
+          "tab": "x2120x",
+          "frets": [
+            null,
+            2,
+            1,
+            2,
+            0,
+            null
+          ],
+          "notes": [
+            "B",
+            "D#",
+            "A",
+            "B"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/6b45cbb749adb7509eb5d42a3a910d34.png",
+          "fingers": [
+            null,
+            "middle",
+            "index",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "Bm7",
+          "tab": "x2x23x",
+          "frets": [
+            null,
+            2,
+            null,
+            2,
+            3,
+            null
+          ],
+          "notes": [
+            "B",
+            "A",
+            "D"
+          ],
+          "minFret": 2,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f5bd9e4b53b9947a53ddf27067ec9de4.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        },
+        {
+          "name": "Bdim",
+          "tab": "x234xx",
+          "frets": [
+            null,
+            2,
+            3,
+            4,
+            null,
+            null
+          ],
+          "notes": [
+            "B",
+            "F",
+            "B"
+          ],
+          "minFret": 2,
+          "maxFret": 4,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/d75de35929f7996c09fdb80205cdf1fe.png",
+          "fingers": [
+            null,
+            "index",
+            "middle",
+            "ring",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "B♭△7",
+          "tab": "x132xx",
+          "frets": [
+            null,
+            1,
+            3,
+            2,
+            null,
+            null
+          ],
+          "notes": [
+            "A#",
+            "F",
+            "A"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/036149163119e47751fcdf4df1668c55.png",
+          "fingers": [
+            null,
+            "index",
+            "ring",
+            "middle",
+            null,
+            null
+          ]
+        },
+        {
+          "name": "B♭/D",
+          "tab": "xx0331",
+          "frets": [
+            null,
+            null,
+            0,
+            3,
+            3,
+            1
+          ],
+          "notes": [
+            "D",
+            "A#",
+            "D",
+            "F"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/0e43c3c3833c9bb710e09022441c9221.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "middle",
+            "ring",
+            "index"
+          ]
+        },
+        {
+          "name": "B♭add9/D",
+          "tab": "xx0311",
+          "frets": [
+            null,
+            null,
+            0,
+            3,
+            1,
+            1
+          ],
+          "notes": [
+            "D",
+            "A#",
+            "C",
+            "F"
+          ],
+          "minFret": 1,
+          "maxFret": 3,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/4218b30a141e300b9124687849611a3d.png",
+          "fingers": [
+            null,
+            null,
+            null,
+            "ring",
+            "index",
+            "middle"
+          ]
+        },
+        {
+          "name": "B♭m7",
+          "tab": "x1x12x",
+          "frets": [
+            null,
+            1,
+            null,
+            1,
+            2,
+            null
+          ],
+          "notes": [
+            "A#",
+            "G#",
+            "C#"
+          ],
+          "minFret": 1,
+          "maxFret": 2,
+          "image": "https://daichan-easyguitar.com/wp-content/uploads/2021/03/f4912c65caadcaaea8e2a82e8dfecd44.png",
+          "fingers": [
+            null,
+            "index",
+            null,
+            "middle",
+            "ring",
+            null
+          ]
+        }
+      ]
+    }
+  ],
+  "fingersNotation": "fingers は frets と同じ 6弦→1弦 の順。index=人差し指 / middle=中指 / ring=薬指 / thumb=親指、null は押さえない弦。"
+}

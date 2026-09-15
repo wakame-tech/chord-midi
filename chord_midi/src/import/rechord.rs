@@ -10,7 +10,7 @@ use std::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, not_line_ending, space0};
-use nom::combinator::{eof, map, map_res, value};
+use nom::combinator::{eof, map, map_res, peek, value};
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
@@ -71,6 +71,8 @@ fn measure_sep(s: Span) -> IResult<Span, bool> {
     // eof acts as an implicit separator so the final measure need not end
     // with a trailing `|` or newline.
     alt((
+        // `|` の直後が行末なら、その小節でひと行が終わる
+        value(true, tuple((tag("|"), space0, peek(line_ending)))),
         value(false, tag("|")),
         value(true, line_ending),
         value(false, eof),
