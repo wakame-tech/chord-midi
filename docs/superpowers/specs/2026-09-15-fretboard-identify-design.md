@@ -75,8 +75,9 @@ pub struct Candidate {
     /// そのまま入力に書ける記法。"C/E@6" や "pow(A@6)"
     pub notation: String,
     pub source: Source,
-    /// `notation` を書いても押さえた形には戻らない（記法で表せない形）
-    pub unreachable: bool,
+    /// `notation` を書くと押さえた形がそのまま戻ってくる。false なら音は
+    /// 合っているが別の押さえ方になる（この形は名指しできない）
+    pub reproduces_shape: bool,
     /// 小さいほど良い。表示順に使う
     pub score: u32,
 }
@@ -248,10 +249,10 @@ x234xx   原典は Bdim   鳴るのは {B, F} の2音
 1. 候補の ChordNode（@N 無し）を chord_ref() -> find() に流す
 2. 返った押さえ方の frets がクリックした形と同じ  -> @N は要らない
 3. 違う -> root_string = 6 - 最低音の弦 を立てて再試行
-4. それでも違う -> 記法は @N 無しの名前のまま、unreachable = true
+4. それでも違う -> 記法は @N 無しの名前のまま、reproduces_shape = false
 ```
 
-`unreachable` が立つのは「その形は今のデータでは再現できない」ということ。記法
+`reproduces_shape` が false なのは「その形は今のデータでは再現できない」ということ。記法
 としては正しい（音は合っている）ので書けるが、プレビュータブに戻したとき同じ形
 にはならない。UI でその旨を添える。
 
@@ -326,7 +327,7 @@ x234xx   原典は Bdim   鳴るのは {B, F} の2音
 - `Source::Data` で原典名が rechord 名と違うときだけ、原典での呼び名を出す
   （`diagram.rs` の `≒` 併記と同じ考え方）
 - 記法と「挿入」ボタン
-- `unreachable` のときだけ注記を出す
+- `reproduces_shape` が false のときだけ注記を出す
 - 候補が0件（全ミュート、または足切りで全滅）のときは「該当なし」
 
 ### CSS

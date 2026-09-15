@@ -161,7 +161,7 @@ fn candidate_cards(
                 }),
                 _ => None,
             };
-            let note = c.unreachable.then(|| {
+            let note = (!c.reproduces_shape).then(|| {
                 html! {
                     <div class="fretboard-note">
                         {"この形は今の押さえ方データでは再現できない"}
