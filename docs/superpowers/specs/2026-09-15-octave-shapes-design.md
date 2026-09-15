@@ -150,17 +150,22 @@ let wanted = if node.modifiers.contains(&Modifier::Octave) {
 ### ガードの規則
 
 ```rust
-// Normal は常に候補。Power / Octave は、その種類が明示されたか
-// @N の指定があるときだけ候補にする
+// Normal は常に候補。可動形 (Power / Octave) は、書かれた関数で種類が
+// 明示されていればその種類だけ、明示が無ければ @N の指定があるときだけ
 let allowed = |kind| match kind {
     ShapeKind::Normal => true,
-    other => chord.wanted == Some(other) || chord.root_string.is_some(),
+    other => match chord.wanted {
+        Some(wanted) => wanted == other,
+        None => chord.root_string.is_some(),
+    },
 };
 ```
 
+`wanted` は「この種類の押さえ方が欲しい」という明示なので、`@N` より優先する。`||` で繋ぐと弦指定を付けた瞬間に種類の指定が無効になり、`oct(A/E@6)` の構成音 `{A, E}` がパワーコード形と完全一致するためパワー形が選ばれてしまう。
+
 `Normal` を常に許すのは既存どおり。`pow(C)` が原典の2音の形（`x-3-x-0-1-x` = C + G）を引くのはこの経路で、可動形より低いポジションなので妥当な結果として受け入れている。
 
-`@N` 指定時は Power と Octave の両方が候補になるが、コストで自然に分かれる。
+関数の指定が無く `@N` だけがあるときは Power と Octave の両方が候補になるが、コストで自然に分かれる。
 
 | 入力 | パワー形のコスト | オクターブ形のコスト | 選ばれる |
 | --- | --- | --- | --- |
