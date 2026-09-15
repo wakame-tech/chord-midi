@@ -2,12 +2,55 @@ use crate::model::ast::{Expr, Func};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
+/// 展開してよい小節の総数。120bpm の 4/4 で 4096 小節 ≒ 2時間15分。
+/// 実用の曲がこれを超えることはまず無く、超えたら書き間違いと見てよい。
+///
+/// `$b = $a x32` のような入れ子は乗算的に増えるので、上限が無いと
+/// 打ち間違い1つでメモリを食い尽くす。web は打鍵のたびに展開するので致命的
+const MAX_MEASURES: usize = 4096;
+
+/// 展開済みの定義。本体と、その本体が持つ小節の数
+struct Def {
+    body: Expr,
+    measures: usize,
+}
+
 /// 定義の環境。`$name` から展開済みの本体への写像
 #[derive(Default)]
 struct Env {
-    defs: HashMap<String, Expr>,
+    defs: HashMap<String, Def>,
     /// いま本体を展開している最中の定義の名前。自己参照を見分けるためだけに持つ
     defining: Option<String>,
+    /// これまでに作った小節の総数。`MAX_MEASURES` を超えたら止める
+    measures: usize,
+}
+
+impl Env {
+    /// これから作る小節を先に計上する。作ってから数えるのでは、
+    /// 数え終わる前にメモリを食い尽くすので、必ず複製の前に呼ぶこと
+    fn charge(&mut self, n: usize) -> Result<()> {
+        self.measures = self.measures.saturating_add(n);
+        if self.measures > MAX_MEASURES {
+            return Err(anyhow!(
+                "展開すると小節が多すぎる (上限 {} 小節)。xN の入れ子を減らすこと",
+                MAX_MEASURES
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// 展開済みの式が持つ小節の数
+fn measures_in(expr: &Expr) -> usize {
+    match expr {
+        Expr::Measure(_, _) => 1,
+        Expr::Seq(items) => items.iter().map(measures_in).sum(),
+        Expr::Apply(_, inner, _) => measures_in(inner),
+        Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => measures_in(inner),
+        Expr::Comment(_) | Expr::Pattern(_) => 0,
+        // 展開後には残らない
+        Expr::Define(_, _) | Expr::Ref(_) | Expr::Repeat(_, _) => 0,
+    }
 }
 
 /// `Define` を環境に収容して `Seq` から除き、`Ref` を値に置き換え、
@@ -33,19 +76,23 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             }
             Ok(Expr::Seq(out))
         }
-        Expr::Ref(name) => match env.defs.get(&name) {
-            Some(body) => Ok(body.clone()),
-            None if env.defining.as_deref() == Some(name.as_str()) => Err(anyhow!(
-                "${} の定義が自分自身を参照している (循環参照)",
-                name
-            )),
-            None => Err(anyhow!(
-                "${} は定義されていない (定義は使う前に書くこと)",
-                name
-            )),
-        },
+        Expr::Ref(name) => {
+            let Some(measures) = env.defs.get(&name).map(|def| def.measures) else {
+                return Err(if env.defining.as_deref() == Some(name.as_str()) {
+                    anyhow!("${} の定義が自分自身を参照している (循環参照)", name)
+                } else {
+                    anyhow!("${} は定義されていない (定義は使う前に書くこと)", name)
+                });
+            };
+            // 複製する前に、複製で増える小節を計上する
+            env.charge(measures)?;
+            Ok(env.defs[&name].body.clone())
+        }
         Expr::Repeat(inner, n) => {
             let inner = expand_in(*inner, env)?;
+            // 中身は既に1つぶん計上されている。増えるのは残りの n-1 個
+            let per = measures_in(&inner);
+            env.charge(per * (n as usize).saturating_sub(1))?;
             let mut out = Vec::new();
             for _ in 0..n {
                 push_flat(&mut out, inner.clone());
@@ -88,7 +135,10 @@ fn expand_in(expr: Expr, env: &mut Env) -> Result<Expr> {
             name
         )),
         Expr::Comment(c) => Ok(Expr::Comment(c)),
-        Expr::Measure(nodes, br) => Ok(Expr::Measure(nodes, br)),
+        Expr::Measure(nodes, br) => {
+            env.charge(1)?;
+            Ok(Expr::Measure(nodes, br))
+        }
         Expr::Pattern(p) => Ok(Expr::Pattern(p)),
     }
 }
@@ -105,7 +155,9 @@ fn define(name: String, body: Expr, env: &mut Env) -> Result<()> {
     let outer = env.defining.replace(name.clone());
     let body = expand_in(body, env);
     env.defining = outer;
-    env.defs.insert(name, body?);
+    let body = body?;
+    let measures = measures_in(&body);
+    env.defs.insert(name, Def { body, measures });
     Ok(())
 }
 
@@ -271,6 +323,59 @@ mod tests {
             "{:?}",
             items
         );
+    }
+
+    /// `expand` は度数を実音に変えない。`Ref` を度数のままの本体に置き換えるだけで、
+    /// 解決は後から `into_pitch` が `Keyed` のスコープを降りながら行う。
+    /// 度数表記のリフをキーを変えて使い回せるのはこの順序のおかげ
+    #[test]
+    fn test_ref_resolves_with_the_key_at_the_use_site() {
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+        use crate::model::scale::Scale;
+
+        // 定義は key: C の下、使うのは key: D の下。
+        // expand は度数を解決しないので、使う位置のスコープが効く。
+        // これにより度数表記のリフをキーを変えて使い回せる
+        let e =
+            expanded("key: C\n$a = I | IV |\nkey: D\n$a\n").into_pitch(Pitch::C, Scale::Major);
+
+        fn pitches(e: &Expr, out: &mut Vec<Pitch>) {
+            match e {
+                Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
+                Expr::Apply(_, inner, _) => pitches(inner, out),
+                Expr::Measure(nodes, _) => {
+                    for n in nodes {
+                        if let crate::model::ast::Node::Chord(c) = n {
+                            if let Key::Absolute(p) = c.key {
+                                out.push(p);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut got = Vec::new();
+        pitches(&e, &mut got);
+        assert_eq!(got, vec![Pitch::D, Pitch::G], "使う位置の key: が効くこと");
+    }
+
+    #[test]
+    fn test_expansion_is_capped() {
+        // xN の入れ子で乗算的に増える。web は打鍵のたびに展開するので、
+        // 上限が無いとブラウザが固まる
+        let msg = err("$a = (C | D | E | F) x32\n$b = $a x32\n$c = $b x32\n$c\n");
+        assert!(msg.contains("4096") || msg.contains("多すぎる"), "{}", msg);
+    }
+
+    #[test]
+    fn test_reasonable_song_is_not_capped() {
+        // 実用の範囲は通ること。(4小節) x32 = 128小節
+        let e = expanded("(C | Am | F | G) x32\n");
+        assert_eq!(count_measures(&e), 128);
     }
 
     /// `Apply` の中身は常に `Seq`。展開で畳んでもその形は崩さない
