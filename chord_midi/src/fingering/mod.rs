@@ -54,6 +54,10 @@ pub struct Fingering {
     pub pitch_classes: u16,
     /// 最低音（鳴る弦のうち一番低い弦）のピッチクラス
     pub bass: u8,
+    /// 最低音が鳴る弦。0 = 6弦, 5 = 1弦
+    pub lowest_string: u8,
+    /// 可動パワーコード形かどうか。`find` のガードに使う
+    pub is_power: bool,
 }
 
 impl Fingering {
@@ -233,8 +237,14 @@ fn extra_cost(semitone: u8) -> u32 {
 /// 代用させる構成なので、部分集合だけに絞ると素の三和音が軒並み引けなくなる。
 pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
+    // 可動パワーコード形は2音しか無いので、無条件に候補へ入れると
+    // 3rd や 7th が欠けた形が本来のコードを押しのける。ルートと5th
+    // ちょうどのときだけ候補にする（`@N` での解放は Task 4 で足す）
+    let power_target =
+        chord.pitch_classes == (1u16 << chord.root) | (1u16 << ((chord.root + 7) % 12));
     FINGERINGS
         .iter()
+        .filter(|f| !f.is_power || power_target)
         .filter(|f| (f.pitch_classes & !chord.pitch_classes).count_ones() <= 1)
         .min_by_key(|f| {
             let extra: u32 = relative_semitones(f.pitch_classes & !chord.pitch_classes, chord.root)
@@ -365,7 +375,7 @@ mod tests {
 
     #[test]
     fn data_is_consistent() {
-        assert_eq!(FINGERINGS.len(), 67);
+        assert_eq!(FINGERINGS.len(), 91);
         for f in FINGERINGS {
             let mut pcs = 0u16;
             for (i, v) in f.frets.iter().enumerate() {
@@ -516,5 +526,64 @@ mod tests {
         assert_eq!(ms.len(), 1);
         assert_eq!(ms[0].chords.len(), 1);
         assert_eq!(ms[0].chords[0].label, "C");
+    }
+
+    #[test]
+    fn power_chord_shapes_are_present() {
+        let powers: Vec<_> = FINGERINGS.iter().filter(|f| f.is_power).collect();
+        // 6弦ルート12キー + 5弦ルート12キー
+        assert_eq!(powers.len(), 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24);
+    }
+
+    #[test]
+    fn power_chord_shapes_sound_root_and_fifth() {
+        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+            // 鳴るのは2音だけ
+            assert_eq!(f.pitch_classes.count_ones(), 2, "{} {}", f.name, tab(f));
+            // 最低音がルート、その完全5度上がもう1音
+            let fifth = (f.bass + 7) % 12;
+            let expected = (1u16 << f.bass) | (1u16 << fifth);
+            assert_eq!(f.pitch_classes, expected, "{} {}", f.name, tab(f));
+        }
+    }
+
+    #[test]
+    fn power_chord_fingers_are_index_and_ring() {
+        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+            let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
+            match used.len() {
+                // 開放弦がルートの形は押さえるのが5thだけ
+                1 => assert_eq!(used, vec![Finger::Ring], "{} {}", f.name, tab(f)),
+                2 => assert_eq!(
+                    used,
+                    vec![Finger::Index, Finger::Ring],
+                    "{} {}",
+                    f.name,
+                    tab(f)
+                ),
+                n => panic!("unexpected pressed count {} for {}", n, f.name),
+            }
+        }
+    }
+
+    #[test]
+    fn power_chord_shapes_reach_high_frets() {
+        // 6弦ルートの D5 は 10fr + 12fr。桁あふれせずに持てていること
+        let d5 = shape([Some(10), Some(12), None, None, None, None]);
+        assert!(d5.is_power);
+        assert_eq!(tab(d5), "10-12-x-x-x-x");
+    }
+
+    #[test]
+    fn lowest_string_matches_frets() {
+        for f in FINGERINGS {
+            let expected = f
+                .frets
+                .iter()
+                .position(|v| v.is_some())
+                .expect("no sounding string") as u8;
+            assert_eq!(f.lowest_string, expected, "{} {}", f.name, tab(f));
+        }
     }
 }
