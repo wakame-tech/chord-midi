@@ -164,6 +164,29 @@ fn notation_for(
     (node.to_string(), false)
 }
 
+/// 可動形（パワーコード / オクターブ形）の候補。
+///
+/// `C5` と書くと `Modifier::Dominant(5)` に読まれてただのメジャートライアドに
+/// なってしまう（`Modifier::Power` は `pow()` からしか作れない）ので、記法は
+/// 関数で包む。どの弦で取るかが形そのものなので `@N` は常に付ける
+fn movable_candidate(f: &'static Fingering) -> Option<Candidate> {
+    let (func, suffix) = match f.kind {
+        ShapeKind::Power => ("pow", "5"),
+        ShapeKind::Octave => ("oct", "oct"),
+        ShapeKind::Normal => return None,
+    };
+    let root = Pitch::try_from(f.bass).ok()?;
+    // Fingering.lowest_string は 0 = 6弦、記法の @N は 1 = 1弦
+    let string = 6 - f.lowest_string;
+    Some(Candidate {
+        name: format!("{}{}", root, suffix),
+        notation: format!("{}({}@{})", func, root, string),
+        source: Source::Data(f),
+        unreachable: false,
+        score: 0,
+    })
+}
+
 /// 押さえ方からコード名候補を引く。frets は 6弦→1弦、None = ミュート
 pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     let Some(played) = played(&frets) else {
@@ -201,6 +224,11 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     let data = FINGERINGS.iter().find(|f| f.frets == frets);
 
     let mut out: Vec<Candidate> = Vec::new();
+    // 可動形は段2が出せない（Power は記法が違い、Octave は1音なので何にでも
+    // 一致する）ので、データに当たったときだけここで先頭に足す
+    if let Some(c) = data.and_then(movable_candidate) {
+        out.push(c);
+    }
     for (s, _, node, r) in scored {
         if out.len() >= MAX_CANDIDATES {
             break;
@@ -329,19 +357,51 @@ mod tests {
     /// RechordImporter を通す。これなら `pow(A@6)` のような関数も読める
     fn reparse(notation: &str) -> Vec<ChordRef> {
         use crate::import::{Importer, RechordImporter};
+        // `pow(...)` / `oct(...)` は小節をまるごと包む書き方なので、後ろに `|` は
+        // 付けられない。素のコード名だけ小節にする
+        let input = if notation.starts_with("pow(") || notation.starts_with("oct(") {
+            format!("{}\n", notation)
+        } else {
+            format!("{} |\n", notation)
+        };
         let ast = RechordImporter
-            .import(&format!("{} |\n", notation))
+            .import(&input)
             .unwrap_or_else(|e| panic!("{} がパースできない: {}", notation, e))
             .resolve();
         chord_refs(&ast).unwrap()
+    }
+
+    #[test]
+    fn identify_names_a_power_shape() {
+        // 57xxxx = 6弦5fr + 5弦7fr の A パワーコード
+        let c = identify(frets("57xxxx"));
+        assert_eq!(c[0].name, "A5");
+        assert_eq!(c[0].notation, "pow(A@6)");
+        assert!(matches!(c[0].source, Source::Data(_)));
+        assert!(!c[0].unreachable);
+    }
+
+    #[test]
+    fn identify_names_an_octave_shape() {
+        // 5x7xxx = 6弦5fr + 4弦7fr の A オクターブ形
+        let c = identify(frets("5x7xxx"));
+        assert_eq!(c[0].name, "Aoct");
+        assert_eq!(c[0].notation, "oct(A@6)");
+        assert!(matches!(c[0].source, Source::Data(_)));
+    }
+
+    #[test]
+    fn identify_names_a_five_string_power_shape() {
+        // x02xxx = 5弦開放 + 4弦2fr の A パワーコード
+        let c = identify(frets("x02xxx"));
+        assert_eq!(c[0].notation, "pow(A@5)");
     }
 
     /// データの全要素について、逆引きが1件は返し、Data と印が付いた候補の記法を
     /// 読み直して find() に流すと元の形が戻る
     #[test]
     fn every_shape_in_the_data_round_trips() {
-        // 可動形は Task 6 まで扱わないので、ここでは原典の押さえ方だけ見る
-        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Normal) {
+        for f in FINGERINGS.iter() {
             let got = identify(f.frets);
             assert!(!got.is_empty(), "{} ({:?}) の候補が空", f.name, f.frets);
             for c in got.iter().filter(|c| matches!(c.source, Source::Data(_))) {
