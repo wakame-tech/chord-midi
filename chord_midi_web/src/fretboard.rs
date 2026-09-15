@@ -23,7 +23,7 @@ pub fn fretboard(props: &FretboardProps) -> Html {
         Callback::from(move |_| on_change.emit([None; 6]))
     };
     html! {
-        <div class="fretboard-tab">
+        <div>
             <p class="fretboard-help">
                 {"指板を押すとその弦の音が決まる。同じところをもう一度押すとミュート。"}
             </p>
@@ -71,7 +71,6 @@ fn board(props: &FretboardProps) -> Html {
                         "fb-cell",
                         (fret == 0).then_some("is-open"),
                         (fret == 1).then_some("is-nut"),
-                        on.then_some("is-on"),
                     );
                     let dot = if on {
                         html! { <span class="fb-dot"></span> }

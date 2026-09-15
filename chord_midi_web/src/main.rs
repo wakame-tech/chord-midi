@@ -62,7 +62,7 @@ fn app() -> Html {
     let measures = use_state(Vec::<MeasureRef>::new);
     let tab = use_state(|| Tab::Editor);
     // 運指タブで押さえた形。タブを離れても消さないので App が持つ
-    let picked = use_state(|| [None; 6] as [Option<u8>; 6]);
+    let picked = use_state(|| [None::<u8>; 6]);
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
@@ -324,7 +324,7 @@ fn app() -> Html {
             let next = if cur.trim().is_empty() {
                 format!("{} |", notation)
             } else {
-                format!("{} {} |", cur.trim_end(), notation)
+                format!("{}\n{} |", cur.trim_end(), notation)
             };
             input.set(next);
         })
