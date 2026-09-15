@@ -17,7 +17,9 @@ web 版でできること（再生を除く）は CLI からも使える。
     cargo run -p chord_midi_cli -- -i song.txt --scale minor
 
     # 表示
-    cargo run -p chord_midi_cli -- -i song.txt --print-ast
+    cargo run -p chord_midi_cli -- -i song.txt --print-ast            # 構文木 (JSON)
+    cargo run -p chord_midi_cli -- -i song.txt --print-ast expanded   # 解決後 (JSON)
+    cargo run -p chord_midi_cli -- -i song.txt --print-ast text       # rechord 記法に書き戻し
     cargo run -p chord_midi_cli -- -i song.txt --fingering
 
     # プリセット進行（`-i` の代わりに使う）
@@ -42,6 +44,21 @@ web 版の移調ボタン / スケール選択と同じ扱いなので、結果�
     just gen-fingerings
 
 `chord_midi/src/fingering/data.rs` は生成物なので手で編集しない。
+
+## キーとスケール
+
+    key: C
+    scale: dorian
+
+`key:` と `scale:` は**それ以降の行に効く**。曲の途中で書き直すと、そこから
+後ろだけがそのキーになる。
+
+    key: C
+    I | IV |
+    key: D
+    I | IV |     # ここは D のキーで解釈される
+
+`--print-ast` と web 版の「解釈結果」で、この入れ子が JSON として見える。
 
 ## 関数
 
