@@ -32,6 +32,16 @@ const SAMPLES: &[(&str, &str)] = &[
     // パワーコードが三和音のまま鳴る
     ("pow_ref", "$a = C\npow($a)\n"),
     ("oct_ref", "$b = A\noct($b)\n"),
+    // Phase 2 の記法
+    ("define_ref", "$riff = pow(C | E D)\n$riff | C |\n"),
+    (
+        "define_pattern",
+        "$eight = \"o.o.o.o.\"\npat($eight, C | Am)\n",
+    ),
+    ("repeat_measure", "C x4 |\n"),
+    ("repeat_group", "(C | Am | F | G) x2\n"),
+    ("nested_define", "$a = C\n$b = $a | $a\n$b x2\n"),
+    ("define_under_key", "key: C\n$a = I | IV |\n$a x2\n"),
     ("root_string", "pow(A@6 | D@5 | E@5)\n"),
     ("comment", "# memo\nkey: C\nC | F |\n"),
     ("multiline", "C | Am |\nF | G |\n"),
@@ -161,6 +171,63 @@ fn presets_are_stable() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// 定義を使った書き方と、手で展開した書き方が同じ MIDI を出すこと。
+///
+/// Phase 2 で足した定義・参照・リピート・グループは「書き方を短くするだけで、
+/// 鳴る音は変えない」というのが前提。ここが崩れると、定義を使った瞬間に
+/// 曲が変わることになる。
+///
+/// `key_scope` のペアだけは意味が違う。定義の本体は度数のまま環境に入り、
+/// 度数が実音になるのは**使う位置**のキーで決まる。だから同じ `$a` が
+/// `key: C` の下では C F に、`key: D` の下では D G になる
+#[test]
+fn defines_match_hand_expansion() {
+    let pairs: &[(&str, &str, &str)] = &[
+        (
+            "riff",
+            "$riff = pow(C | E D)\n$riff | C |\n",
+            "pow(C | E D) C |\n",
+        ),
+        ("repeat", "C x4 |\n", "C | C | C | C |\n"),
+        ("group", "(C | Am) x2\n", "C | Am | C | Am |\n"),
+        (
+            "nested",
+            "$a = C\n$b = $a | $a\n$b x2\n",
+            "C | C | C | C |\n",
+        ),
+        // pow / oct の修飾が参照の中身まで届くこと
+        ("pow_through_ref", "$a = C\npow($a)\n", "pow(C)\n"),
+        ("oct_through_ref", "$a = A\noct($a)\n", "oct(A)\n"),
+        // pat の第1引数が参照でも、同じリズムになること
+        (
+            "pat_through_ref",
+            "$p = \"oxox\"\npat($p, C)\n",
+            "pat(\"oxox\", C)\n",
+        ),
+        // 度数表記のリフを、キーを変えて使い回せること。
+        // 定義した位置 (key: C) ではなく、使う位置の key: が効く
+        (
+            "key_scope",
+            "key: C\n$a = I | IV |\n$a\nkey: D\n$a\n",
+            "key: C\nI | IV |\nkey: D\nI | IV |\n",
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (name, with_define, expanded) in pairs {
+        match (midi_bytes(name, with_define), midi_bytes(name, expanded)) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (Ok(a), Ok(b)) => failures.push(format!(
+                "[{}] 定義版と展開版の MIDI が違う ({} bytes vs {} bytes)",
+                name,
+                a.len(),
+                b.len()
+            )),
+            (Err(e), _) | (_, Err(e)) => failures.push(format!("[{}] {}", name, e)),
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// サンプル + プリセットの全ケースを `(診断用の名前, コード)` で列挙する。
