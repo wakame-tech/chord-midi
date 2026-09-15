@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Ast, ChordNode, Directive, Node};
+use crate::model::ast::{Ast, Beat, ChordNode, Directive, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
@@ -24,7 +24,21 @@ impl Display for Ast {
             }
             Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
             Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
-            Ast::Apply(_, _) => Ok(()),
+            Ast::Apply(func, items) => {
+                let inner = items
+                    .iter()
+                    .map(|item| item.to_string())
+                    .collect::<Vec<_>>()
+                    .join("");
+                // 小節の Display は末尾に " | " を出すので、関数の中では
+                // 最後の区切りを落として `pow(C | E D)` の形に揃える
+                let inner = inner.trim_end();
+                let inner = inner.strip_suffix('|').unwrap_or(inner).trim_end();
+                match func {
+                    Func::Pow => write!(f, "pow({}) ", inner),
+                    Func::Pat(pattern) => write!(f, "pat(\"{}\", {}) ", pattern, inner),
+                }
+            }
             Ast::Measure(nodes, br) => {
                 write!(
                     f,
@@ -56,6 +70,20 @@ impl Display for Node {
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
         }
+    }
+}
+
+impl Display for Pattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for beat in &self.0 {
+            let c = match beat {
+                Beat::Hit => 'o',
+                Beat::Rest => '.',
+                Beat::Brush => 'x',
+            };
+            write!(f, "{}", c)?;
+        }
+        Ok(())
     }
 }
 
@@ -112,5 +140,31 @@ mod tests {
         let ast = RechordImporter.import("arp(C) |\n").unwrap();
         let s = format!("{}", ast);
         assert!(s.contains("arp(C)"));
+    }
+
+    fn roundtrip(code: &str) -> String {
+        let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
+        format!("{}", ast).trim_end().to_string()
+    }
+
+    #[test]
+    fn test_pow_roundtrip() {
+        assert_eq!(roundtrip("pow(C | E D)"), "pow(C | E D)");
+        assert_eq!(roundtrip("pow(C)"), "pow(C)");
+    }
+
+    #[test]
+    fn test_pat_roundtrip() {
+        assert_eq!(roundtrip("pat(\"o.o.oxox\", C | E D)"), "pat(\"o.o.oxox\", C | E D)");
+    }
+
+    #[test]
+    fn test_nested_apply_roundtrip() {
+        assert_eq!(roundtrip("pat(\"oxox\", pow(C))"), "pat(\"oxox\", pow(C))");
+    }
+
+    #[test]
+    fn test_apply_then_measure_roundtrip() {
+        assert_eq!(roundtrip("pow(C) F |"), "pow(C) F |");
     }
 }
