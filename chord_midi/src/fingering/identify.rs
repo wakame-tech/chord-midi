@@ -265,10 +265,12 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
     if let Some(c) = data.and_then(movable_candidate) {
         out.push(c);
     }
-    // 候補ごとに記法を決める。並び順は (score, QUALITIES の並び順) で既に
-    // 確定しているので、truncate で落ちる分の notation_for は捨てることになる。
-    // 足切り後の候補は数十件、find() は115件の軽いビット演算なので許容する
+    // 並び順は (score, QUALITIES の並び順) で既に確定しているので、上から
+    // 必要な件数だけ記法を決めれば足りる
     for (s, _, node, r) in scored {
+        if out.len() >= MAX_CANDIDATES {
+            break;
+        }
         if out.iter().any(|c| c.name == r.label) {
             continue;
         }
@@ -285,7 +287,6 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             score: s,
         });
     }
-    out.truncate(MAX_CANDIDATES);
     out
 }
 
