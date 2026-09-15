@@ -97,6 +97,7 @@ dependencies = [
  "chord_midi",
  "clap",
  "log",
+ "serde_json",
  "simplelog",
 ]
 

@@ -17,6 +17,16 @@ use std::{
 
 mod diagram;
 
+#[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
+enum AstForm {
+    /// パース直後の構文木を JSON で
+    Syntax,
+    /// key/scale を解決し pow/oct を潰した後の木を JSON で
+    Expanded,
+    /// rechord 記法に書き戻したテキスト
+    Text,
+}
+
 #[derive(Debug, clap::Parser)]
 #[command(version, about = "rechord 記法のコード進行を MIDI などに変換する")]
 struct Cli {
@@ -40,9 +50,14 @@ struct Cli {
     /// スケールを張り替える (major, minor, dorian, ...)
     #[arg(long, value_name = "SCALE")]
     scale: Option<String>,
-    /// AST を度数表記のまま標準出力に書く
-    #[arg(long)]
-    print_ast: bool,
+    /// AST を表示する。syntax = 構文木 (既定), expanded = 解決後, text = rechord 記法
+    #[arg(
+        long,
+        value_name = "FORM",
+        num_args = 0..=1,
+        default_missing_value = "syntax"
+    )]
+    print_ast: Option<AstForm>,
     /// ギターの押さえ方を標準出力に書く
     #[arg(long)]
     fingering: bool,
@@ -155,8 +170,15 @@ fn main() -> Result<()> {
         importer.import(code.as_str())
     };
 
-    if args.print_ast {
-        println!("{}", parse()?);
+    if let Some(form) = args.print_ast {
+        let ast = parse()?;
+        match form {
+            AstForm::Syntax => println!("{}", serde_json::to_string_pretty(&ast)?),
+            AstForm::Expanded => {
+                println!("{}", serde_json::to_string_pretty(&ast.resolve())?)
+            }
+            AstForm::Text => print!("{}", ast),
+        }
     }
     if args.fingering {
         print_fingerings(parse()?)?;
@@ -164,7 +186,7 @@ fn main() -> Result<()> {
     match &args.output {
         Some(path) => export(&args, path, parse()?)?,
         // 出力先も表示指定も無いときは、書き換えた入力をそのまま返す
-        None if !args.print_ast && !args.fingering => {
+        None if args.print_ast.is_none() && !args.fingering => {
             print!("{}", code);
             if !code.ends_with('\n') {
                 println!();
