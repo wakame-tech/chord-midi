@@ -132,7 +132,12 @@ impl Display for ChordNode {
             .as_ref()
             .map(|p| format!("/{}", p))
             .unwrap_or("".to_string());
-        write!(f, "{}{}{}{}", self.key, mods, tensions, on)
+        // `@N` を再出力する。これでキー移調がテキストを書き戻しても消えない
+        let root_string = self
+            .root_string
+            .map(|n| format!("@{}", n))
+            .unwrap_or_default();
+        write!(f, "{}{}{}{}{}", self.key, mods, tensions, on, root_string)
     }
 }
 
@@ -176,5 +181,12 @@ mod tests {
     #[test]
     fn test_apply_then_measure_roundtrip() {
         assert_eq!(roundtrip("pow(C) F |"), "pow(C) F |");
+    }
+
+    #[test]
+    fn test_root_string_roundtrip() {
+        assert_eq!(roundtrip("A@6 |"), "A@6 |");
+        assert_eq!(roundtrip("A/E@6 |"), "A/E@6 |");
+        assert_eq!(roundtrip("pow(A@6 | D@5)"), "pow(A@6 | D@5)");
     }
 }

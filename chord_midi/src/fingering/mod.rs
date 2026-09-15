@@ -46,8 +46,6 @@ pub struct Fingering {
     pub name: &'static str,
     /// 原典のセクション名 ("Cコード系" など)
     pub group: &'static str,
-    /// "x3201x" 形式
-    pub tab: &'static str,
     /// None = ミュート、Some(0) = 開放
     pub frets: [Option<u8>; 6],
     /// 押さえる弦だけ Some。開放弦とミュート弦は None
@@ -56,6 +54,10 @@ pub struct Fingering {
     pub pitch_classes: u16,
     /// 最低音（鳴る弦のうち一番低い弦）のピッチクラス
     pub bass: u8,
+    /// 最低音が鳴る弦。0 = 6弦, 5 = 1弦
+    pub lowest_string: u8,
+    /// 可動パワーコード形かどうか。`find` のガードに使う
+    pub is_power: bool,
 }
 
 impl Fingering {
@@ -96,6 +98,8 @@ pub struct ChordRef {
     pub pitch_classes: u16,
     /// スラッシュコードのベース。無ければ None
     pub bass: Option<u8>,
+    /// `@N` の指定。`Fingering.lowest_string` に合わせて 0 = 6弦 に正規化する
+    pub root_string: Option<u8>,
 }
 
 /// AST に現れるコードを出現順に取り出す。
@@ -169,7 +173,14 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
 }
 
 fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
-    let label = node.to_string();
+    // ラベルに `@N` は含めない。弦の指定は押さえ方への指示であって
+    // コード名の一部ではなく、どの弦で取ったかは図を見れば分かる。
+    // 含めると押さえ方の名前と食い違い、「≒」の併記まで誤って出る
+    let label = {
+        let mut named = node.clone();
+        named.root_string = None;
+        named.to_string()
+    };
     let chord = node.to_chord()?;
     let root = pitch_class(&chord.key)?;
     let mut pitch_classes = 0u16;
@@ -189,6 +200,8 @@ fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         root,
         pitch_classes,
         bass,
+        // 記法は 1 = 1弦。Fingering.lowest_string は 0 = 6弦 なので変換する
+        root_string: node.root_string.map(|n| 6 - n),
     })
 }
 
@@ -235,8 +248,18 @@ fn extra_cost(semitone: u8) -> u32 {
 /// 代用させる構成なので、部分集合だけに絞ると素の三和音が軒並み引けなくなる。
 pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
+    // 可動パワーコード形は2音しか無いので、無条件に候補へ入れると
+    // 3rd や 7th が欠けた形が本来のコードを押しのける。ルートと5th
+    // ちょうどのときか、弦指定があるときだけ候補にする
+    let power_target =
+        chord.pitch_classes == (1u16 << chord.root) | (1u16 << ((chord.root + 7) % 12));
     FINGERINGS
         .iter()
+        .filter(|f| !f.is_power || power_target || chord.root_string.is_some())
+        .filter(|f| match chord.root_string {
+            Some(string) => f.lowest_string == string,
+            None => true,
+        })
         .filter(|f| (f.pitch_classes & !chord.pitch_classes).count_ones() <= 1)
         .min_by_key(|f| {
             let extra: u32 = relative_semitones(f.pitch_classes & !chord.pitch_classes, chord.root)
@@ -367,18 +390,8 @@ mod tests {
 
     #[test]
     fn data_is_consistent() {
-        assert_eq!(FINGERINGS.len(), 67);
+        assert_eq!(FINGERINGS.len(), 91);
         for f in FINGERINGS {
-            let tab: String = f
-                .frets
-                .iter()
-                .map(|v| match v {
-                    None => "x".to_string(),
-                    Some(n) => n.to_string(),
-                })
-                .collect();
-            assert_eq!(tab, f.tab, "tab mismatch: {}", f.name);
-
             let mut pcs = 0u16;
             for (i, v) in f.frets.iter().enumerate() {
                 if let Some(n) = *v {
@@ -421,65 +434,83 @@ mod tests {
 
     #[test]
     fn known_fingerings() {
-        // C = x3201x。人=2弦1F / 中=4弦2F / 薬=5弦3F
-        let c = FINGERINGS.iter().find(|f| f.tab == "x3201x").unwrap();
+        // C = x-3-2-0-1-x。人=2弦1F / 中=4弦2F / 薬=5弦3F
+        let c = shape([None, Some(3), Some(2), Some(0), Some(1), None]);
         assert_eq!(c.fingers[4], Some(Finger::Index));
         assert_eq!(c.fingers[2], Some(Finger::Middle));
         assert_eq!(c.fingers[1], Some(Finger::Ring));
 
-        // F#m7-5 = 2x221x。6弦は親指、2弦1F が人差し指
-        let fsm = FINGERINGS.iter().find(|f| f.tab == "2x221x").unwrap();
+        // F#m7-5 = 2-x-2-2-1-x。6弦は親指、2弦1F が人差し指
+        let fsm = shape([Some(2), None, Some(2), Some(2), Some(1), None]);
         assert_eq!(fsm.fingers[0], Some(Finger::Thumb));
         assert_eq!(fsm.fingers[4], Some(Finger::Index));
 
-        // G = 3x000x。1本指のときは中指
-        let g = FINGERINGS.iter().find(|f| f.tab == "3x000x").unwrap();
+        // G = 3-x-0-0-0-x。1本指のときは中指
+        let g = shape([Some(3), None, Some(0), Some(0), Some(0), None]);
         assert_eq!(g.fingers[0], Some(Finger::Middle));
     }
 
-    fn tab_of(input: &str) -> &'static str {
+    /// テスト用。押さえ方を "x-3-2-0-1-x" の形にする。
+    /// 10フレット以上でも読めるよう区切る
+    fn tab(f: &Fingering) -> String {
+        f.frets
+            .iter()
+            .map(|v| v.map_or("x".to_string(), |n| n.to_string()))
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
+    /// 押さえ方をフレットの配列で引く
+    fn shape(frets: [Option<u8>; 6]) -> &'static Fingering {
+        FINGERINGS
+            .iter()
+            .find(|f| f.frets == frets)
+            .unwrap_or_else(|| panic!("no fingering with frets {:?}", frets))
+    }
+
+    fn tab_of(input: &str) -> String {
         let r = refs(input);
-        find(&r[0]).expect("no fingering found").tab
+        tab(find(&r[0]).expect("no fingering found"))
     }
 
     #[test]
     fn find_picks_the_matching_shape() {
-        assert_eq!(tab_of("C |\n"), "x3201x");
-        assert_eq!(tab_of("D |\n"), "xx0232");
-        assert_eq!(tab_of("E |\n"), "022100");
-        assert_eq!(tab_of("F |\n"), "xx321x");
-        assert_eq!(tab_of("G |\n"), "3x000x");
-        assert_eq!(tab_of("A |\n"), "x0222x");
-        assert_eq!(tab_of("Am7 |\n"), "x0201x");
-        assert_eq!(tab_of("Em7 |\n"), "020000");
-        assert_eq!(tab_of("Dm7 |\n"), "xx0211");
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("D |\n"), "x-x-0-2-3-2");
+        assert_eq!(tab_of("E |\n"), "0-2-2-1-0-0");
+        assert_eq!(tab_of("F |\n"), "x-x-3-2-1-x");
+        assert_eq!(tab_of("G |\n"), "3-x-0-0-0-x");
+        assert_eq!(tab_of("A |\n"), "x-0-2-2-2-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("Em7 |\n"), "0-2-0-0-0-0");
+        assert_eq!(tab_of("Dm7 |\n"), "x-x-0-2-1-1");
     }
 
     #[test]
     fn find_prefers_the_fuller_chord() {
-        // CM7 には C の形 (x3201x) ではなく C△7 の形が選ばれる
-        assert_eq!(tab_of("CM7 |\n"), "x3x000");
+        // CM7 には C の形ではなく C△7 の形が選ばれる
+        assert_eq!(tab_of("CM7 |\n"), "x-3-x-0-0-0");
     }
 
     #[test]
     fn find_falls_back_to_the_substitute_shape() {
         // 原典は B を B7、F#m を F#m7 で代用させる構成になっている
-        assert_eq!(tab_of("B |\n"), "x2120x");
-        assert_eq!(tab_of("Am |\n"), "x0201x");
-        assert_eq!(tab_of("Em |\n"), "020000");
-        assert_eq!(tab_of("F#m |\n"), "2x22xx");
-        assert_eq!(tab_of("C#m |\n"), "x4x400");
+        assert_eq!(tab_of("B |\n"), "x-2-1-2-0-x");
+        assert_eq!(tab_of("Am |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("Em |\n"), "0-2-0-0-0-0");
+        assert_eq!(tab_of("F#m |\n"), "2-x-2-2-x-x");
+        assert_eq!(tab_of("C#m |\n"), "x-4-x-4-0-0");
     }
 
     #[test]
     fn find_rejects_two_extra_notes() {
-        // Cm7 (x3x34x) は C に対して Eb と Bb の2音が余分なので候補に入らない
-        assert_ne!(tab_of("C |\n"), "x3x34x");
+        // Cm7 (x-3-x-3-4-x) は C に対して Eb と Bb の2音が余分なので候補に入らない
+        assert_ne!(tab_of("C |\n"), "x-3-x-3-4-x");
     }
 
     #[test]
     fn find_honors_slash_bass() {
-        assert_eq!(tab_of("D/F# |\n"), "2x023x");
+        assert_eq!(tab_of("D/F# |\n"), "2-x-0-2-3-x");
     }
 
     #[test]
@@ -490,6 +521,7 @@ mod tests {
             root: 1,
             pitch_classes: 1u16 << 1,
             bass: None,
+            root_string: None,
         };
         assert!(find(&c).is_none());
     }
@@ -510,5 +542,107 @@ mod tests {
         assert_eq!(ms.len(), 1);
         assert_eq!(ms[0].chords.len(), 1);
         assert_eq!(ms[0].chords[0].label, "C");
+    }
+
+    #[test]
+    fn power_chord_shapes_are_present() {
+        let powers: Vec<_> = FINGERINGS.iter().filter(|f| f.is_power).collect();
+        // 6弦ルート12キー + 5弦ルート12キー
+        assert_eq!(powers.len(), 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24);
+    }
+
+    #[test]
+    fn power_chord_shapes_sound_root_and_fifth() {
+        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+            // 鳴るのは2音だけ
+            assert_eq!(f.pitch_classes.count_ones(), 2, "{} {}", f.name, tab(f));
+            // 最低音がルート、その完全5度上がもう1音
+            let fifth = (f.bass + 7) % 12;
+            let expected = (1u16 << f.bass) | (1u16 << fifth);
+            assert_eq!(f.pitch_classes, expected, "{} {}", f.name, tab(f));
+        }
+    }
+
+    #[test]
+    fn power_chord_fingers_are_index_and_ring() {
+        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+            let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
+            match used.len() {
+                // 開放弦がルートの形は押さえるのが5thだけ
+                1 => assert_eq!(used, vec![Finger::Ring], "{} {}", f.name, tab(f)),
+                2 => assert_eq!(
+                    used,
+                    vec![Finger::Index, Finger::Ring],
+                    "{} {}",
+                    f.name,
+                    tab(f)
+                ),
+                n => panic!("unexpected pressed count {} for {}", n, f.name),
+            }
+        }
+    }
+
+    #[test]
+    fn power_chord_shapes_reach_high_frets() {
+        // 6弦ルートの D5 は 10fr + 12fr。桁あふれせずに持てていること
+        let d5 = shape([Some(10), Some(12), None, None, None, None]);
+        assert!(d5.is_power);
+        assert_eq!(tab(d5), "10-12-x-x-x-x");
+    }
+
+    #[test]
+    fn lowest_string_matches_frets() {
+        for f in FINGERINGS {
+            let expected = f
+                .frets
+                .iter()
+                .position(|v| v.is_some())
+                .expect("no sounding string") as u8;
+            assert_eq!(f.lowest_string, expected, "{} {}", f.name, tab(f));
+        }
+    }
+
+    #[test]
+    fn chord_ref_label_omits_the_string_hint() {
+        // @N はコード名の一部ではないのでラベルに出さない
+        assert_eq!(refs("A@6 |\n")[0].label, "A");
+        assert_eq!(refs("pow(A@6)\n")[0].label, "A5");
+        // 指定が無いときと同じラベルになる
+        assert_eq!(refs("A |\n")[0].label, refs("A@6 |\n")[0].label);
+    }
+
+    #[test]
+    fn find_honors_the_string_hint() {
+        // pow(...) は小節ではないので後ろに `|` は付けない
+        assert_eq!(tab_of("pow(A@6)\n"), "5-7-x-x-x-x");
+        assert_eq!(tab_of("pow(D@5)\n"), "x-5-7-x-x-x");
+        assert_eq!(tab_of("pow(E@5)\n"), "x-7-9-x-x-x");
+        assert_eq!(tab_of("pow(E@6)\n"), "0-2-x-x-x-x");
+    }
+
+    #[test]
+    fn find_picks_low_position_without_a_hint() {
+        // 弦指定が無ければローポジション優先の既存 tie-break が効く
+        assert_eq!(tab_of("pow(E)\n"), "0-2-x-x-x-x");
+        assert_eq!(tab_of("pow(A)\n"), "x-0-2-x-x-x");
+    }
+
+    #[test]
+    fn find_returns_none_when_the_hint_has_no_shape() {
+        // 最低音が1弦になる押さえ方はデータに無い
+        // (既存67件の最低音は6弦/5弦/4弦、パワーコード形は6弦/5弦)
+        let r = refs("C@1 |\n");
+        assert!(find(&r[0]).is_none());
+    }
+
+    #[test]
+    fn power_shapes_do_not_displace_normal_chords() {
+        // 2音しか無いパワーコード形が3rdや7thを持つ形を押しのけないこと
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
+        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
     }
 }

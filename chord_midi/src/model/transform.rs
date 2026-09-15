@@ -10,6 +10,7 @@ fn chordnode_into_degree(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordN
         key: chord.key.into_degree(tonic, scale),
         modifiers: chord.modifiers,
         on: chord.on.map(|on| on.into_degree(tonic, scale)),
+        root_string: chord.root_string,
     }
 }
 
@@ -18,6 +19,7 @@ fn chordnode_into_pitch(chord: ChordNode, tonic: Pitch, scale: Scale) -> ChordNo
         key: chord.key.into_pitch(tonic, scale),
         modifiers: chord.modifiers,
         on: chord.on.map(|on| on.into_pitch(tonic, scale)),
+        root_string: chord.root_string,
     }
 }
 

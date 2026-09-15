@@ -49,11 +49,13 @@ fn parse_node(sexp: &Sexp) -> Result<Node> {
             key: parse_key(&key)?,
             modifiers: BTreeSet::new(),
             on: None,
+            root_string: None,
         })),
         Sexp::List(list) if starts_with(&sexp, "chord") => Ok(Node::Chord(ChordNode {
             key: parse_key(list[1].string()?)?,
             modifiers: BTreeSet::new(),
             on: None,
+            root_string: None,
         })),
         _ => Err(anyhow::anyhow!("unexpected input: {:?}", sexp)),
     }

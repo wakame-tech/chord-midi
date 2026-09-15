@@ -4,6 +4,9 @@ use yew::prelude::*;
 /// 一度に描くフレット数
 const FRET_COUNT: u8 = 5;
 
+/// 実ギターのポジションマークが入るフレット。指板の下に番号を出す
+const POSITION_MARKS: [u8; 8] = [3, 5, 7, 9, 12, 15, 17, 19];
+
 #[derive(Properties, PartialEq)]
 pub struct ChordDiagramProps {
     /// 入力に書かれたコード名
@@ -84,12 +87,27 @@ fn diagram(f: &Fingering) -> Html {
         })
         .collect::<Html>();
 
+    // 指板の下にフレット番号を出す。実ギターのポジションマークと同じ位置
+    let numbers = (0..FRET_COUNT)
+        .map(|i| {
+            let fret = start + i;
+            let text = if POSITION_MARKS.contains(&fret) {
+                fret.to_string()
+            } else {
+                String::new()
+            };
+            html! { <div class="fret-number">{text}</div> }
+        })
+        .collect::<Html>();
+
     html! {
         <div class="diagram">
             <div class="grid">{rows}</div>
-            if start > 1 {
-                <div class="fret-label">{format!("{}fr", start)}</div>
-            }
+            <div class="fret-numbers">
+                // 左端はミュート/開放のマーカー列のぶん
+                <div></div>
+                {numbers}
+            </div>
         </div>
     }
 }
