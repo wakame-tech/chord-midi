@@ -1,9 +1,11 @@
 use chord_midi::{
     edit::{set_scale, shift_key},
     export::{Exporter, MidiExporter},
+    fingering::{self, ChordRef},
     import::{Importer, RechordImporter},
     model::scale::Scale,
 };
+use diagram::ChordDiagram;
 use std::io::BufWriter;
 use std::str::FromStr;
 use web_sys::wasm_bindgen::closure::Closure;
@@ -11,6 +13,7 @@ use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
+mod diagram;
 mod presets;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
@@ -22,17 +25,22 @@ fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     Blob::new_with_blob_sequence_and_options(&parts, &options).unwrap()
 }
 
-fn compile(input: &str, bpm: u8) -> Result<(String, Vec<u8>), String> {
+fn compile(input: &str, bpm: u8) -> Result<(String, Vec<ChordRef>, Vec<u8>), String> {
     let ast = RechordImporter
         .import(&format!("{}\n", input))
         .map_err(|e| e.to_string())?;
+    // AST 表示は度数表記のまま出したいので resolve する前に文字列化する
     let ast_str = format!("{}", ast);
+    // resolve() も export() も self を consume するので、解決済みの AST を
+    // 使い回す。MidiExporter は内部でもう一度 resolve() を呼ぶが冪等。
+    let resolved = ast.resolve();
+    let chords = fingering::chord_refs(&resolved).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(Vec::new());
     MidiExporter { bpm }
-        .export(&mut writer, ast)
+        .export(&mut writer, resolved)
         .map_err(|e| e.to_string())?;
     let bytes = writer.into_inner().map_err(|e| e.to_string())?;
-    Ok((ast_str, bytes))
+    Ok((ast_str, chords, bytes))
 }
 
 #[function_component(App)]
@@ -41,6 +49,7 @@ fn app() -> Html {
     let bpm = use_state(|| 120u8);
     let loop_on = use_state(|| false);
     let result = use_state(String::new);
+    let chords = use_state(Vec::<ChordRef>::new);
     let error = use_state(String::new);
     let url = use_state(String::new);
     let playing = use_mut_ref(|| false);
@@ -54,6 +63,7 @@ fn app() -> Html {
     // input か bpm が変わるたびに再計算
     {
         let result = result.clone();
+        let chords = chords.clone();
         let error = error.clone();
         let url = url.clone();
         let playing = playing.clone();
@@ -63,6 +73,7 @@ fn app() -> Html {
             if input.trim().is_empty() {
                 error.set(String::new());
                 result.set(String::new());
+                chords.set(Vec::new());
                 let old_pending = pending.borrow_mut().take();
                 if let Some(old) = old_pending {
                     let _ = web_sys::Url::revoke_object_url(&old);
@@ -78,9 +89,10 @@ fn app() -> Html {
                 return;
             }
             match compile(input, *bpm) {
-                Ok((ast_str, bytes)) => {
+                Ok((ast_str, cs, bytes)) => {
                     error.set(String::new());
                     result.set(ast_str);
+                    chords.set(cs);
                     let blob = new_blob(&bytes, "audio/midi");
                     let object_url =
                         web_sys::Url::create_object_url_with_blob(&blob).unwrap();
@@ -98,7 +110,10 @@ fn app() -> Html {
                         url.set(object_url);
                     }
                 }
-                Err(e) => error.set(e),
+                Err(e) => {
+                    error.set(e);
+                    chords.set(Vec::new());
+                }
             }
         });
     }
@@ -207,6 +222,33 @@ fn app() -> Html {
         })
     };
 
+    let cards = {
+        // 出現するコード名ごとに色を割り当てる。同じコードは常に同じ色
+        const PALETTE: [&str; 8] = [
+            "#c0392b", "#d35400", "#b7950b", "#1e8449", "#1f618d", "#6c3483", "#a93226",
+            "#117864",
+        ];
+        let mut labels: Vec<String> = Vec::new();
+        let mut cards: Vec<Html> = Vec::new();
+        for c in chords.iter() {
+            let index = match labels.iter().position(|l| l == &c.label) {
+                Some(i) => i,
+                None => {
+                    labels.push(c.label.clone());
+                    labels.len() - 1
+                }
+            };
+            cards.push(html! {
+                <ChordDiagram
+                    label={c.label.clone()}
+                    fingering={fingering::find(c)}
+                    color={PALETTE[index % PALETTE.len()].to_string()}
+                />
+            });
+        }
+        cards
+    };
+
     html! {
         <div>
             <h1>{"chord_midi_web"}</h1>
@@ -247,6 +289,7 @@ fn app() -> Html {
                     html!{ <button {onclick}>{name}</button> }
                 }) }
             </div>
+            <div class="fingerings">{cards}</div>
             <div>
                 {
                     if (*url).is_empty() {
