@@ -91,11 +91,13 @@ midi-player {
 
 midi-visualizer {
     display: block;
-    height: 64px;
-    transition: height 0.15s ease;
-    /* ピアノロールは長くなるので横スクロールで見られるようにする */
-    overflow-x: auto;
-    overflow-y: hidden;
+    /* ピアノロールの高さは曲の音域で決まるので固定値だと足りない。
+       64px 固定にしていたときは中身 126px が切り取られ、低い音が
+       見えなかった。上限まで content に合わせ、超えたらスクロールする */
+    height: auto;
+    max-height: 144px;
+    /* ピアノロールは縦にも横にも伸びるので両方スクロールで見られるようにする */
+    overflow: auto;
     /* 再生するまで中身は空なので、描画抜けに見えないよう下地を敷く */
     background: var(--gutter-bg);
     border-bottom: 1px solid var(--line);
@@ -103,6 +105,7 @@ midi-visualizer {
 
 midi-visualizer.is-empty {
     height: 0;
+    max-height: 0;
     border-bottom: none;
 }
 
@@ -161,8 +164,9 @@ midi-visualizer.is-empty {
 .panel {
     max-width: 1100px;
     margin: 0 auto;
-    /* 固定フッタのぶんを空けておく */
-    padding: 20px 20px 150px;
+    /* 固定フッタのぶんを空けておく。フッタの最大の高さは
+       ピアノロール 144 + 境界 1 + プレイヤー 79 = 224 */
+    padding: 20px 20px 240px;
 }
 
 .editor-wrap {
@@ -1004,11 +1008,11 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     /* エディタを見ながら使う。フッタのプレイヤーのぶんを引いて収める */
     position: sticky;
     top: 12px;
-    /* 170px はビューポート上端からの見積もりだったが、パネルの実際の上端は
-     ヘッダとタブのぶん約 118px 下にある。スクロール前の状態では
-     118 + max-height がフッタのプレイヤー (最大 145px) を越えて隠れた。
-     118 + 145 + 余白 で 280px 引く */
-  max-height: calc(100vh - 280px);
+    /* パネルの実際の上端はヘッダとタブのぶん約 118px 下にあるので、
+       ビューポート上端から引くだけでは足りない。フッタは高さが変わる
+       (ピアノロールが出ると伸びる) ので最大の 224px を見込む。
+       118 + 224 + 余白 で 360px 引く */
+    max-height: calc(100vh - 360px);
     overflow-y: auto;
 }
 
@@ -1139,6 +1143,45 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 
 .syntax-example {
     color: var(--muted);
+}
+
+/* 関数と入れ子は 1 項目を縦に積む。幅 280px のパネルに 3 列も 4 列も入らず、
+   表にすると説明列が 1 文字ずつ折り返して読めなくなる */
+.syntax-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.syntax-entry {
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.syntax-entry:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.syntax-entry-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.syntax-entry-head code {
+    font-family: var(--mono);
+    font-size: 11px;
+}
+
+/* 何を受けて何を返すか */
+.syntax-kind {
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
 }
 
 @media (max-width: 640px) {

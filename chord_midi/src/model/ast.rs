@@ -82,24 +82,39 @@ impl Expr {
     }
 }
 
+/// コードを返す式。入れ子にできる
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum ChordExpr {
+    /// 素のコード
+    Chord(ChordNode),
+    /// コード1つを別のコード1つに変える
+    Map(ChordMap, Box<ChordExpr>),
+}
+
+/// `Chord -> Chord` の変換
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ChordMap {
+    /// ブラックアダーコード
+    Blk,
+    /// 裏コード化
+    Sub,
+    /// ドミナント化
+    Dom,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Node {
-    Chord(ChordNode),
-    Arpeggio(ChordNode),
-    Transform(Transform, ChordNode),
-    /// ブラッシング。`pat` の `x` から作られる
-    Brush(ChordNode),
+    /// 鳴らす
+    Chord(ChordExpr),
+    /// アルペジオで鳴らす
+    Arpeggio(ChordExpr),
+    /// ブラッシング。`pat` の `x` から作られる (パーサは作らない)
+    Brush(ChordExpr),
+    /// ツーファイブ分割。自分の尺を2つに割る
+    Split(ChordExpr),
     Rest,
     Sustain,
     Repeat,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum Transform {
-    S25,
-    Sub,
-    Dom,
-    Blk,
 }
 
 fn transform_chord(key: Key, extra: &[Modifier], on: Option<Key>) -> ChordNode {
@@ -116,37 +131,75 @@ fn transform_chord(key: Key, extra: &[Modifier], on: Option<Key>) -> ChordNode {
     }
 }
 
-impl Transform {
-    /// Expand into standard nodes. tonic/scale are for Relative-key shift math
-    /// (usually called after into_pitch so keys are Absolute and tonic/scale are ignored).
-    pub fn expand(self, c: ChordNode, tonic: Pitch, scale: Scale) -> Vec<Node> {
+impl ChordMap {
+    /// コード1つを別のコード1つに変える。
+    ///
+    /// `tonic`/`scale` は Relative なキーをずらすためのもので、
+    /// `resolve()` 済み (= Absolute) なら無視される
+    pub fn apply(self, c: ChordNode, tonic: Pitch, scale: Scale) -> ChordNode {
         match self {
-            Transform::S25 => {
-                let ii = transform_chord(
-                    c.key.clone().shift(7, tonic, scale),
-                    &[Modifier::Minor(7)],
-                    None,
-                );
-                vec![Node::Chord(ii), Node::Chord(c)]
-            }
             // sub/dom produce a fresh dominant chord; the source chord's slash bass
             // (`on`) is intentionally discarded.
-            Transform::Sub => vec![Node::Chord(transform_chord(
-                c.key.shift(6, tonic, scale),
-                &[Modifier::Dominant(7)],
-                None,
-            ))],
-            Transform::Dom => vec![Node::Chord(transform_chord(
-                c.key,
-                &[Modifier::Dominant(7)],
-                None,
-            ))],
-            Transform::Blk => vec![Node::Chord(transform_chord(
+            ChordMap::Sub => {
+                transform_chord(c.key.shift(6, tonic, scale), &[Modifier::Dominant(7)], None)
+            }
+            ChordMap::Dom => transform_chord(c.key, &[Modifier::Dominant(7)], None),
+            ChordMap::Blk => transform_chord(
                 c.key.clone().shift(6, tonic, scale),
                 &[Modifier::Aug],
                 Some(c.key),
-            ))],
+            ),
         }
+    }
+}
+
+impl ChordExpr {
+    /// 入れ子を内側から畳んで1つのコードにする
+    pub fn eval(&self, tonic: Pitch, scale: Scale) -> ChordNode {
+        match self {
+            ChordExpr::Chord(c) => c.clone(),
+            ChordExpr::Map(m, inner) => m.apply(inner.eval(tonic, scale), tonic, scale),
+        }
+    }
+
+    /// 一番内側の素のコードへの参照
+    pub fn innermost(&self) -> &ChordNode {
+        match self {
+            ChordExpr::Chord(c) => c,
+            ChordExpr::Map(_, inner) => inner.innermost(),
+        }
+    }
+
+    /// 一番内側の素のコードを書き換える。
+    ///
+    /// `pow`/`oct` の修飾や `key:` の解決は「元のコード」に掛かるもので、
+    /// 変換の結果に掛かるものではない
+    pub fn map_innermost(self, f: &mut impl FnMut(ChordNode) -> ChordNode) -> ChordExpr {
+        match self {
+            ChordExpr::Chord(c) => ChordExpr::Chord(f(c)),
+            ChordExpr::Map(m, inner) => ChordExpr::Map(m, Box::new(inner.map_innermost(f))),
+        }
+    }
+
+    /// 一番内側の素のコードへの可変参照
+    pub fn innermost_mut(&mut self) -> &mut ChordNode {
+        match self {
+            ChordExpr::Chord(c) => c,
+            ChordExpr::Map(_, inner) => inner.innermost_mut(),
+        }
+    }
+}
+
+impl Node {
+    /// `s25` を2つのコードに展開する。呼ぶ側が尺を2等分する
+    pub fn split_into(expr: &ChordExpr, tonic: Pitch, scale: Scale) -> Vec<ChordNode> {
+        let c = expr.eval(tonic, scale);
+        let ii = transform_chord(
+            c.key.clone().shift(7, tonic, scale),
+            &[Modifier::Minor(7)],
+            None,
+        );
+        vec![ii, c]
     }
 }
 
@@ -198,11 +251,8 @@ mod tests {
     use crate::model::pitch::Pitch;
     use crate::model::scale::Scale;
 
-    fn semis(node: &Node) -> Vec<u8> {
-        match node {
-            Node::Chord(c) => c.to_chord().unwrap().semitones.into_iter().collect(),
-            _ => panic!("not a chord"),
-        }
+    fn semis(chord: &ChordNode) -> Vec<u8> {
+        chord.to_chord().unwrap().semitones.into_iter().collect()
     }
 
     #[test]
@@ -212,14 +262,10 @@ mod tests {
         // is appended below at MIDI export. Full 4-note output {F,B,D#,G} is checked
         // e2e in test_blk_produces_one_chord.
         let f = ChordNode::absolute(Pitch::F);
-        let nodes = Transform::Blk.expand(f, Pitch::C, Scale::Major);
-        assert_eq!(nodes.len(), 1);
-        let Node::Chord(c) = &nodes[0] else {
-            panic!("not a chord")
-        };
+        let c = ChordMap::Blk.apply(f, Pitch::C, Scale::Major);
         assert_eq!(c.key, Key::Absolute(Pitch::B));
         assert_eq!(c.on, Some(Key::Absolute(Pitch::F)));
-        assert_eq!(semis(&nodes[0]), vec![0, 4, 8]);
+        assert_eq!(semis(&c), vec![0, 4, 8]);
     }
 
     #[test]
@@ -231,10 +277,9 @@ mod tests {
             on: None,
             root_string: None,
         };
-        let subbed = Transform::Sub.expand(g.clone(), Pitch::C, Scale::Major);
-        assert_eq!(subbed.len(), 1);
-        assert!(matches!(&subbed[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::Cs)));
-        assert_eq!(semis(&subbed[0]), vec![0, 4, 7, 10]);
+        let subbed = ChordMap::Sub.apply(g.clone(), Pitch::C, Scale::Major);
+        assert_eq!(subbed.key, Key::Absolute(Pitch::Cs));
+        assert_eq!(semis(&subbed), vec![0, 4, 7, 10]);
 
         let dm7 = ChordNode {
             key: Key::Absolute(Pitch::D),
@@ -242,9 +287,9 @@ mod tests {
             on: None,
             root_string: None,
         };
-        let dommed = Transform::Dom.expand(dm7, Pitch::C, Scale::Major);
-        assert!(matches!(&dommed[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
-        assert_eq!(semis(&dommed[0]), vec![0, 4, 7, 10]);
+        let dommed = ChordMap::Dom.apply(dm7, Pitch::C, Scale::Major);
+        assert_eq!(dommed.key, Key::Absolute(Pitch::D));
+        assert_eq!(semis(&dommed), vec![0, 4, 7, 10]);
     }
 
     #[test]
@@ -256,11 +301,11 @@ mod tests {
             on: None,
             root_string: None,
         };
-        let nodes = Transform::S25.expand(g, Pitch::C, Scale::Major);
-        assert_eq!(nodes.len(), 2);
-        assert!(matches!(&nodes[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
-        assert_eq!(semis(&nodes[0]), vec![0, 3, 7, 10]);
-        assert!(matches!(&nodes[1], Node::Chord(c) if c.key == Key::Absolute(Pitch::G)));
+        let chords = Node::split_into(&ChordExpr::Chord(g), Pitch::C, Scale::Major);
+        assert_eq!(chords.len(), 2);
+        assert_eq!(chords[0].key, Key::Absolute(Pitch::D));
+        assert_eq!(semis(&chords[0]), vec![0, 3, 7, 10]);
+        assert_eq!(chords[1].key, Key::Absolute(Pitch::G));
     }
 
     #[test]

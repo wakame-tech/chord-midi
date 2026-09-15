@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordExpr, ChordMap, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
@@ -180,10 +180,12 @@ impl Display for Expr {
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::Chord(chord) => write!(f, "{}", chord),
-            Node::Brush(chord) => write!(f, "{}", chord),
-            Node::Arpeggio(chord) => write!(f, "arp({})", chord),
-            Node::Transform(t, c) => write!(f, "{}({})", transform_prefix(t), c),
+            Node::Chord(e) => write!(f, "{}", e),
+            // ブラッシングは `pat` の `x` が作るもので記法には無いので、
+            // 中身をそのまま出す
+            Node::Brush(e) => write!(f, "{}", e),
+            Node::Arpeggio(e) => write!(f, "arp({})", e),
+            Node::Split(e) => write!(f, "s25({})", e),
             Node::Rest => write!(f, "N.C."),
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
@@ -205,13 +207,20 @@ impl Display for Pattern {
     }
 }
 
-fn transform_prefix(t: &crate::model::ast::Transform) -> &'static str {
-    use crate::model::ast::Transform::*;
-    match t {
-        S25 => "s25",
-        Sub => "sub",
-        Dom => "dom",
-        Blk => "blk",
+impl Display for ChordExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChordExpr::Chord(c) => write!(f, "{}", c),
+            ChordExpr::Map(m, inner) => write!(f, "{}({})", chord_map_prefix(*m), inner),
+        }
+    }
+}
+
+fn chord_map_prefix(m: ChordMap) -> &'static str {
+    match m {
+        ChordMap::Sub => "sub",
+        ChordMap::Dom => "dom",
+        ChordMap::Blk => "blk",
     }
 }
 
@@ -263,6 +272,44 @@ mod tests {
         let ast = RechordImporter.import("arp(C) |\n").unwrap();
         let s = format!("{}", ast);
         assert!(s.contains("arp(C)"));
+    }
+
+    #[test]
+    fn test_nested_transform_roundtrip() {
+        assert_eq!(roundtrip("arp(blk(C)) |"), "arp(blk(C)) |");
+        assert_eq!(roundtrip("blk(sub(G7)) |"), "blk(sub(G7)) |");
+        assert_eq!(roundtrip("arp(blk(sub(G7))) |"), "arp(blk(sub(G7))) |");
+        assert_eq!(roundtrip("s25(blk(C)) |"), "s25(blk(C)) |");
+    }
+
+    #[test]
+    fn test_flat_transform_roundtrip_unchanged() {
+        // 既存の書き方が変わらないこと
+        assert_eq!(roundtrip("arp(C) |"), "arp(C) |");
+        assert_eq!(roundtrip("blk(F) |"), "blk(F) |");
+        assert_eq!(roundtrip("s25(G7) |"), "s25(G7) |");
+        assert_eq!(roundtrip("sub(G7) |"), "sub(G7) |");
+        assert_eq!(roundtrip("dom(Dm7) |"), "dom(Dm7) |");
+    }
+
+    /// `shift_key` で往復 (+delta してから -delta) しても元のテキストに戻ること。
+    /// 入れ子の変換 (`arp(blk(...))` 等) を通しても壊れないことを確認する
+    #[test]
+    fn test_nested_transform_survives_transpose_round_trip() {
+        for code in [
+            "key: C\narp(blk(I)) |",
+            "key: C\nblk(sub(V7)) |",
+            "key: C\narp(blk(sub(G7))) |",
+            "key: C\ns25(blk(IV)) |",
+        ] {
+            let up = crate::edit::shift_key(code, 1);
+            // 移調した結果も読み戻せる (パースが通る) こと
+            RechordImporter
+                .import(&format!("{}\n", up))
+                .unwrap_or_else(|e| panic!("移調後にパースできない: {:?}\n{}", e, up));
+            let back = crate::edit::shift_key(&up, -1);
+            assert_eq!(back, code, "+1 -1 の往復で元に戻らない: {:?}", code);
+        }
     }
 
     fn roundtrip(code: &str) -> String {
@@ -555,6 +602,11 @@ mod tests {
             "$a = C |\n$a x2 | D |",
             "(C | Am) x2 | D |",
             "((C | Am) x2) x3 | D |",
+            // 入れ子の変換
+            "arp(blk(C)) |",
+            "blk(sub(G7)) |",
+            "arp(blk(sub(G7))) |",
+            "s25(blk(C)) |",
         ] {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);

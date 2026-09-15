@@ -235,12 +235,14 @@ fn collect_ast(
 
 fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) | Node::Brush(c) => out.push(chord_ref(c)?),
-        Node::Transform(t, c) => {
-            // resolve() 済みなら key は Absolute なので tonic/scale は無視される。
-            // export/midi.rs の Node::Transform の扱いと同じ。
-            for expanded in t.expand(c.clone(), Pitch::C, Scale::Major) {
-                collect_node(&expanded, out)?;
+        Node::Chord(e) | Node::Arpeggio(e) | Node::Brush(e) => {
+            // resolve() 済みなら key は Absolute なので tonic/scale は無視される
+            out.push(chord_ref(&e.eval(Pitch::C, Scale::Major))?)
+        }
+        Node::Split(e) => {
+            // export/midi.rs の Node::Split の扱いと同じ
+            for c in Node::split_into(e, Pitch::C, Scale::Major) {
+                out.push(chord_ref(&c)?);
             }
         }
         Node::Rest | Node::Sustain | Node::Repeat => {}

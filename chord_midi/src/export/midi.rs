@@ -1,8 +1,10 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordExpr, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
+use crate::model::pitch::Pitch;
+use crate::model::scale::Scale;
 use anyhow::anyhow;
 use anyhow::Result;
 use midi_file::core::{Channel, Clocks, DurationName, GeneralMidi, NoteNumber, Velocity};
@@ -135,13 +137,15 @@ impl Score {
             self.rest = 0;
         }
         match node {
-            Node::Chord(node) => {
-                log::debug!("chord: {}: {:?}", node, node.modifiers);
-                self.pre = Some(voicing(&node)?);
+            Node::Chord(ref e) => {
+                // resolve() 済みなら key は Absolute なので tonic/scale は無視される
+                let c = e.eval(Pitch::C, Scale::Major);
+                log::debug!("chord: {}: {:?}", c, c.modifiers);
+                self.pre = Some(voicing(&c)?);
                 self.sustain = dur;
             }
-            Node::Arpeggio(node) => {
-                let all = voicing(&node)?;
+            Node::Arpeggio(ref e) => {
+                let all = voicing(&e.eval(Pitch::C, Scale::Major))?;
                 // dur が音数より少ない密な小節では鳴らせる音数を dur に制限し、
                 // 総尺が dur を超えて後続ノードがずれるのを防ぐ（総尺は常に dur）
                 let k = (all.len() as u32).min(dur).max(1);
@@ -152,25 +156,21 @@ impl Score {
                     self.notes.push(Note::new(Some(vec![n]), d));
                 }
             }
-            Node::Transform(t, c) => {
+            Node::Split(ref e) => {
                 // keys are already Absolute after resolve(); Absolute shift ignores tonic/scale
-                let nodes = t.expand(
-                    c,
-                    crate::model::pitch::Pitch::C,
-                    crate::model::scale::Scale::Major,
-                );
+                let chords = Node::split_into(e, Pitch::C, Scale::Major);
                 // cap the expanded-node count to the slot so a dense measure can't overrun
                 // (mirrors the arpeggio guard); each sub-chord gets an equal share of dur
-                let k = (nodes.len() as u32).min(dur).max(1);
+                let k = (chords.len() as u32).min(dur).max(1);
                 let each = dur / k;
                 let rem = dur % k;
-                for (i, n) in nodes.into_iter().take(k as usize).enumerate() {
+                for (i, c) in chords.into_iter().take(k as usize).enumerate() {
                     let d = each + if i as u32 == k - 1 { rem } else { 0 };
-                    self.interpret_node(n, d)?;
+                    self.interpret_node(Node::Chord(ChordExpr::Chord(c)), d)?;
                 }
             }
-            Node::Brush(node) => {
-                let notes = voicing(&node)?;
+            Node::Brush(ref e) => {
+                let notes = voicing(&e.eval(Pitch::C, Scale::Major))?;
                 self.pre = Some(notes.clone());
                 self.notes.push(Note::brushed(Some(notes), dur));
             }
@@ -279,6 +279,26 @@ impl Score {
 
     /// 1小節をパターンのスロット数に割り直す
     fn interpret_patterned_measure(&mut self, nodes: Vec<Node>, pattern: &Pattern) -> Result<()> {
+        // パターンを配る前に `s25` を 2 コードへ展開しておく。
+        // 展開せずに `Node::Split` のままスロットへ配ると、2 コードへ割れる
+        // はずのものが各スロットで両方とも鳴ってしまう
+        // (正しくは前半 Dm7 / 後半 G7)。
+        // 尺は変わらない: `Split` 1 つが小節を占めて中で 2 等分されるのと、
+        // 展開後の 2 ノードが小節を 2 等分するのは同じ。
+        //
+        // `blk`/`sub`/`dom` は `ChordExpr` の中にいてノードに貼り付いたまま
+        // 運ばれるので、ここで展開する必要はない。ブラッシングのスロットでも
+        // `Node::Brush(ChordExpr)` として変換ごと移る
+        let nodes: Vec<Node> = nodes
+            .into_iter()
+            .flat_map(|n| match n {
+                Node::Split(ref e) => Node::split_into(e, Pitch::C, Scale::Major)
+                    .into_iter()
+                    .map(|c| Node::Chord(ChordExpr::Chord(c)))
+                    .collect::<Vec<_>>(),
+                other => vec![other],
+            })
+            .collect();
         let slots = pattern.0.len() as u32;
         // パターン長は 1/2/4/8/16 に限られるので必ず割り切れる
         let slot_dur = MEASURE_LENGTH / slots;
@@ -296,7 +316,6 @@ impl Score {
                 (Beat::Hit, other) => other,
                 (Beat::Brush, Node::Chord(c)) => Node::Brush(c),
                 (Beat::Brush, Node::Arpeggio(c)) => Node::Brush(c),
-                (Beat::Brush, Node::Transform(_, c)) => Node::Brush(c),
                 (Beat::Brush, other) => other,
             };
             self.interpret_node(node, slot_dur)?;

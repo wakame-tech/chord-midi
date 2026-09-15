@@ -1,5 +1,5 @@
 use super::parser_util::{capture, Span};
-use crate::model::ast::{ChordNode, Node, Transform};
+use crate::model::ast::{ChordExpr, ChordMap, ChordNode, Node};
 use crate::model::key::Key;
 use crate::model::modifier::Modifier;
 use crate::model::pitch::{Accidental, Pitch};
@@ -41,6 +41,26 @@ pub fn parser_roman_num(s: &str) -> Result<u8> {
     }
 }
 
+/// `blk(` `sub(` `dom(` の入れ子。中身も `ChordExpr` なので再帰する。
+///
+/// 再帰の前に必ず `blk(` などのタグを消費するので、入力は毎回短くなる
+/// (= 無限再帰にならない)
+#[tracable_parser]
+fn chord_expr_parser(s: Span) -> IResult<Span, ChordExpr> {
+    alt((
+        map(delimited(tag("blk("), chord_expr_parser, tag(")")), |e| {
+            ChordExpr::Map(ChordMap::Blk, Box::new(e))
+        }),
+        map(delimited(tag("sub("), chord_expr_parser, tag(")")), |e| {
+            ChordExpr::Map(ChordMap::Sub, Box::new(e))
+        }),
+        map(delimited(tag("dom("), chord_expr_parser, tag(")")), |e| {
+            ChordExpr::Map(ChordMap::Dom, Box::new(e))
+        }),
+        map(chord_node_parser, ChordExpr::Chord),
+    ))(s)
+}
+
 #[tracable_parser]
 pub fn node_parser(s: Span) -> IResult<Span, Node> {
     alt((
@@ -48,23 +68,17 @@ pub fn node_parser(s: Span) -> IResult<Span, Node> {
         map(tag("_"), |_| Node::Rest),
         map(tag("%"), |_| Node::Repeat),
         map(tag("N.C."), |_| Node::Rest),
+        // arp と s25 は Node を返すので、chord_expr_parser の中には現れない。
+        // `arp(s25(V7))` や `blk(arp(I))` がパースエラーになるのはこの帰結
         map(
-            delimited(tag("arp("), chord_node_parser, tag(")")),
+            delimited(tag("arp("), chord_expr_parser, tag(")")),
             Node::Arpeggio,
         ),
-        map(delimited(tag("blk("), chord_node_parser, tag(")")), |c| {
-            Node::Transform(Transform::Blk, c)
-        }),
-        map(delimited(tag("s25("), chord_node_parser, tag(")")), |c| {
-            Node::Transform(Transform::S25, c)
-        }),
-        map(delimited(tag("sub("), chord_node_parser, tag(")")), |c| {
-            Node::Transform(Transform::Sub, c)
-        }),
-        map(delimited(tag("dom("), chord_node_parser, tag(")")), |c| {
-            Node::Transform(Transform::Dom, c)
-        }),
-        map(chord_node_parser, Node::Chord),
+        map(
+            delimited(tag("s25("), chord_expr_parser, tag(")")),
+            Node::Split,
+        ),
+        map(chord_expr_parser, Node::Chord),
     ))(s)
 }
 
@@ -301,15 +315,61 @@ mod tests {
 
     #[test]
     fn test_transform_parser() {
-        for code in ["blk(F)", "s25(G7)", "sub(G7)", "dom(Dm7)"] {
+        use crate::model::ast::{ChordExpr, Node};
+        for code in ["blk(F)", "sub(G7)", "dom(Dm7)"] {
             let (rest, node) = super::node_parser(span(code)).unwrap();
             assert_eq!(rest.into_fragment(), "", "{}", code);
             assert!(
-                matches!(node, crate::model::ast::Node::Transform(_, _)),
+                matches!(node, Node::Chord(ChordExpr::Map(_, _))),
                 "{}",
                 code
             );
         }
+        let (rest, node) = super::node_parser(span("s25(G7)")).unwrap();
+        assert_eq!(rest.into_fragment(), "");
+        assert!(matches!(node, Node::Split(_)));
+    }
+
+    #[test]
+    fn test_arp_can_wrap_a_transform() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{ChordExpr, ChordMap, Expr, Node};
+        let ast = RechordImporter.import("key: C\narp(blk(I)) |\n").unwrap();
+        fn first_node(e: &Expr) -> Option<&Node> {
+            match e {
+                Expr::Measure(nodes, _) => nodes.first(),
+                Expr::Seq(items) => items.iter().find_map(first_node),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => first_node(inner),
+                _ => None,
+            }
+        }
+        let Some(Node::Arpeggio(expr)) = first_node(&ast) else {
+            panic!("arp にならない: {:?}", ast)
+        };
+        assert!(
+            matches!(expr, ChordExpr::Map(ChordMap::Blk, _)),
+            "中身が blk の Map にならない: {:?}",
+            expr
+        );
+    }
+
+    #[test]
+    fn test_transforms_can_nest() {
+        use crate::import::{Importer, RechordImporter};
+        assert!(RechordImporter.import("blk(sub(G7)) |\n").is_ok());
+        assert!(RechordImporter.import("arp(blk(sub(G7))) |\n").is_ok());
+        assert!(RechordImporter.import("s25(blk(C)) |\n").is_ok());
+    }
+
+    #[test]
+    fn test_node_returning_functions_cannot_nest() {
+        use crate::import::{Importer, RechordImporter};
+        // arp と s25 は Node を返すので ChordExpr の位置に置けない
+        assert!(RechordImporter.import("arp(s25(G7)) |\n").is_err());
+        assert!(RechordImporter.import("blk(arp(C)) |\n").is_err());
+        assert!(RechordImporter.import("s25(s25(G7)) |\n").is_err());
+        assert!(RechordImporter.import("blk(s25(G7)) |\n").is_err());
+        assert!(RechordImporter.import("arp(arp(C)) |\n").is_err());
     }
 
     #[test]
@@ -354,12 +414,7 @@ mod tests {
             let (_r, node) = super::node_parser(span(code)).unwrap();
             let text = format!("{}", node);
             let (_r2, node2) = super::node_parser(span(&text)).unwrap();
-            assert!(
-                matches!(node2, crate::model::ast::Node::Transform(_, _)),
-                "{} -> {}",
-                code,
-                text
-            );
+            assert_eq!(node, node2, "{} -> {}", code, text);
         }
     }
 

@@ -3,7 +3,7 @@
 //! テキストは持たない。`fretboard.rs` と同じく、やりたいことを
 //! `Callback` で親に投げるだけ
 
-use chord_midi::reference::{Scope, FUNCTIONS};
+use chord_midi::reference::FUNCTIONS;
 use yew::prelude::*;
 
 use crate::cursor::Edit;
@@ -25,10 +25,13 @@ fn wrap_for(name: &str) -> Edit {
     }
 }
 
-fn buttons(scope: Scope, on_edit: &Callback<Edit>) -> Html {
+/// `takes_chord` が true ならコード1つに掛かる関数、false なら小節列に掛かる関数。
+/// 「コードに掛ける」群には、コードを返す `blk` などと鳴らし方を返す `arp` が
+/// 両方入る (書き始める位置は同じなので、ボタンは分けない)
+fn buttons(takes_chord: bool, on_edit: &Callback<Edit>) -> Html {
     FUNCTIONS
         .iter()
-        .filter(|f| f.scope == scope)
+        .filter(|f| f.scope.takes_chord() == takes_chord)
         .map(|f| {
             let on_edit = on_edit.clone();
             let edit = wrap_for(f.name);
@@ -58,11 +61,11 @@ pub fn func_palette(props: &FuncPaletteProps) -> Html {
         <>
             <div class="block">
                 <span class="block-label">{"小節列に掛ける"}</span>
-                <div class="palette">{ buttons(Scope::Measures, &props.on_edit) }</div>
+                <div class="palette">{ buttons(false, &props.on_edit) }</div>
             </div>
             <div class="block">
                 <span class="block-label">{"コードに掛ける"}</span>
-                <div class="palette">{ buttons(Scope::Chord, &props.on_edit) }</div>
+                <div class="palette">{ buttons(true, &props.on_edit) }</div>
             </div>
             <div class="block">
                 <span class="block-label">{"まとめ・繰り返し"}</span>

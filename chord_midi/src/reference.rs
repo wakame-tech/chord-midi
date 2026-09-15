@@ -1,21 +1,44 @@
 //! 記法の一覧表。web の記法パネルと CLI の `--help-syntax` が同じものを出す。
 //! `presets.rs` と同じ静的テーブル。生成元の JSON は持たないので手で足す。
 
-/// 関数の適用単位。表の「単位」列と、web のパレットの2群が使う
+/// 関数が何を受けて何を返すか。表の「引数 -> 返すもの」列と、
+/// web のパレットの2群が使う。
+///
+/// **入れ子にできるかはこれで決まる。** 返すものが引数として要求されている
+/// ところにしか書けないので、「コード」を返す関数だけが `arp(blk(F))` の
+/// ように他の関数の中に置ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// `pow(C | E D)` のように小節列に掛かる
+    /// `pow(C | E D)` のように小節列に掛かり、小節列を返す。
+    /// `pat("oxox", pow(C))` のように小節列の位置に入れ子にできる
     Measures,
-    /// `arp(C)` のように1つのコードに掛かる
+    /// `blk(F)` のように1つのコードに掛かり、**コードを返す**。
+    /// コードが書けるところならどこにでも置ける
     Chord,
+    /// `arp(C)` `s25(G7)` のように1つのコードに掛かり、
+    /// **コードではなく鳴らし方を返す**。コードの位置に置けないので、
+    /// `blk(arp(C))` や `arp(s25(G7))` はパースエラーになる
+    Play,
 }
 
 impl Scope {
-    /// 表に出す日本語の見出し
+    /// 表に出す日本語の見出し。
+    ///
+    /// 矢印は ASCII のまま。全角矢印は端末によって1桁にも2桁にも見えるので、
+    /// 等幅で並べる表 (`help_text`) の桁がずれる
     pub fn label(&self) -> &'static str {
         match self {
-            Scope::Measures => "小節列",
-            Scope::Chord => "コード",
+            Scope::Measures => "小節列 -> 小節列",
+            Scope::Chord => "コード -> コード",
+            Scope::Play => "コード -> 鳴らし方",
+        }
+    }
+
+    /// コード1つに掛かるか。web のパレットの2群がこれで分かれる
+    pub fn takes_chord(&self) -> bool {
+        match self {
+            Scope::Measures => false,
+            Scope::Chord | Scope::Play => true,
         }
     }
 }
@@ -154,7 +177,7 @@ pub const FUNCTIONS: &[Function] = &[
     Function {
         name: "arp",
         args: "コード",
-        scope: Scope::Chord,
+        scope: Scope::Play,
         summary: "アルペジオ",
         example: "arp(C)",
     },
@@ -168,7 +191,7 @@ pub const FUNCTIONS: &[Function] = &[
     Function {
         name: "s25",
         args: "コード",
-        scope: Scope::Chord,
+        scope: Scope::Play,
         summary: "ツーファイブ分割",
         example: "s25(G7)",
     },
@@ -185,6 +208,34 @@ pub const FUNCTIONS: &[Function] = &[
         scope: Scope::Chord,
         summary: "ドミナント化",
         example: "dom(Dm7)",
+    },
+];
+
+/// 入れ子の書き方。`Scope` の「返すもの」が引数に合う組み合わせだけを載せる。
+///
+/// **書けない組み合わせは載せない。** 例は `every_example_parses` が実際の
+/// パーサに通すので、載せられるのはパースできるものだけ。
+/// 書けない形 (`arp(s25(G7))` など) は README の表を見ること
+pub const NESTING: &[Symbol] = &[
+    Symbol {
+        symbol: "blk(sub(コード))",
+        summary: "コードを返す関数どうしは入れ子にできる",
+        example: "blk(sub(G7))",
+    },
+    Symbol {
+        symbol: "arp(blk(コード))",
+        summary: "arp と s25 はコードを返す関数を包める (逆は書けない)",
+        example: "arp(blk(F))",
+    },
+    Symbol {
+        symbol: "s25(blk(コード))",
+        summary: "包んだコードの尺を2つに割る",
+        example: "s25(blk(F))",
+    },
+    Symbol {
+        symbol: "arp(blk(sub(コード)))",
+        summary: "コードを返す関数は何重でも重ねられる",
+        example: "arp(blk(sub(G7)))",
     },
 ];
 
@@ -222,6 +273,8 @@ pub fn help_text() -> String {
             f.example
         ));
     }
+    out.push_str("\n入れ子 (コードを返す関数だけが他の関数の中に書ける)\n");
+    out.push_str(&symbol_table(NESTING));
     out
 }
 
@@ -280,6 +333,7 @@ mod tests {
         let examples = SYMBOLS
             .iter()
             .chain(BEATS.iter())
+            .chain(NESTING.iter())
             .map(|s| s.example)
             .chain(FUNCTIONS.iter().map(|f| f.example));
         for example in examples {
@@ -295,7 +349,7 @@ mod tests {
     #[test]
     fn help_text_lists_every_row() {
         let text = help_text();
-        for s in SYMBOLS.iter().chain(BEATS.iter()) {
+        for s in SYMBOLS.iter().chain(BEATS.iter()).chain(NESTING.iter()) {
             assert!(text.contains(s.symbol), "{} が出ていない", s.symbol);
             assert!(text.contains(s.summary), "{} が出ていない", s.summary);
         }
@@ -308,8 +362,25 @@ mod tests {
     #[test]
     fn functions_are_grouped_by_scope() {
         // パレットの2群がどちらも空にならないこと
-        assert!(FUNCTIONS.iter().any(|f| f.scope == Scope::Measures));
-        assert!(FUNCTIONS.iter().any(|f| f.scope == Scope::Chord));
+        assert!(FUNCTIONS.iter().any(|f| !f.scope.takes_chord()));
+        assert!(FUNCTIONS.iter().any(|f| f.scope.takes_chord()));
+    }
+
+    /// 表の「返すもの」が実際のパーサと合っていること。
+    /// コードを返すと書いてある関数は `arp(..)` に包め、鳴らし方を返すと
+    /// 書いてある関数は包めない。表だけが嘘をつくのを機械で止める
+    #[test]
+    fn scope_matches_what_the_parser_accepts() {
+        for f in FUNCTIONS {
+            let nested = format!("arp({})\n", f.example);
+            let parses = RechordImporter.import(&nested).is_ok();
+            match f.scope {
+                // 小節列を返す関数はそもそも arp の引数ではない
+                Scope::Measures => {}
+                Scope::Chord => assert!(parses, "コードを返すはずの {} を arp に包めない", f.name),
+                Scope::Play => assert!(!parses, "鳴らし方を返すはずの {} が arp に包める", f.name),
+            }
+        }
     }
 
     #[test]
@@ -324,11 +395,12 @@ mod tests {
         // 「関数」の行は列が揃っていること。等幅で読ませる表なので、
         // ここが崩れると CLI の出力が読めない
         let text = help_text();
+        // 「関数」の見出しから、次の見出しの前の空行までが関数の表
         let lines: Vec<&str> = text
             .lines()
             .skip_while(|l| *l != "関数")
             .skip(1)
-            .filter(|l| !l.trim().is_empty())
+            .take_while(|l| !l.trim().is_empty())
             .collect();
         assert_eq!(lines.len(), FUNCTIONS.len());
         // 「例」が始まる桁がどの行でも同じであること
