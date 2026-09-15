@@ -1,0 +1,41 @@
+{
+  "description": "chord_midi_web の進行プリセット。scripts/gen_presets.py が chord_midi_web/src/presets.rs を生成する。",
+  "notation": "progression は rechord 記法のディグリー表記。degrees はボタンに出す短い要約で、コードが5つ以上になる進行は先頭4つ + … にする。",
+  "presets": [
+    {
+      "name": "王道進行",
+      "degrees": "IVM7-V7-IIIm7-VIm7",
+      "progression": "IVM7 | V7 | IIIm7 | VIm7 |"
+    },
+    {
+      "name": "カノン進行",
+      "degrees": "I-V-VIm-IIIm…",
+      "progression": "I | V | VIm | IIIm | IV | I | IV | V |"
+    },
+    {
+      "name": "小室進行",
+      "degrees": "VIm-IV-V-I",
+      "progression": "VIm | IV | V | I |"
+    },
+    {
+      "name": "ツーファイブワン",
+      "degrees": "IIm7-V7-IM7",
+      "progression": "IIm7 | V7 | IM7 | IM7 |"
+    },
+    {
+      "name": "丸の内進行",
+      "degrees": "IVM7-III7-VIm7-I7",
+      "progression": "IVM7 | III7 | VIm7 | I7 |"
+    },
+    {
+      "name": "Just the Two of Us",
+      "degrees": "IVM7-IIIm7-VI7-IIm7…",
+      "progression": "IVM7 | IIIm7 VI7 | IIm7 | V7 |"
+    },
+    {
+      "name": "コンファメーション",
+      "degrees": "IM7-VIIm7b5-III7-VIm7…",
+      "progression": "IM7 | VIIm7b5 III7 | VIm7 II7 | Vm7 I7 |\nIVM7 | IVm7 bVII7 | IIIm7 VI7 | IIm7 V7 |"
+    }
+  ]
+}

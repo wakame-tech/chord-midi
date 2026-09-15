@@ -353,16 +353,21 @@ fn app() -> Html {
             <div class="block">
                 <span class="block-label">{"進行プリセット"}</span>
                 <div class="presets">
-                    { for presets::PRESETS.iter().map(|(name, degrees)| {
+                    { for presets::PRESETS.iter().map(|preset| {
                         let input = input.clone();
-                        let degrees = degrees.to_string();
+                        let progression = preset.progression.to_string();
                         let onclick = Callback::from(move |_| {
                             let cur = (*input).clone();
-                            let next = if cur.trim().is_empty() { degrees.clone() }
-                                       else { format!("{}\n{}", cur.trim_end(), degrees) };
+                            let next = if cur.trim().is_empty() { progression.clone() }
+                                       else { format!("{}\n{}", cur.trim_end(), progression) };
                             input.set(next);
                         });
-                        html!{ <button class="btn" {onclick}>{name}</button> }
+                        html!{
+                            <button class="btn preset" {onclick}>
+                                <span class="preset-name">{preset.name}</span>
+                                <span class="preset-degrees">{preset.degrees}</span>
+                            </button>
+                        }
                     }) }
                 </div>
             </div>
