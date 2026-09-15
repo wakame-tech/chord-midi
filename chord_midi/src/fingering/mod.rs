@@ -189,6 +189,19 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
         // `Func::Pat` の引数としてしか現れない。Apply の腕で処理済みなので
         // ここに直接来ることはない
         Expr::Pattern(_) => {}
+        // 定義と参照は expand が消す。ここに来るのは expand を通していないとき
+        Expr::Define(name, _) => {
+            return Err(anyhow::anyhow!(
+                "定義 ${} が展開されていない。expand を通すこと",
+                name
+            ))
+        }
+        Expr::Ref(name) => {
+            return Err(anyhow::anyhow!(
+                "参照 ${} が展開されていない。expand を通すこと",
+                name
+            ))
+        }
     }
     Ok(())
 }

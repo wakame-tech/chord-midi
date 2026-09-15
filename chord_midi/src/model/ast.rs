@@ -25,6 +25,10 @@ pub enum Expr {
     Seq(Vec<Expr>),
     /// `"o.ox"` のリズムパターン。`pat` の第1引数になる値
     Pattern(Pattern),
+    /// `$name = ...`。本体は1行。`expand` が環境に畳んで消す
+    Define(String, Box<Expr>),
+    /// `$name`。`expand` が定義の本体に置き換えて消す
+    Ref(String),
 }
 
 /// 小節列に掛ける関数

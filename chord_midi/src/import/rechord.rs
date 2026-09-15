@@ -6,7 +6,7 @@ use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
 use anyhow::Result;
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{line_ending, not_line_ending, space0};
 use nom::combinator::{eof, map, map_res, opt, peek, value};
 use nom::multi::{many0, many1};
@@ -81,7 +81,21 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
             // 以降は inner が飲み切っている
             break;
         }
-        match alt((comment_parser, apply_parser, measure_parser))(rest) {
+        // `$name = ...` は以降に効く定義。`key:` と同じく、後ろをひとまとまり
+        // として読む。alt に混ぜずにここで先に試すことで、`$a = ...` の `$a`
+        // だけを ref_parser に食われないようにしている
+        if let Ok((r, def)) = define_parser(rest) {
+            items.push(def);
+            let (r2, inner) = seq_parser(r)?;
+            // 定義しかない入力で空の Seq が残らないようにする
+            if !matches!(&inner, Expr::Seq(v) if v.is_empty()) {
+                items.push(inner);
+            }
+            rest = r2;
+            // 以降は inner が飲み切っている
+            break;
+        }
+        match alt((comment_parser, apply_parser, ref_parser, measure_parser))(rest) {
             Ok((r, item)) => {
                 // 入力が減らないまま成功するパーサがあると無限ループになる。
                 // 念のため「進んでいない」ときは打ち切る
@@ -160,6 +174,100 @@ fn pattern_parser(s: Span) -> IResult<Span, Pattern> {
     )(s)
 }
 
+/// `"o.ox"` のリズムパターンを式として読む
+fn pattern_atom(s: Span) -> IResult<Span, Expr> {
+    map(tuple((pattern_parser, space0)), |(p, _)| Expr::Pattern(p))(s)
+}
+
+/// `$` に続く名前。英数字 + `_` + 日本語。記号は取らない。
+/// `char::is_alphanumeric` は漢字・かな・カタカナに true を返すので
+/// `$Aメロ` がそのまま通る
+fn name_parser(s: Span) -> IResult<Span, String> {
+    map(
+        tuple((
+            tag("$"),
+            take_while1(|c: char| c.is_alphanumeric() || c == '_'),
+        )),
+        |(_, name): (Span, Span)| name.fragment().to_string(),
+    )(s)
+}
+
+/// `$name` の参照。後ろの区切りは飲まない。関数の引数のように式の内側で使う
+fn ref_atom(s: Span) -> IResult<Span, Expr> {
+    map(name_parser, Expr::Ref)(s)
+}
+
+/// `$name` の参照。小節の位置に置けるよう、後ろの区切り (`|` / 改行) まで飲む
+#[tracable_parser]
+fn ref_parser(s: Span) -> IResult<Span, Expr> {
+    map(
+        tuple((
+            ref_atom,
+            space0,
+            opt(measure_sep),
+            space_or_line_ending_many0,
+        )),
+        |(r, _, _, _)| r,
+    )(s)
+}
+
+/// `$name = <本体>`。本体は1行。
+///
+/// 本体を読む前に `not_line_ending` でその行の範囲を切り出し、切り出した
+/// Span の上で本体のパーサを走らせる。`measure_parser` は `measure_sep` で
+/// 改行を消費してしまうので、行の中で止まるよう入力の側を先に区切っておく
+#[tracable_parser]
+fn define_parser(s: Span) -> IResult<Span, Expr> {
+    let (s, (name, _, _, _)) = tuple((name_parser, space0, tag("="), space0))(s)?;
+    let (s, line) = not_line_ending(s)?;
+    let (leftover, body) = define_body_parser(line)?;
+    // 行の中に読めない残りがあるなら、その定義ごと失敗させる。
+    // 黙って捨てると `$a = C ???` のような行が通ってしまう
+    if !leftover.fragment().trim().is_empty() {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            leftover,
+            nom::error::ErrorKind::Eof,
+        )));
+    }
+    let (s, _) = alt((line_ending, eof))(s)?;
+    let (s, _) = space_or_line_ending_many0(s)?;
+    Ok((s, Expr::Define(name, Box::new(body))))
+}
+
+/// 定義の本体。入力は既に1行ぶんに切り出された Span なので、
+/// 行末はそのまま `eof` として見える
+fn define_body_parser(s: Span) -> IResult<Span, Expr> {
+    let mut items: Vec<Expr> = Vec::new();
+    let mut rest = s;
+    while !rest.fragment().trim_start().is_empty() {
+        match alt((apply_parser, ref_parser, pattern_atom, measure_parser))(rest) {
+            Ok((r, item)) => {
+                // 入力が減らないまま成功するパーサがあると無限ループになる
+                if r.fragment().len() >= rest.fragment().len() {
+                    break;
+                }
+                items.push(item);
+                rest = r;
+            }
+            Err(_) => break,
+        }
+    }
+    if items.is_empty() {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            s,
+            nom::error::ErrorKind::Many1,
+        )));
+    }
+    // 要素が1つなら包まない。`$eight = "o.o.o."` の本体が `Expr::Pattern`
+    // そのものになり、`pat` の引数としてそのまま使える
+    let body = if items.len() == 1 {
+        items.pop().expect("len == 1")
+    } else {
+        Expr::Seq(items)
+    };
+    Ok((rest, body))
+}
+
 /// `pow( <小節列> )` と `pat( "<パターン>", <小節列> )`
 #[tracable_parser]
 fn apply_parser(s: Span) -> IResult<Span, Expr> {
@@ -172,15 +280,16 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
                     tuple((
                         tag("pat("),
                         space0,
-                        pattern_parser,
+                        // 第1引数はリズムパターンそのものか、その定義への参照
+                        alt((map(pattern_parser, Expr::Pattern), ref_atom)),
                         space0,
                         tag(","),
                         space0,
                     )),
-                    |(_, _, pattern, _, _, _)| Func::Pat(Box::new(Expr::Pattern(pattern))),
+                    |(_, _, arg, _, _, _)| Func::Pat(Box::new(arg)),
                 ),
             )),
-            many1(alt((apply_parser, measure_parser))),
+            many1(alt((apply_parser, ref_parser, measure_parser))),
             space0,
             tag(")"),
             space0,
@@ -448,6 +557,105 @@ mod tests {
     fn test_pattern_rejects_unknown_char() {
         use crate::import::{Importer, RechordImporter};
         assert!(RechordImporter.import("pat(\"o.oz\", C)\n").is_err());
+    }
+
+    #[test]
+    fn test_define_and_ref_parse() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter
+            .import("$riff = pow(C | E D)\n$riff | C |\n")
+            .unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        assert_eq!(items.len(), 2, "定義1つと小節列1つ: {:?}", items);
+        let Expr::Define(name, body) = &items[0] else {
+            panic!("1つ目は Define: {:?}", items[0])
+        };
+        assert_eq!(name, "riff");
+        assert!(matches!(body.as_ref(), Expr::Apply(_, _, _)));
+    }
+
+    #[test]
+    fn test_dollar_is_not_a_chord_node() {
+        use crate::import::{Importer, RechordImporter};
+        // `$` は既存のコード表記のどれとも衝突しない。コードの一部として
+        // 吸われるなら、この入力が通ってしまう
+        assert!(RechordImporter.import("C$ |\n").is_err());
+        // `$` に続く名前は1文字以上
+        assert!(RechordImporter.import("$ |\n").is_err());
+    }
+
+    #[test]
+    fn test_ref_in_measure_position() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("$riff = C\n$riff | Am |\n").unwrap();
+        // Ref が木のどこかに現れること
+        fn has_ref(e: &Expr, want: &str) -> bool {
+            match e {
+                Expr::Ref(n) => n == want,
+                Expr::Seq(items) => items.iter().any(|i| has_ref(i, want)),
+                Expr::Apply(_, inner, _) => has_ref(inner, want),
+                Expr::Define(_, body) => has_ref(body, want),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => has_ref(inner, want),
+                _ => false,
+            }
+        }
+        assert!(has_ref(&ast, "riff"), "{:?}", ast);
+    }
+
+    #[test]
+    fn test_pattern_define_and_ref_in_pat() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Func};
+        let ast = RechordImporter
+            .import("$eight = \"o.o.o.o.\"\npat($eight, C)\n")
+            .unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Define(name, body) = &items[0] else { panic!("not a define") };
+        assert_eq!(name, "eight");
+        assert!(matches!(body.as_ref(), Expr::Pattern(_)));
+        fn find_pat_arg(e: &Expr) -> Option<&Expr> {
+            match e {
+                Expr::Apply(Func::Pat(arg), _, _) => Some(arg.as_ref()),
+                Expr::Seq(items) => items.iter().find_map(find_pat_arg),
+                Expr::Define(_, body) => find_pat_arg(body),
+                _ => None,
+            }
+        }
+        let arg = find_pat_arg(&ast).expect("pat が見つからない");
+        assert!(matches!(arg, Expr::Ref(n) if n == "eight"), "{:?}", arg);
+    }
+
+    #[test]
+    fn test_japanese_define_name() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("$Aメロ = C | Am |\n$Aメロ\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Define(name, _) = &items[0] else { panic!("not a define") };
+        assert_eq!(name, "Aメロ");
+    }
+
+    #[test]
+    fn test_define_body_stops_at_line_end() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        // 定義の本体は1行。次の行を飲み込まないこと
+        let ast = RechordImporter.import("$a = C | E |\nAm | F |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        assert_eq!(items.len(), 2, "定義と、その後ろの小節列: {:?}", items);
+        let Expr::Define(_, body) = &items[0] else { panic!("not a define") };
+        fn count_measures(e: &Expr) -> usize {
+            match e {
+                Expr::Measure(_, _) => 1,
+                Expr::Seq(items) => items.iter().map(count_measures).sum(),
+                Expr::Apply(_, inner, _) => count_measures(inner),
+                _ => 0,
+            }
+        }
+        // 本体は C と E の2小節だけ。Am / F を飲み込んでいない
+        assert_eq!(count_measures(body), 2, "本体が次の行まで伸びている: {:?}", body);
     }
 
     #[test]

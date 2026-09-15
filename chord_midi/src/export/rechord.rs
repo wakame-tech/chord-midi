@@ -67,6 +67,9 @@ impl Display for Expr {
                 Ok(())
             }
             Expr::Pattern(p) => write!(f, "\"{}\"", p),
+            // Task 6 で正式化する。いまは往復できる最低限の形だけ出す
+            Expr::Define(name, body) => writeln!(f, "${} = {}", name, body),
+            Expr::Ref(name) => write!(f, "${} ", name),
         }
     }
 }

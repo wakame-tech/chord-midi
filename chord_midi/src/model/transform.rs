@@ -50,6 +50,10 @@ impl Expr {
             Expr::Apply(func, inner, br) => {
                 Expr::Apply(func, Box::new(inner.into_degree(tonic, scale)), br)
             }
+            // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
+            Expr::Define(name, body) => {
+                Expr::Define(name, Box::new(body.into_degree(tonic, scale)))
+            }
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
@@ -82,6 +86,10 @@ impl Expr {
             ),
             Expr::Apply(func, inner, br) => {
                 Expr::Apply(func, Box::new(inner.into_pitch(tonic, scale)), br)
+            }
+            // 定義の本体も同じスコープで変換する。参照は名前だけなので触らない
+            Expr::Define(name, body) => {
+                Expr::Define(name, Box::new(body.into_pitch(tonic, scale)))
             }
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
