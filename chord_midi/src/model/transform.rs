@@ -213,7 +213,17 @@ fn desugar_shapes(ast: Expr) -> Vec<Expr> {
             .flat_map(splice)
             .map(|it| Expr::Section(name.clone(), Box::new(it)))
             .collect(),
-        other => vec![other],
+        // catch-all を置かないのは、Expr に variant が増えたときに
+        // コンパイラへ拾わせるため。ここに catch-all があったせいで
+        // `$riff = pow(...)` の Power 修飾が届かないバグを見逃していた
+        e @ (Expr::Comment(_)
+        | Expr::Keyed(_, _)
+        | Expr::Scaled(_, _)
+        | Expr::Measure(_, _)
+        | Expr::Pattern(_)
+        | Expr::Define(_, _)
+        | Expr::Ref(_, _)
+        | Expr::Repeat(_, _, _)) => vec![e],
     }
 }
 
