@@ -18,6 +18,7 @@ use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 mod cursor;
+mod defines;
 mod diagram;
 mod fretboard;
 mod palette;
