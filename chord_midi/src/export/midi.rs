@@ -1,6 +1,6 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::{Ast, Beat, ChordNode, Func, Node, Pattern};
+use crate::model::ast::{Expr, Beat, ChordNode, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -201,13 +201,13 @@ impl Score {
         Ok(MEASURE_LENGTH / len)
     }
 
-    fn interpret(&mut self, ast: Ast) -> Result<()> {
+    fn interpret(&mut self, ast: Expr) -> Result<()> {
         match ast {
-            Ast::Comment(_) => Ok(()),
-            Ast::Directive(_) => Ok(()),
-            Ast::Score(score) => {
+            Expr::Comment(_) => Ok(()),
+            Expr::Directive(_) => Ok(()),
+            Expr::Seq(score) => {
                 for node in score.into_iter() {
-                    self.interpret(*node)?
+                    self.interpret(node)?
                 }
                 if self.sustain != 0 {
                     self.notes.push(Note::new(self.pre.clone(), self.sustain));
@@ -215,20 +215,20 @@ impl Score {
                 }
                 Ok(())
             }
-            Ast::Apply(Func::Pat(pattern), items, _) => {
+            Expr::Apply(Func::Pat(pattern), items, _) => {
                 for item in items {
-                    self.interpret_with_pattern(*item, &pattern)?;
+                    self.interpret_with_pattern(item, &pattern)?;
                 }
                 Ok(())
             }
-            Ast::Apply(_, items, _) => {
+            Expr::Apply(_, items, _) => {
                 // pow は resolve() で消えているが、素の AST を渡された場合に備える
                 for item in items {
-                    self.interpret(*item)?;
+                    self.interpret(item)?;
                 }
                 Ok(())
             }
-            Ast::Measure(measure, _) => {
+            Expr::Measure(measure, _) => {
                 let dur = Self::measure_unit_size(measure.len()).unwrap();
                 for node in measure {
                     self.interpret_node(node, dur)?;
@@ -240,19 +240,19 @@ impl Score {
     }
 
     /// `pat(...)` の中身を、パターンに従って読み替えながら解釈する
-    fn interpret_with_pattern(&mut self, ast: Ast, pattern: &Pattern) -> Result<()> {
+    fn interpret_with_pattern(&mut self, ast: Expr, pattern: &Pattern) -> Result<()> {
         match ast {
-            Ast::Measure(nodes, _) => self.interpret_patterned_measure(nodes, pattern),
+            Expr::Measure(nodes, _) => self.interpret_patterned_measure(nodes, pattern),
             // 内側の pat が優先される
-            Ast::Apply(Func::Pat(inner), items, _) => {
+            Expr::Apply(Func::Pat(inner), items, _) => {
                 for item in items {
-                    self.interpret_with_pattern(*item, &inner)?;
+                    self.interpret_with_pattern(item, &inner)?;
                 }
                 Ok(())
             }
-            Ast::Apply(_, items, _) => {
+            Expr::Apply(_, items, _) => {
                 for item in items {
-                    self.interpret_with_pattern(*item, pattern)?;
+                    self.interpret_with_pattern(item, pattern)?;
                 }
                 Ok(())
             }
@@ -310,7 +310,7 @@ fn write_notes(
 }
 
 impl Exporter for MidiExporter {
-    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+    fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()> {
         let ast = ast.resolve();
         let mut score = Score::new();
         score.interpret(ast)?;

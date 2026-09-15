@@ -1,5 +1,5 @@
 use crate::import::{Importer, RechordImporter};
-use crate::model::ast::{Ast, ChordNode, Directive, Node};
+use crate::model::ast::{Expr, ChordNode, Directive, Node};
 use crate::model::key::Key;
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
@@ -49,28 +49,28 @@ struct Seen {
     key_directive: bool,
 }
 
-fn shift_ast(ast: &mut Ast, delta: i8, seen: &mut Seen) {
+fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
     match ast {
-        Ast::Score(items) => {
+        Expr::Seq(items) => {
             for item in items {
                 shift_ast(item, delta, seen);
             }
         }
-        Ast::Directive(Directive::Key(p)) => {
+        Expr::Directive(Directive::Key(p)) => {
             seen.key_directive = true;
             *p = shift_pitch(*p, delta);
         }
-        Ast::Measure(nodes, _) => {
+        Expr::Measure(nodes, _) => {
             for node in nodes {
                 shift_node(node, delta, seen);
             }
         }
-        Ast::Apply(_, items, _) => {
+        Expr::Apply(_, items, _) => {
             for item in items {
                 shift_ast(item, delta, seen);
             }
         }
-        Ast::Directive(Directive::Scale(_)) | Ast::Comment(_) => {}
+        Expr::Directive(Directive::Scale(_)) | Expr::Comment(_) => {}
     }
 }
 

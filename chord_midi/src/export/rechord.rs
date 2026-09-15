@@ -1,30 +1,30 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Ast, Beat, ChordNode, Directive, Func, Node, Pattern};
+use crate::model::ast::{Expr, Beat, ChordNode, Directive, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
 impl Exporter for RechordExporter {
-    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+    fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()> {
         writeln!(f, "{}", ast)?;
         Ok(())
     }
 }
 
-impl Display for Ast {
+impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ast::Score(nodes) => {
+            Expr::Seq(nodes) => {
                 for node in nodes {
                     write!(f, "{}", node)?;
                 }
                 Ok(())
             }
-            Ast::Comment(comment) => {
+            Expr::Comment(comment) => {
                 writeln!(f, "# {}", comment)
             }
-            Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
-            Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
-            Ast::Apply(func, items, br) => {
+            Expr::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
+            Expr::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
+            Expr::Apply(func, items, br) => {
                 let inner = items
                     .iter()
                     .map(|item| item.to_string())
@@ -45,7 +45,7 @@ impl Display for Ast {
                     write!(f, " ")
                 }
             }
-            Ast::Measure(nodes, br) => {
+            Expr::Measure(nodes, br) => {
                 write!(
                     f,
                     "{}",

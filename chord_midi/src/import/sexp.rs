@@ -3,7 +3,7 @@ use super::{
     SexpImporter,
 };
 use crate::model::{
-    ast::{Ast, ChordNode, Node},
+    ast::{Expr, ChordNode, Node},
     key::Key,
     pitch::{Accidental, Pitch},
     scale::{Degree, Scale},
@@ -13,7 +13,7 @@ use std::{collections::BTreeSet, str::FromStr};
 use symbolic_expressions::{parser::parse_str, Sexp};
 
 impl super::Importer for SexpImporter {
-    fn import(&self, code: &str) -> Result<Ast> {
+    fn import(&self, code: &str) -> Result<Expr> {
         let score = parse_str(code)?;
         parse_ast(&score)
     }
@@ -65,15 +65,15 @@ fn starts_with(sexp: &Sexp, tag: &str) -> bool {
     sexp.is_list() && sexp.list_name().ok() == Some(&tag.to_string())
 }
 
-fn parse_ast(sexp: &Sexp) -> Result<Ast> {
+fn parse_ast(sexp: &Sexp) -> Result<Expr> {
     match sexp {
-        // score(...: Measure) -> Score
+        // score(...: Measure) -> Seq
         Sexp::List(list) if starts_with(&sexp, "score") => {
             let measures = list[1..]
                 .iter()
-                .map(|ast| parse_ast(ast).map(Box::new))
+                .map(parse_ast)
                 .collect::<Result<Vec<_>>>()?;
-            Ok(Ast::Score(measures))
+            Ok(Expr::Seq(measures))
         }
         // keyed(pitch: Pitch, measure: Measure) -> Measure
         Sexp::List(list) if starts_with(sexp, "keyed") => {
@@ -85,7 +85,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
             Ok(measure)
         }
         // (...: Node): Measure
-        Sexp::List(list) => Ok(Ast::Measure(
+        Sexp::List(list) => Ok(Expr::Measure(
             list.into_iter()
                 .map(parse_node)
                 .collect::<Result<Vec<_>>>()?,
@@ -99,7 +99,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 mod tests {
     use crate::{
         import::{Importer, SexpImporter},
-        model::ast::{Ast, ChordNode, Node},
+        model::ast::{Expr, ChordNode, Node},
         model::pitch::{Accidental, Pitch},
         model::scale::Degree,
     };
@@ -113,9 +113,9 @@ mod tests {
         let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
             SexpImporter.import("(score (C D) (E F))")?,
-            Ast::Score(vec![
-                Box::new(Ast::Measure(vec![c, d], false)),
-                Box::new(Ast::Measure(vec![e, f], false))
+            Expr::Seq(vec![
+                Expr::Measure(vec![c, d], false),
+                Expr::Measure(vec![e, f], false)
             ])
         );
 
@@ -124,7 +124,7 @@ mod tests {
         let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
         assert_eq!(
             SexpImporter.import("(score (I# IV))")?,
-            Ast::Score(vec![Box::new(Ast::Measure(vec![is, iv], false))])
+            Expr::Seq(vec![Expr::Measure(vec![is, iv], false)])
         );
         Ok(())
     }

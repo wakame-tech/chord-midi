@@ -3,7 +3,7 @@ use chord_midi::edit::{set_scale, shift_key};
 use chord_midi::export::{Exporter, RechordExporter};
 use chord_midi::fingering;
 use chord_midi::import::{Importer, SexpImporter};
-use chord_midi::model::ast::Ast;
+use chord_midi::model::ast::Expr;
 use chord_midi::model::scale::Scale;
 use chord_midi::presets::PRESETS;
 use chord_midi::{export::MidiExporter, import::RechordImporter};
@@ -95,7 +95,7 @@ fn edit_source(code: String, args: &Cli) -> Result<String> {
 }
 
 /// 押さえ方を小節ごとに書く。`|` で小節を区切り、入力の改行もそのまま出す
-fn print_fingerings(ast: Ast) -> Result<()> {
+fn print_fingerings(ast: Expr) -> Result<()> {
     let resolved = ast.resolve();
     for measure in fingering::measure_refs(&resolved)? {
         for chord in &measure.chords {
@@ -106,7 +106,7 @@ fn print_fingerings(ast: Ast) -> Result<()> {
     Ok(())
 }
 
-fn export(args: &Cli, path: &Path, ast: Ast) -> Result<()> {
+fn export(args: &Cli, path: &Path, ast: Expr) -> Result<()> {
     let mut out = OpenOptions::new()
         .create(true)
         .write(true)
@@ -144,9 +144,9 @@ fn main() -> Result<()> {
     };
     let code = edit_source(code, &args)?;
 
-    // Ast は Clone できず resolve() / export() が consume するので、
+    // Expr は Clone できず resolve() / export() が consume するので、
     // 必要になるたびに読み直す。パースは十分安い
-    let parse = || -> Result<Ast> {
+    let parse = || -> Result<Expr> {
         let importer = if sexp {
             Box::new(SexpImporter) as Box<dyn Importer>
         } else {

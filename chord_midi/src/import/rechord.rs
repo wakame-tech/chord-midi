@@ -1,7 +1,7 @@
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
-use crate::model::ast::{Ast, Beat, Directive, Func, Pattern};
+use crate::model::ast::{Expr, Beat, Directive, Func, Pattern};
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
 use anyhow::Result;
@@ -18,7 +18,7 @@ use nom_tracable::tracable_parser;
 use nom_tracable::TracableInfo;
 
 impl super::Importer for RechordImporter {
-    fn import(&self, code: &str) -> Result<Ast> {
+    fn import(&self, code: &str) -> Result<Expr> {
         let code = code.replace("♭", "b");
         let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
         let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
@@ -30,7 +30,7 @@ impl super::Importer for RechordImporter {
 }
 
 #[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Ast> {
+fn ast_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((
             many1(alt((
@@ -41,12 +41,12 @@ fn ast_parser(s: Span) -> IResult<Span, Ast> {
             ))),
             eof,
         )),
-        |(score, _)| Ast::Score(score.into_iter().map(Box::new).collect()),
+        |(score, _)| Expr::Seq(score),
     )(s)
 }
 
 #[tracable_parser]
-fn directive_parser(s: Span) -> IResult<Span, Ast> {
+fn directive_parser(s: Span) -> IResult<Span, Expr> {
     // a bad value (e.g. `key: H`) fails the parse gracefully (map_res) rather
     // than panicking — important for the realtime web editor while typing.
     // The terminator accepts eof so a trailing directive without a newline parses.
@@ -54,25 +54,25 @@ fn directive_parser(s: Span) -> IResult<Span, Ast> {
         map_res(
             tuple((tag("key:"), space0, not_line_ending, alt((line_ending, eof)))),
             |(_, _, val, _): (Span, Span, Span, Span)| {
-                Pitch::from_str(val.fragment().trim()).map(|p| Ast::Directive(Directive::Key(p)))
+                Pitch::from_str(val.fragment().trim()).map(|p| Expr::Directive(Directive::Key(p)))
             },
         ),
         map_res(
             tuple((tag("scale:"), space0, not_line_ending, alt((line_ending, eof)))),
             |(_, _, val, _): (Span, Span, Span, Span)| {
-                Scale::from_str(val.fragment().trim()).map(|s| Ast::Directive(Directive::Scale(s)))
+                Scale::from_str(val.fragment().trim()).map(|s| Expr::Directive(Directive::Scale(s)))
             },
         ),
     ))(s)
 }
 
 #[tracable_parser]
-fn comment_parser(s: Span) -> IResult<Span, Ast> {
+fn comment_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((tag("#"), not_line_ending, line_ending)),
         // `# ` の後ろの空白は落とす。Display 側が `# ` を付けて出すので、
         // 残したままだと書き戻すたびに空白が1つずつ増えていく
-        |(_, comment, _): (Span, Span, Span)| Ast::Comment(comment.trim().to_string()),
+        |(_, comment, _): (Span, Span, Span)| Expr::Comment(comment.trim().to_string()),
     )(s)
 }
 
@@ -119,7 +119,7 @@ fn pattern_parser(s: Span) -> IResult<Span, Pattern> {
 
 /// `pow( <小節列> )` と `pat( "<パターン>", <小節列> )`
 #[tracable_parser]
-fn apply_parser(s: Span) -> IResult<Span, Ast> {
+fn apply_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((
             alt((
@@ -146,7 +146,7 @@ fn apply_parser(s: Span) -> IResult<Span, Ast> {
             space_or_line_ending_many0,
         )),
         |(func, items, _, _, _, br, _)| {
-            Ast::Apply(func, items.into_iter().map(Box::new).collect(), br.is_some())
+            Expr::Apply(func, items, br.is_some())
         },
     )(s)
 }
@@ -156,14 +156,14 @@ fn space_or_line_ending_many0(s: Span) -> IResult<Span, ()> {
 }
 
 #[tracable_parser]
-fn measure_parser(s: Span) -> IResult<Span, Ast> {
+fn measure_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((
             many1(delimited(space0, node_parser, space0)),
             measure_sep,
             space_or_line_ending_many0,
         )),
-        |(nodes, br, _)| Ast::Measure(nodes, br),
+        |(nodes, br, _)| Expr::Measure(nodes, br),
     )(s)
 }
 
@@ -201,13 +201,13 @@ mod tests {
     #[test]
     fn test_directive_parser() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Ast, Directive};
+        use crate::model::ast::{Expr, Directive};
         use crate::model::pitch::Pitch;
         use crate::model::scale::Scale;
         let ast = RechordImporter.import("key: C\nscale: dorian\nC |\n").unwrap();
-        let Ast::Score(items) = &ast else { panic!() };
-        assert!(matches!(items[0].as_ref(), Ast::Directive(Directive::Key(Pitch::C))));
-        assert!(matches!(items[1].as_ref(), Ast::Directive(Directive::Scale(Scale::Dorian))));
+        let Expr::Seq(items) = &ast else { panic!() };
+        assert!(matches!(&items[0], Expr::Directive(Directive::Key(Pitch::C))));
+        assert!(matches!(&items[1], Expr::Directive(Directive::Scale(Scale::Dorian))));
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_scale_directive_changes_pitch() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Ast, Node};
+        use crate::model::ast::{Expr, Node};
         use crate::model::key::Key;
         use crate::model::pitch::Pitch;
         // III resolves differently per scale: Major -> E, Dorian -> D#/Ds
@@ -230,10 +230,10 @@ mod tests {
             .import("key: C\nscale: dorian\nIII |\n")
             .unwrap()
             .resolve();
-        let first_key = |ast: &Ast| -> Key {
-            let Ast::Score(items) = ast else { panic!() };
+        let first_key = |ast: &Expr| -> Key {
+            let Expr::Seq(items) = ast else { panic!() };
             for it in items {
-                if let Ast::Measure(nodes, _) = it.as_ref() {
+                if let Expr::Measure(nodes, _) = it {
                     if let Some(Node::Chord(c)) = nodes.first() {
                         return c.key.clone();
                     }
@@ -248,28 +248,28 @@ mod tests {
     #[test]
     fn test_pow_parser() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Ast, Func};
+        use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pow(C | E D)\n").unwrap();
-        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else { panic!("not a score") };
         assert_eq!(items.len(), 1);
-        let Ast::Apply(Func::Pow, inner, _) = items[0].as_ref() else {
+        let Expr::Apply(Func::Pow, inner, _) = &items[0] else {
             panic!("not a pow apply: {:?}", items[0])
         };
         // C の小節と E D の小節
         assert_eq!(inner.len(), 2);
-        let Ast::Measure(nodes, _) = inner[0].as_ref() else { panic!("not a measure") };
+        let Expr::Measure(nodes, _) = &inner[0] else { panic!("not a measure") };
         assert_eq!(nodes.len(), 1);
-        let Ast::Measure(nodes, _) = inner[1].as_ref() else { panic!("not a measure") };
+        let Expr::Measure(nodes, _) = &inner[1] else { panic!("not a measure") };
         assert_eq!(nodes.len(), 2);
     }
 
     #[test]
     fn test_pat_parser() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Ast, Beat, Func};
+        use crate::model::ast::{Expr, Beat, Func};
         let ast = RechordImporter.import("pat(\"o.ox\", C | E D)\n").unwrap();
-        let Ast::Score(items) = &ast else { panic!("not a score") };
-        let Ast::Apply(Func::Pat(pattern), inner, _) = items[0].as_ref() else {
+        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Apply(Func::Pat(pattern), inner, _) = &items[0] else {
             panic!("not a pat apply: {:?}", items[0])
         };
         assert_eq!(
@@ -282,24 +282,24 @@ mod tests {
     #[test]
     fn test_pat_nested_in_pow() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Ast, Func};
+        use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pat(\"oxox\", pow(C))\n").unwrap();
-        let Ast::Score(items) = &ast else { panic!("not a score") };
-        let Ast::Apply(Func::Pat(_), inner, _) = items[0].as_ref() else {
+        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
             panic!("not a pat apply")
         };
-        assert!(matches!(inner[0].as_ref(), Ast::Apply(Func::Pow, _, _)));
+        assert!(matches!(&inner[0], Expr::Apply(Func::Pow, _, _)));
     }
 
     #[test]
     fn test_apply_followed_by_measure() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::Ast;
+        use crate::model::ast::Expr;
         let ast = RechordImporter.import("pow(C) F |\n").unwrap();
-        let Ast::Score(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else { panic!("not a score") };
         assert_eq!(items.len(), 2);
-        assert!(matches!(items[0].as_ref(), Ast::Apply(_, _, _)));
-        assert!(matches!(items[1].as_ref(), Ast::Measure(_, _)));
+        assert!(matches!(&items[0], Expr::Apply(_, _, _)));
+        assert!(matches!(&items[1], Expr::Measure(_, _)));
     }
 
     #[test]
