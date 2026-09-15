@@ -96,7 +96,7 @@ const QUALITIES: &[&[Modifier]] = &[
     &[Modifier::Dim],                         // Cdim
     &[Modifier::Dim7],                        // Cdim7
     &[Modifier::Aug],                         // Caug
-    &[Modifier::Power],                       // C5 (記法は pow(C)。Task 6 で包む)
+    &[Modifier::Power],                       // C5 (記法は render() が pow(C) に包む)
 ];
 
 /// 品質から `ChordNode` を作る。`chord_node_parser` と同じく `Major(5)` を
@@ -141,6 +141,22 @@ fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
     Some(extra + missing + root_silent + bass_mismatch)
 }
 
+/// ノードを記法の文字列にする。
+///
+/// `Modifier::Power` を持つノードをそのまま書くと `D5` になるが、読み直すと
+/// `Modifier::Dominant(5)` = ただのメジャートライアドになってしまう
+/// （`Modifier::Power` は `pow()` からしか作れない）。`Power` を外した中身を
+/// `pow()` で包んで、書いた通りに読める形にする。`@N` は `ChordNode` の
+/// `Display` が末尾に付けるので、自然と括弧の内側に入る
+fn render(node: &ChordNode) -> String {
+    if !node.modifiers.contains(&Modifier::Power) {
+        return node.to_string();
+    }
+    let mut inner = node.clone();
+    inner.modifiers.remove(&Modifier::Power);
+    format!("pow({})", inner)
+}
+
 /// 記法を決める。`@N` 無しで元の形に戻るならそのまま、戻らなければ `@N` を
 /// 足してもう一度試す。それでも戻らなければ `@N` 無しの名前を返し、
 /// 「再現できない」と伝える。返り値は (記法, 元の形を再現するか)
@@ -151,17 +167,17 @@ fn notation_for(
     frets: &[Option<u8>; 6],
 ) -> (String, bool) {
     if find(r).map(|f| f.frets) == Some(*frets) {
-        return (node.to_string(), true);
+        return (render(node), true);
     }
     let mut with_string = node.clone();
     // 記法は 1 = 1弦、Played.bass_string は 0 = 6弦
     with_string.root_string = Some(6 - played.bass_string);
     if let Ok(r2) = chord_ref(&with_string) {
         if find(&r2).map(|f| f.frets) == Some(*frets) {
-            return (with_string.to_string(), true);
+            return (render(&with_string), true);
         }
     }
-    (node.to_string(), false)
+    (render(node), false)
 }
 
 /// 可動形（パワーコード / オクターブ形）の候補。
@@ -263,6 +279,7 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
 mod tests {
     use super::*;
     use crate::fingering::chord_refs;
+    use std::collections::HashMap;
 
     /// "x3201x" のような文字列を frets に直す。x = ミュート、それ以外は1桁の16進
     fn frets(s: &str) -> [Option<u8>; 6] {
@@ -432,6 +449,71 @@ mod tests {
                     got.iter()
                         .map(|c| (c.name.clone(), matches!(c.source, Source::Data(_))))
                         .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn identify_wraps_a_power_candidate_that_is_not_in_the_data() {
+        // 3x003x は原典の G。kind は Normal なので可動形としては拾われないが、
+        // 鳴っている音からは G5 とも読める。この G5 を裸で書くと読み直したとき
+        // Dominant(5) = G メジャートライアドになってしまうので pow() で包む
+        let c = identify(frets("3x003x"));
+        let power = c.iter().find(|x| x.name == "G5").unwrap_or_else(|| {
+            panic!(
+                "G5 が候補に無い: {:?}",
+                c.iter().map(|x| &x.name).collect::<Vec<_>>()
+            )
+        });
+        assert_eq!(power.notation, "pow(G)");
+    }
+
+    /// 候補の名前から、その名前が意味する構成音を引く。identify が使うのと
+    /// 同じ品質テーブルから組み立てるので、突き合わせる相手は「パーサが記法を
+    /// どう読んだか」という独立した側になる
+    fn pitch_classes_by_name() -> HashMap<String, u16> {
+        // oct は QUALITIES に無い（1音なので何にでも一致して候補を埋め尽くす）
+        // が、可動形の候補としては出てくるのでこの表には入れる
+        let octave: &[Modifier] = &[Modifier::Octave];
+        let mut out = HashMap::new();
+        for root in 0..12u8 {
+            let Ok(root_pitch) = Pitch::try_from(root) else {
+                continue;
+            };
+            for quality in QUALITIES.iter().chain(std::iter::once(&octave)) {
+                let ons = std::iter::once(None).chain((0..12u8).map(|b| Pitch::try_from(b).ok()));
+                for on in ons {
+                    let n = node(root_pitch, quality, on);
+                    if let Ok(r) = chord_ref(&n) {
+                        out.entry(r.label).or_insert(r.pitch_classes);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// 記法は必ず、それが名乗っているコードを指していること。
+    /// `D5` のような裸の記法は読み直すと別のコード（メジャートライアド）に
+    /// なるので、`pow()` で包まれていなければここで落ちる
+    #[test]
+    fn every_candidate_notation_denotes_its_own_chord() {
+        let expected = pitch_classes_by_name();
+        for f in FINGERINGS.iter() {
+            for c in identify(f.frets) {
+                let refs = reparse(&c.notation);
+                assert_eq!(refs.len(), 1, "{} が1コードにならない", c.notation);
+                let want = expected.get(&c.name).unwrap_or_else(|| {
+                    panic!(
+                        "候補名 {} が品質テーブルから引けない ({})",
+                        c.name, c.notation
+                    )
+                });
+                assert_eq!(
+                    refs[0].pitch_classes, *want,
+                    "{} の候補 {} の記法 {} が別のコードに読まれる",
+                    f.name, c.name, c.notation
                 );
             }
         }
