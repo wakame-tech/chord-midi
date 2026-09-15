@@ -310,6 +310,9 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
 mod tests {
     use super::*;
 
+    /// 開放弦の MIDI ノート番号。6弦→1弦
+    const OPEN_STRING_PITCHES: [u8; 6] = [40, 45, 50, 55, 59, 64];
+
     fn refs(input: &str) -> Vec<ChordRef> {
         use crate::import::{Importer, RechordImporter};
         let ast = RechordImporter.import(input).unwrap().resolve();
@@ -416,7 +419,7 @@ mod tests {
 
     #[test]
     fn data_is_consistent() {
-        assert_eq!(FINGERINGS.len(), 91);
+        assert_eq!(FINGERINGS.len(), 115);
         for f in FINGERINGS {
             let mut pcs = 0u16;
             for (i, v) in f.frets.iter().enumerate() {
@@ -579,7 +582,7 @@ mod tests {
             .collect();
         // 6弦ルート12キー + 5弦ルート12キー
         assert_eq!(powers.len(), 24);
-        assert_eq!(FINGERINGS.len(), 67 + 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24 + 24);
     }
 
     #[test]
@@ -674,5 +677,52 @@ mod tests {
         assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
         assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
         assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
+    }
+
+    #[test]
+    fn octave_shapes_are_present() {
+        let octaves: Vec<_> = FINGERINGS
+            .iter()
+            .filter(|f| f.kind == ShapeKind::Octave)
+            .collect();
+        // 6弦ルート12キー + 5弦ルート12キー
+        assert_eq!(octaves.len(), 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24 + 24);
+    }
+
+    #[test]
+    fn octave_shapes_sound_one_pitch_class_twice() {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Octave) {
+            // 鳴る音は1種類だけ
+            assert_eq!(f.pitch_classes.count_ones(), 1, "{} {}", f.name, tab(f));
+            // 鳴る弦は2本で、ちょうど12半音離れている
+            let sounding: Vec<u8> = f
+                .frets
+                .iter()
+                .enumerate()
+                .filter_map(|(i, v)| v.map(|n| OPEN_STRING_PITCHES[i] + n))
+                .collect();
+            assert_eq!(sounding.len(), 2, "{} {}", f.name, tab(f));
+            assert_eq!(sounding[1] - sounding[0], 12, "{} {}", f.name, tab(f));
+        }
+    }
+
+    #[test]
+    fn octave_shape_fingers_are_index_and_ring() {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Octave) {
+            let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
+            match used.len() {
+                // 開放弦がルートの形は押さえるのがオクターブ側だけ
+                1 => assert_eq!(used, vec![Finger::Ring], "{} {}", f.name, tab(f)),
+                2 => assert_eq!(
+                    used,
+                    vec![Finger::Index, Finger::Ring],
+                    "{} {}",
+                    f.name,
+                    tab(f)
+                ),
+                n => panic!("unexpected pressed count {} for {}", n, f.name),
+            }
+        }
     }
 }
