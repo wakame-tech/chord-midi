@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/progressions.json から chord_midi_web/src/presets.rs を生成する。
+"""docs/progressions.json から chord_midi/src/presets.rs を生成する。
 
 使い方:
     just gen-presets  (= python3 scripts/gen_presets.py)
@@ -9,7 +9,7 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 JSON_PATH = ROOT / "docs" / "progressions.json"
-RS_PATH = ROOT / "chord_midi_web" / "src" / "presets.rs"
+RS_PATH = ROOT / "chord_midi" / "src" / "presets.rs"
 
 
 def rust_str(s):

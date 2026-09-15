@@ -4,6 +4,37 @@ rechord format to midi file
 - [ ] optimize voicing
 - [ ] arpeggio
 
+## CLI
+
+web 版でできること（再生を除く）は CLI からも使える。
+
+    # 変換
+    cargo run -p chord_midi_cli -- -i song.txt -o song.midi --bpm 120
+    cargo run -p chord_midi_cli -- -i song.txt -o song.rechord
+
+    # 編集（出力先を省くと書き換えた進行を標準出力に返す）
+    cargo run -p chord_midi_cli -- -i song.txt --transpose -2
+    cargo run -p chord_midi_cli -- -i song.txt --scale minor
+
+    # 表示
+    cargo run -p chord_midi_cli -- -i song.txt --print-ast
+    cargo run -p chord_midi_cli -- -i song.txt --fingering
+
+    # プリセット進行（`-i` の代わりに使う）
+    cargo run -p chord_midi_cli -- --list-presets
+    cargo run -p chord_midi_cli -- --preset 小室進行 --fingering
+
+`--transpose` と `--scale` は AST ではなく入力テキストを書き換える。
+web 版の移調ボタン / スケール選択と同じ扱いなので、結果をそのまま
+入力ファイルに書き戻せる。
+
+`--fingering` は web 版のコード図を等幅文字で描く。指は `1` = 人差し指、
+`2` = 中指、`3` = 薬指、`T` = 親指。行頭の `o` は開放弦、`x` はミュート。
+
+進行プリセットは `chord_midi/src/presets.rs`（`docs/progressions.json` からの
+生成物）を web と CLI で共有している。
+
+
 ## 押さえ方データ
 
 ギターの押さえ方は `docs/easy_guiter_chords.json` が原本。
