@@ -279,6 +279,25 @@ impl Score {
 
     /// 1小節をパターンのスロット数に割り直す
     fn interpret_patterned_measure(&mut self, nodes: Vec<Node>, pattern: &Pattern) -> Result<()> {
+        // パターンを配る前に Transform を展開しておく。
+        // 展開せずに `Node::Transform` のままスロットへ配ると 2 つ壊れる:
+        //   - ブラッシングのスロットで変換が捨てられ、打弦は Baug/F なのに
+        //     ブラッシングは F、と同じ小節で和音が食い違う
+        //   - s25 のように 2 コードへ展開されるものが、各スロットで両方とも
+        //     鳴ってしまう (正しくは前半 Dm7 / 後半 G7)
+        // 尺は変わらない: Transform 1 つが小節を占めて中で n 等分されるのと、
+        // 展開後の n ノードが小節を n 等分するのは同じ
+        let nodes: Vec<Node> = nodes
+            .into_iter()
+            .flat_map(|n| match n {
+                Node::Transform(t, c) => t.expand(
+                    c,
+                    crate::model::pitch::Pitch::C,
+                    crate::model::scale::Scale::Major,
+                ),
+                other => vec![other],
+            })
+            .collect();
         let slots = pattern.0.len() as u32;
         // パターン長は 1/2/4/8/16 に限られるので必ず割り切れる
         let slot_dur = MEASURE_LENGTH / slots;
@@ -296,7 +315,6 @@ impl Score {
                 (Beat::Hit, other) => other,
                 (Beat::Brush, Node::Chord(c)) => Node::Brush(c),
                 (Beat::Brush, Node::Arpeggio(c)) => Node::Brush(c),
-                (Beat::Brush, Node::Transform(_, c)) => Node::Brush(c),
                 (Beat::Brush, other) => other,
             };
             self.interpret_node(node, slot_dur)?;

@@ -32,6 +32,11 @@ const SAMPLES: &[(&str, &str)] = &[
     // パワーコードが三和音のまま鳴る
     ("pow_ref", "$a = C\npow($a)\n"),
     ("oct_ref", "$b = A\noct($b)\n"),
+    // pat の中の変換。ブラッシングのスロットで変換が捨てられていたのと、
+    // s25 が全スロットで2コードとも鳴っていたのを固定する
+    ("pat_blk", "pat(\"o.ox\", blk(F))\n"),
+    ("pat_s25", "pat(\"oooo\", s25(G7))\n"),
+    ("pat_dom_brush", "pat(\"xxxx\", dom(Dm7))\n"),
     // Phase 2 の記法
     ("define_ref", "$riff = pow(C | E D)\n$riff | C |\n"),
     (
@@ -171,6 +176,55 @@ fn presets_are_stable() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// `pat` の中の変換が、手で展開した形と同じ MIDI を出すこと。
+///
+/// かつてはブラッシングのスロットで変換が捨てられ (打弦は Baug/F なのに
+/// ブラッシングは F)、s25 は全スロットで2コードとも鳴っていた。
+#[test]
+fn transforms_in_pattern_match_hand_expansion() {
+    let pairs: &[(&str, &str, &str)] = &[
+        // s25 は小節を2つに割る。パターンを掛けても手で 2 コード書いたのと同じ
+        ("s25", "pat(\"oooo\", s25(G7))\n", "pat(\"oooo\", Dm7 G7)\n"),
+        ("s25_dense", "pat(\"oxoxoxox\", s25(G7))\n", "pat(\"oxoxoxox\", Dm7 G7)\n"),
+    ];
+    let mut failures = Vec::new();
+    for (name, shorthand, expanded) in pairs {
+        match (midi_bytes(name, shorthand), midi_bytes(name, expanded)) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (Ok(a), Ok(b)) => failures.push(format!(
+                "[{}] 変換版と手で書いた版の MIDI が違う ({} bytes vs {} bytes)",
+                name,
+                a.len(),
+                b.len()
+            )),
+            (Err(e), _) | (_, Err(e)) => failures.push(format!("[{}] {}", name, e)),
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// ブラッシングのスロットでも変換が効くこと (捨てられて素のコードにならない)
+#[test]
+fn transforms_survive_brush_beats() {
+    let cases: &[(&str, &str, &str)] = &[
+        ("blk", "pat(\"xxxx\", blk(F))\n", "pat(\"xxxx\", F)\n"),
+        ("dom", "pat(\"xxxx\", dom(Dm7))\n", "pat(\"xxxx\", Dm7)\n"),
+        ("sub", "pat(\"xxxx\", sub(G7))\n", "pat(\"xxxx\", G7)\n"),
+    ];
+    let mut failures = Vec::new();
+    for (name, transformed, plain) in cases {
+        match (midi_bytes(name, transformed), midi_bytes(name, plain)) {
+            (Ok(a), Ok(b)) if a != b => {}
+            (Ok(_), Ok(_)) => failures.push(format!(
+                "[{}] ブラッシングのスロットで変換が捨てられている (素のコードと同じ音)",
+                name
+            )),
+            (Err(e), _) | (_, Err(e)) => failures.push(format!("[{}] {}", name, e)),
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// 定義を使った書き方と、手で展開した書き方が同じ MIDI を出すこと。
