@@ -4,6 +4,7 @@ use chord_midi::{
     fingering::{self, MeasureRef},
     import::{Importer, RechordImporter},
     model::scale::Scale,
+    presets,
 };
 use diagram::ChordDiagram;
 use std::io::BufWriter;
@@ -14,7 +15,6 @@ use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 mod diagram;
-mod presets;
 
 fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     let u8_arr = unsafe { web_sys::js_sys::Uint8Array::view(arr) };
