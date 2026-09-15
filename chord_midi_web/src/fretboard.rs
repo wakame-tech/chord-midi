@@ -18,6 +18,7 @@ pub struct FretboardProps {
 #[function_component(Fretboard)]
 pub fn fretboard(props: &FretboardProps) -> Html {
     let candidates = identify(props.frets);
+    let all_muted = props.frets.iter().all(Option::is_none);
     let on_clear = {
         let on_change = props.on_change.clone();
         Callback::from(move |_| on_change.emit([None; 6]))
@@ -33,7 +34,7 @@ pub fn fretboard(props: &FretboardProps) -> Html {
             </div>
             <div class="block">
                 <span class="block-label">{"コードの候補"}</span>
-                { results(&candidates, &props.on_insert) }
+                { results(&candidates, &props.on_insert, all_muted) }
             </div>
         </div>
     }
@@ -77,7 +78,15 @@ fn board(props: &FretboardProps) -> Html {
                     } else {
                         Html::default()
                     };
-                    html! { <div {class} {onclick}>{dot}</div> }
+                    // キーボードでも押せるよう実ボタンにする。弦とフレットは
+                    // 見た目のグリッド位置でしか区別できないので aria-label で言葉にする
+                    html! {
+                        <button type="button" {class} {onclick}
+                            aria-label={format!("{}弦 {}フレット", 6 - s, fret)}
+                            aria-pressed={on.to_string()}>
+                            {dot}
+                        </button>
+                    }
                 })
                 .collect::<Html>();
             html! {
@@ -108,17 +117,22 @@ fn board(props: &FretboardProps) -> Html {
         <div class="fretboard-scroll">
             <div class="fb-grid">{rows}</div>
             <div class="fb-numbers">
-                // 左端は弦名の列のぶん
-                <div></div>
+                // 左端は弦名の列のぶん。fb-label と一緒に横スクロールで固定する
+                <div class="fb-numbers-spacer"></div>
                 {numbers}
             </div>
         </div>
     }
 }
 
-fn results(candidates: &[Candidate], on_insert: &Callback<String>) -> Html {
+fn results(candidates: &[Candidate], on_insert: &Callback<String>, all_muted: bool) -> Html {
     if candidates.is_empty() {
-        return html! { <p class="empty">{"該当なし"}</p> };
+        let message = if all_muted {
+            "指板を押すと候補が出ます"
+        } else {
+            "該当なし"
+        };
+        return html! { <p class="empty">{message}</p> };
     }
     let cards = candidates
         .iter()

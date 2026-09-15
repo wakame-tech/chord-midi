@@ -761,6 +761,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     width: max-content;
 }
 
+/* 横スクロールしても弦名の列だけは見えたままにする */
 .fb-label {
     display: flex;
     align-items: center;
@@ -769,6 +770,18 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     color: var(--muted);
     font-size: 11px;
     line-height: 1;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+}
+
+/* fb-numbers 側の左端スペーサ。fb-label と同じ幅ぶんを固定する */
+.fb-numbers-spacer {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
 }
 
 .fb-value {
@@ -777,10 +790,17 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     font-size: 12px;
 }
 
-/* 弦はセルの中央を横切る線、フレットはセルの右の縦線 */
+/* 弦はセルの中央を横切る線、フレットはセルの右の縦線。
+   実体は <button> なので、地の見た目を消して線の描画だけ残す */
 .fb-cell {
     position: relative;
     cursor: pointer;
+    appearance: none;
+    padding: 0;
+    font: inherit;
+    border-top: 0;
+    border-bottom: 0;
+    border-radius: 0;
     border-right: 1px solid #8a9099;
     background: linear-gradient(#8a9099, #8a9099) 0 50% / 100% 1px no-repeat;
 }

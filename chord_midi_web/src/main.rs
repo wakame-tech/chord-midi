@@ -27,6 +27,16 @@ fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     Blob::new_with_blob_sequence_and_options(&parts, &options).unwrap()
 }
 
+/// 入力の末尾に1行足す。空なら line だけ、それ以外は改行してから足す。
+/// 進行プリセットのボタンと運指タブの挿入、両方が使う共通の結合規則
+fn append_line(cur: &str, line: &str) -> String {
+    if cur.trim().is_empty() {
+        line.to_string()
+    } else {
+        format!("{}\n{}", cur.trim_end(), line)
+    }
+}
+
 fn compile(input: &str, bpm: u8) -> Result<(String, Vec<MeasureRef>, Vec<u8>), String> {
     let ast = RechordImporter
         .import(&format!("{}\n", input))
@@ -316,17 +326,13 @@ fn app() -> Html {
         let picked = picked.clone();
         Callback::from(move |next: [Option<u8>; 6]| picked.set(next))
     };
-    // 記法をエディタ末尾に足す。進行プリセットのボタンと同じ挙動
+    // 記法をエディタ末尾に足す。改行結合の規則は進行プリセットと共通
+    // (append_line)。挿入するのは1小節ぶんの記法なので ` |` は呼び出し側で足す
     let on_insert = {
         let input = input.clone();
         Callback::from(move |notation: String| {
-            let cur = (*input).clone();
-            let next = if cur.trim().is_empty() {
-                format!("{} |", notation)
-            } else {
-                format!("{}\n{} |", cur.trim_end(), notation)
-            };
-            input.set(next);
+            let line = format!("{} |", notation);
+            input.set(append_line(&input, &line));
         })
     };
 
@@ -393,10 +399,7 @@ fn app() -> Html {
                         let input = input.clone();
                         let progression = preset.progression.to_string();
                         let onclick = Callback::from(move |_| {
-                            let cur = (*input).clone();
-                            let next = if cur.trim().is_empty() { progression.clone() }
-                                       else { format!("{}\n{}", cur.trim_end(), progression) };
-                            input.set(next);
+                            input.set(append_line(&input, &progression));
                         });
                         html!{
                             <button class="btn preset" {onclick}>
