@@ -69,6 +69,7 @@ fn app() -> Html {
     // otherwise be a stale first-render snapshot (so its prev-URL revoke never ran).
     let applied = use_mut_ref(|| String::new());
     let player_ref = use_node_ref();
+    let gutter_ref = use_node_ref();
 
     // input か bpm が変わるたびに再計算
     {
@@ -198,6 +199,16 @@ fn app() -> Html {
             input.set(ta.value());
         })
     };
+    // 行番号ガターをテキストエリアのスクロールに追従させる
+    let on_scroll = {
+        let gutter_ref = gutter_ref.clone();
+        Callback::from(move |e: Event| {
+            let ta: HtmlTextAreaElement = e.target_unchecked_into();
+            if let Some(gutter) = gutter_ref.cast::<web_sys::Element>() {
+                gutter.set_scroll_top(ta.scroll_top());
+            }
+        })
+    };
     let on_bpm = {
         let bpm = bpm.clone();
         Callback::from(move |e: InputEvent| {
@@ -282,14 +293,23 @@ fn app() -> Html {
 
     let editor = html! {
         <>
-            <textarea
-                class="editor"
-                rows=10
-                spellcheck="false"
-                placeholder="key: C\nC | Am | F | G |"
-                oninput={on_input}
-                value={(*input).clone()}
-            ></textarea>
+            <div class="editor-wrap">
+                <div class="gutter" ref={gutter_ref}>
+                    { for (1..=(*input).split('\n').count()).map(|n| html! {
+                        <div class="gutter-line">{n}</div>
+                    }) }
+                </div>
+                <textarea
+                    class="editor"
+                    rows=10
+                    spellcheck="false"
+                    wrap="off"
+                    placeholder="key: C\nC | Am | F | G |"
+                    oninput={on_input}
+                    onscroll={on_scroll}
+                    value={(*input).clone()}
+                ></textarea>
+            </div>
             if has_error {
                 <p class="error">{(*error).clone()}</p>
             }
@@ -298,19 +318,21 @@ fn app() -> Html {
                 <div class="field">
                     <label for="bpm">{"BPM"}</label>
                     <input id="bpm" type="range" min="40" max="240"
+                        style={format!("--fill: {}%", (*bpm as f32 - 40.0) / 2.0)}
                         value={bpm.to_string()} oninput={on_bpm} />
                     <output class="field-value">{*bpm}</output>
                 </div>
                 <div class="field">
-                    <label class="check">
+                    <label class="switch">
                         <input type="checkbox" checked={*loop_on} onchange={on_loop} />
-                        {"ループ再生"}
+                        <span class="switch-track"></span>
+                        <span class="switch-label">{"ループ再生"}</span>
                     </label>
                 </div>
                 <div class="field">
                     <label>{"キー"}</label>
-                    <button class="btn" onclick={on_key_down} title="半音下げる">{"♭"}</button>
-                    <button class="btn" onclick={on_key_up} title="半音上げる">{"♯"}</button>
+                    <button class="btn btn-icon" onclick={on_key_down} title="半音下げる">{"♭"}</button>
+                    <button class="btn btn-icon" onclick={on_key_up} title="半音上げる">{"♯"}</button>
                 </div>
                 <div class="field">
                     <label for="scale">{"スケール"}</label>
