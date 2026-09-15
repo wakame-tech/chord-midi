@@ -8,7 +8,7 @@
 //! (`fretboard.rs` の候補カードなど) と同じく、`Edit` を投げるだけで
 //! テキストの持ち主である `App` には触らない。
 
-use chord_midi::reference::{Function, Symbol, BEATS, FUNCTIONS, SYMBOLS};
+use chord_midi::reference::{Function, Symbol, BEATS, FUNCTIONS, NESTING, SYMBOLS};
 use yew::prelude::*;
 
 use crate::cursor::Edit;
@@ -49,8 +49,9 @@ fn function_table(rows: &[Function], on_edit: &Callback<Edit>) -> Html {
             { for rows.iter().map(|f| html! {
                 <tr>
                     <td><code>{format!("{}({})", f.name, f.args)}</code></td>
-                    // 小節列に掛かるか、コード1つに掛かるか。この区別が
-                    // 崩れると「書けると思ったのに書けない」が起きる
+                    // 何を受けて何を返すか。返すものが「コード」の関数だけが
+                    // 他の関数の中に書ける。この区別が崩れると
+                    // 「書けると思ったのに書けない」が起きる
                     <td>{f.scope.label()}</td>
                     <td>{f.summary}</td>
                     { example_cell(f.example, on_edit) }
@@ -80,8 +81,14 @@ pub fn syntax_reference(props: &SyntaxReferenceProps) -> Html {
                 { symbol_table(BEATS, &props.on_edit) }
             </div>
             <div class="block">
-                <span class="block-label">{"関数 (単位: 小節列 / コード)"}</span>
+                <span class="block-label">{"関数 (引数 -> 返すもの)"}</span>
                 { function_table(FUNCTIONS, &props.on_edit) }
+            </div>
+            <div class="block">
+                <span class="block-label">
+                    {"入れ子 (コードを返す関数だけが他の関数の中に書ける)"}
+                </span>
+                { symbol_table(NESTING, &props.on_edit) }
             </div>
         </details>
     }
