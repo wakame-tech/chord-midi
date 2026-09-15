@@ -145,16 +145,18 @@ fn modifier_parser(s: Span) -> IResult<Span, Modifier> {
         map(tag("sus2"), |_| Modifier::Sus2),
         map(tag("sus4"), |_| Modifier::Sus4),
         map(tag("dim7"), |_| Modifier::Dim7),
+        // `omit` は dim の別名 `o` より先に試す。後ろに置くと
+        // `Comit3` の `o` が dim に食われて読めなくなる
+        map(
+            tuple((alt((tag("omit"), tag("no"))), degree_number_parser)),
+            |(_, d)| Modifier::Omit(d),
+        ),
         map(alt((tag("dim"), tag("o"))), |_| Modifier::Dim),
         map(tag("aug7"), |_| Modifier::Aug7),
         map(alt((tag("aug"), tag("+"))), |_| Modifier::Aug),
         map(tuple((tag("add"), degree_number_parser)), |(_, d)| {
             Modifier::Add(d)
         }),
-        map(
-            tuple((alt((tag("omit"), tag("no"))), degree_number_parser)),
-            |(_, d)| Modifier::Omit(d),
-        ),
         map(tag("mM7"), |_| Modifier::MinorMajaor7),
         map(
             tuple((alt((tag("maj"), tag("M"))), opt(degree_number_parser))),
@@ -245,6 +247,24 @@ mod tests {
         for (code, expected) in cases {
             assert_eq!(&semis(code), expected, "chord {:?}", code);
         }
+    }
+
+    #[test]
+    fn test_omit_is_not_shadowed_by_dim() {
+        let semitones = |code: &str| {
+            let (_r, node) = chord_node_parser(span(code)).unwrap();
+            node.to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
+        // omit が読めること (3rd が抜けてルートと5thだけになる)
+        assert_eq!(semitones("Comit3"), vec![0, 7]);
+        // 別名の no も従来どおり
+        assert_eq!(semitones("Cno3"), vec![0, 7]);
+        // `o` 単体は今までどおり dim
+        assert_eq!(semitones("Co"), vec![0, 3, 6]);
     }
 
     #[test]

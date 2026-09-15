@@ -1,6 +1,6 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::{Ast, Beat, Func, Node, Pattern};
+use crate::model::ast::{Ast, Beat, ChordNode, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -42,6 +42,25 @@ fn into_note_numbers(chord: &Chord) -> Result<Vec<NoteNumber>> {
         .collect())
 }
 
+/// 開放弦の MIDI ノート番号。6弦→1弦 (E2 A2 D3 G3 B3 E4)
+const OPEN_STRING_NOTES: [u8; 6] = [40, 45, 50, 55, 59, 64];
+
+/// `ChordNode` を鳴らす音（MIDI ノート番号）に直す。低い方から並ぶ。
+///
+/// 押さえ方が見つかればその実音を鳴らす。プレビューが出している図と
+/// 鳴っている音を一致させるため。見つからなければ従来の声部配置に落とす
+fn voicing(node: &ChordNode) -> Result<Vec<NoteNumber>> {
+    if let Some(f) = crate::fingering::find(&crate::fingering::chord_ref(node)?) {
+        return Ok(f
+            .frets
+            .iter()
+            .enumerate()
+            .filter_map(|(i, fret)| fret.map(|n| NoteNumber::new(OPEN_STRING_NOTES[i] + n)))
+            .collect());
+    }
+    into_note_numbers(&node.to_chord()?)
+}
+
 /// ブラッシング（ミュートした空振り）のベロシティ
 const BRUSH_VELOCITY: Velocity = Velocity::new(40);
 
@@ -75,7 +94,8 @@ struct Score {
     notes: Vec<Note>,
     sustain: u32,
     rest: u32,
-    pre: Option<Chord>,
+    /// 直前に鳴らした声部。`=` と `%` が伸ばす対象
+    pre: Option<Vec<NoteNumber>>,
 }
 
 const MEASURE_LENGTH: u32 = 16;
@@ -95,7 +115,7 @@ impl Score {
             "pre={} sus={}/{}, rest={}/{}",
             self.pre
                 .as_ref()
-                .map(|c| format!("{:?}", c))
+                .map(|notes| format!("{:?}", notes))
                 .unwrap_or("None".to_string()),
             self.sustain,
             MEASURE_LENGTH,
@@ -107,12 +127,7 @@ impl Score {
     fn interpret_node(&mut self, node: Node, dur: u32) -> Result<()> {
         self.inspect();
         if !matches!(node, Node::Sustain) && self.sustain != 0 {
-            let notes = if let Some(pre) = &self.pre {
-                Some(into_note_numbers(pre)?)
-            } else {
-                None
-            };
-            self.notes.push(Note::new(notes, self.sustain));
+            self.notes.push(Note::new(self.pre.clone(), self.sustain));
             self.sustain = 0;
         }
         if !matches!(node, Node::Rest) && self.rest != 0 {
@@ -122,13 +137,11 @@ impl Score {
         match node {
             Node::Chord(node) => {
                 log::debug!("chord: {}: {:?}", node, node.modifiers);
-                let chord = node.to_chord()?;
-                self.pre = Some(chord.clone());
+                self.pre = Some(voicing(&node)?);
                 self.sustain = dur;
             }
             Node::Arpeggio(node) => {
-                let chord = node.to_chord()?;
-                let all = into_note_numbers(&chord)?;
+                let all = voicing(&node)?;
                 // dur が音数より少ない密な小節では鳴らせる音数を dur に制限し、
                 // 総尺が dur を超えて後続ノードがずれるのを防ぐ（総尺は常に dur）
                 let k = (all.len() as u32).min(dur).max(1);
@@ -157,9 +170,8 @@ impl Score {
                 }
             }
             Node::Brush(node) => {
-                let chord = node.to_chord()?;
-                let notes = into_note_numbers(&chord)?;
-                self.pre = Some(chord);
+                let notes = voicing(&node)?;
+                self.pre = Some(notes.clone());
                 self.notes.push(Note::brushed(Some(notes), dur));
             }
             Node::Repeat => {
@@ -198,12 +210,7 @@ impl Score {
                     self.interpret(*node)?
                 }
                 if self.sustain != 0 {
-                    let notes = if let Some(pre) = &self.pre {
-                        Some(into_note_numbers(pre)?)
-                    } else {
-                        None
-                    };
-                    self.notes.push(Note::new(notes, self.sustain));
+                    self.notes.push(Note::new(self.pre.clone(), self.sustain));
                     self.sustain = 0;
                 }
                 Ok(())
@@ -377,22 +384,23 @@ mod tests {
     fn test_block_chord_is_simultaneous() {
         let notes = notes_of("C");
         assert_eq!(notes.len(), 1);
-        assert_eq!(notes[0].chord.as_ref().unwrap().len(), 3); // C E G
+        // C の押さえ方 x-3-2-0-1-x は4本鳴る
+        assert_eq!(notes[0].chord.as_ref().unwrap().len(), 4);
     }
 
     #[test]
     fn test_arpeggio_is_sequential() {
         let notes = notes_of("arp(C)");
-        assert_eq!(notes.len(), 3); // 3音が順次
+        assert_eq!(notes.len(), 4); // 押さえ方の4音が順次
         assert!(notes.iter().all(|n| n.chord.as_ref().unwrap().len() == 1));
     }
 
     #[test]
     fn test_arpeggio_durations_sum_to_slot() {
-        // single-node measure: dur = MEASURE_LENGTH = 16, triad k=3
+        // single-node measure: dur = MEASURE_LENGTH = 16, C の押さえ方は4音
         let notes = notes_of("arp(C)");
         let durs: Vec<u32> = notes.iter().map(|n| n.duration).collect();
-        assert_eq!(durs, vec![5, 5, 6]); // each=5, remainder folded into last
+        assert_eq!(durs, vec![4, 4, 4, 4]);
         assert_eq!(durs.iter().sum::<u32>(), 16);
     }
 
@@ -499,5 +507,52 @@ mod tests {
         let sounding: Vec<_> = notes.iter().filter(|n| n.chord.is_some()).collect();
         assert_eq!(sounding.len(), 2);
         assert!(sounding.iter().all(|n| n.duration == 4));
+    }
+
+    /// 最初に鳴る和音の MIDI ノート番号
+    fn pitches_of(code: &str) -> Vec<u8> {
+        resolved_notes_of(code)
+            .iter()
+            .find(|n| n.chord.is_some())
+            .expect("no sounding note")
+            .chord
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|n| n.get())
+            .collect()
+    }
+
+    #[test]
+    fn test_chord_sounds_the_fingering() {
+        // C の押さえ方は x-3-2-0-1-x。
+        // 5弦3fr=C3(48) 4弦2fr=E3(52) 3弦開放=G3(55) 2弦1fr=C4(60)
+        assert_eq!(pitches_of("C |"), vec![48, 52, 55, 60]);
+    }
+
+    #[test]
+    fn test_power_chord_sounds_the_fingering() {
+        // 6弦5fr=A2(45) + 5弦7fr=E3(52)
+        assert_eq!(pitches_of("pow(A@6)"), vec![45, 52]);
+        // 5弦5fr=D3(50) + 4弦7fr=A3(57)
+        assert_eq!(pitches_of("pow(D@5)"), vec![50, 57]);
+        // 5弦7fr=E3(52) + 4弦9fr=B3(59)
+        assert_eq!(pitches_of("pow(E@5)"), vec![52, 59]);
+    }
+
+    #[test]
+    fn test_falls_back_when_no_fingering_matches() {
+        // ルート1音だけの和音に合う押さえ方は無い (どの押さえ方も2音以上鳴る)
+        // ので、従来の声部配置に落ちる
+        let p = pitches_of("C#omit3omit5 |");
+        assert_eq!(p.len(), 1, "{:?}", p);
+    }
+
+    #[test]
+    fn test_voicing_is_ordered_low_to_high() {
+        for code in ["C |", "Am7 |", "F |", "pow(A@6)"] {
+            let p = pitches_of(code);
+            assert!(p.windows(2).all(|w| w[0] < w[1]), "{}: {:?}", code, p);
+        }
     }
 }

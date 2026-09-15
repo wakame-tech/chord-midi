@@ -172,7 +172,9 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
     Ok(())
 }
 
-fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
+/// `ChordNode` から押さえ方検索用の情報を取り出す。
+/// 呼ぶ前に [`Ast::resolve`] を通しておくこと
+pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
     // ラベルに `@N` は含めない。弦の指定は押さえ方への指示であって
     // コード名の一部ではなく、どの弦で取ったかは図を見れば分かる。
     // 含めると押さえ方の名前と食い違い、「≒」の併記まで誤って出る
