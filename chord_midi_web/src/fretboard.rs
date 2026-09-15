@@ -1,3 +1,4 @@
+use chord_midi::fingering::{identify, Candidate, Source};
 use yew::prelude::*;
 
 use crate::diagram::POSITION_MARKS;
@@ -16,6 +17,7 @@ pub struct FretboardProps {
 
 #[function_component(Fretboard)]
 pub fn fretboard(props: &FretboardProps) -> Html {
+    let candidates = identify(props.frets);
     let on_clear = {
         let on_change = props.on_change.clone();
         Callback::from(move |_| on_change.emit([None; 6]))
@@ -28,6 +30,10 @@ pub fn fretboard(props: &FretboardProps) -> Html {
             { board(props) }
             <div class="block">
                 <button class="btn" onclick={on_clear}>{"クリア"}</button>
+            </div>
+            <div class="block">
+                <span class="block-label">{"コードの候補"}</span>
+                { results(&candidates, &props.on_insert) }
             </div>
         </div>
     }
@@ -105,4 +111,54 @@ fn board(props: &FretboardProps) -> Html {
             </div>
         </div>
     }
+}
+
+fn results(candidates: &[Candidate], on_insert: &Callback<String>) -> Html {
+    if candidates.is_empty() {
+        return html! { <p class="empty">{"該当なし"}</p> };
+    }
+    let cards = candidates
+        .iter()
+        .map(|c| {
+            let onclick = {
+                let on_insert = on_insert.clone();
+                let notation = c.notation.clone();
+                Callback::from(move |_| on_insert.emit(notation.clone()))
+            };
+            let (badge, badge_class) = match c.source {
+                Source::Data(_) => ("原典", "fb-badge is-data"),
+                Source::Theory => ("計算", "fb-badge"),
+            };
+            // 原典での呼び名が rechord の名前と違うときだけ併記する。
+            // diagram.rs の「≒」と同じ考え方
+            let alias = match c.source {
+                Source::Data(f) if f.name != c.name => html! {
+                    <div class="fb-alias">{format!("原典では {}", f.name)}</div>
+                },
+                _ => Html::default(),
+            };
+            let note = if c.unreachable {
+                html! {
+                    <div class="fb-note">{"この形は今の押さえ方データでは再現できない"}</div>
+                }
+            } else {
+                Html::default()
+            };
+            html! {
+                <div class="fb-card">
+                    <div class="fb-card-head">
+                        <span class="fb-card-name">{&c.name}</span>
+                        <span class={badge_class}>{badge}</span>
+                    </div>
+                    {alias}
+                    <div class="fb-card-body">
+                        <code class="fb-notation">{&c.notation}</code>
+                        <button class="btn" {onclick}>{"挿入"}</button>
+                    </div>
+                    {note}
+                </div>
+            }
+        })
+        .collect::<Html>();
+    html! { <div class="fb-cards">{cards}</div> }
 }
