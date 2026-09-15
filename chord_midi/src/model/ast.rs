@@ -20,14 +20,42 @@ pub enum Ast {
     Directive(Directive),
     // nodes, br?
     Measure(Vec<Node>, bool),
+    /// 小節列に関数を適用する。中身は Measure と Apply（ネスト）だけ。
+    /// 3つ目は「この関数の後ろで入力が改行されている」
+    Apply(Func, Vec<Box<Ast>>, bool),
     Score(Vec<Box<Ast>>),
 }
 
-#[derive(Debug, PartialEq)]
+/// 小節列に掛ける関数
+#[derive(Debug, Clone, PartialEq)]
+pub enum Func {
+    /// パワーコード化
+    Pow,
+    /// リズムパターン
+    Pat(Pattern),
+}
+
+/// リズムパターン。長さは 1/2/4/8/16 のいずれか
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pattern(pub Vec<Beat>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Beat {
+    /// `o` 打弦
+    Hit,
+    /// `.` 休符
+    Rest,
+    /// `x` ブラッシング
+    Brush,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Chord(ChordNode),
     Arpeggio(ChordNode),
     Transform(Transform, ChordNode),
+    /// ブラッシング。`pat` の `x` から作られる
+    Brush(ChordNode),
     Rest,
     Sustain,
     Repeat,

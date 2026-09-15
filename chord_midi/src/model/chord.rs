@@ -183,6 +183,13 @@ impl Chord {
                 self.semitones.insert(semitone as u8);
                 Ok(())
             }
+            Modifier::Power => {
+                // 他の修飾を全部捨ててルートと5thだけにする
+                self.semitones.clear();
+                self.semitones.insert(Scale::Major.semitone(1));
+                self.semitones.insert(Scale::Major.semitone(5));
+                Ok(())
+            }
             _ => Err(anyhow::anyhow!("unknown mod: {:?}", modifier)),
         }
     }

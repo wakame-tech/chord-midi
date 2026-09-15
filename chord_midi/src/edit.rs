@@ -65,13 +65,18 @@ fn shift_ast(ast: &mut Ast, delta: i8, seen: &mut Seen) {
                 shift_node(node, delta, seen);
             }
         }
+        Ast::Apply(_, items, _) => {
+            for item in items {
+                shift_ast(item, delta, seen);
+            }
+        }
         Ast::Directive(Directive::Scale(_)) | Ast::Comment(_) => {}
     }
 }
 
 fn shift_node(node: &mut Node, delta: i8, seen: &mut Seen) {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) | Node::Transform(_, c) => {
+        Node::Chord(c) | Node::Arpeggio(c) | Node::Transform(_, c) | Node::Brush(c) => {
             shift_chord(c, delta, seen)
         }
         Node::Rest | Node::Sustain | Node::Repeat => {}
@@ -195,5 +200,26 @@ mod tests {
     #[test]
     fn test_set_scale_absent_after_key() {
         assert_eq!(set_scale("key: C\nI |", Scale::Lydian), "key: C\nscale: lydian\nI |");
+    }
+
+    #[test]
+    fn test_shift_key_transposes_inside_pow() {
+        assert_eq!(shift_key("pow(C | E D)", 1), "pow(C# | F D#)");
+        assert_eq!(shift_key("pow(C# | F D#)", -1), "pow(C | E D)");
+    }
+
+    #[test]
+    fn test_shift_key_keeps_function_line_breaks() {
+        // 関数を別々の行に書いても行が潰れないこと
+        assert_eq!(
+            shift_key("pow(C)\npat(\"oo\", D)", 1),
+            "pow(C#)\npat(\"oo\", D#)"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_keeps_pattern_literal() {
+        // パターン文字列は移調で変わらない
+        assert_eq!(shift_key("pat(\"o.o.\", C)", 1), "pat(\"o.o.\", C#)");
     }
 }

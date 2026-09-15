@@ -143,6 +143,11 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
                 line_break: *line_break,
             });
         }
+        Ast::Apply(_, items, _) => {
+            for item in items {
+                collect_ast(item, out)?;
+            }
+        }
         Ast::Comment(_) | Ast::Directive(_) => {}
     }
     Ok(())
@@ -150,7 +155,7 @@ fn collect_ast(ast: &Ast, out: &mut Vec<MeasureRef>) -> Result<()> {
 
 fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
     match node {
-        Node::Chord(c) | Node::Arpeggio(c) => out.push(chord_ref(c)?),
+        Node::Chord(c) | Node::Arpeggio(c) | Node::Brush(c) => out.push(chord_ref(c)?),
         Node::Transform(t, c) => {
             // resolve() 済みなら key は Absolute なので tonic/scale は無視される。
             // export/midi.rs の Node::Transform の扱いと同じ。
@@ -487,5 +492,23 @@ mod tests {
             bass: None,
         };
         assert!(find(&c).is_none());
+    }
+
+    #[test]
+    fn find_handles_power_chords() {
+        // pow(C) は C と G の2音になる
+        let r = refs("pow(C)\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].pitch_classes, mask(&[0, 7]));
+        assert!(find(&r[0]).is_some());
+    }
+
+    #[test]
+    fn measure_refs_ignores_rhythm() {
+        // リズムでカードが増えないこと
+        let ms = measures("pat(\"o.o.oxox\", C)\n");
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].chords.len(), 1);
+        assert_eq!(ms[0].chords[0].label, "C");
     }
 }
