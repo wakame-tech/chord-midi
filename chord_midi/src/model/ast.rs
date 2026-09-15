@@ -6,28 +6,27 @@ use crate::model::{
     scale::{Degree, Scale},
 };
 use anyhow::Result;
+use serde::Serialize;
 use std::collections::BTreeSet;
 
-#[derive(Debug, PartialEq)]
-pub enum Directive {
-    Key(Pitch),
-    Scale(Scale),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Ast {
+#[derive(Debug, PartialEq, Serialize)]
+pub enum Expr {
     Comment(String),
-    Directive(Directive),
-    // nodes, br?
+    /// `key:` 以降を包む
+    Keyed(Pitch, Box<Expr>),
+    /// `scale:` 以降を包む
+    Scaled(Scale, Box<Expr>),
+    /// 小節。2つ目は「この小節の後ろで入力が改行されている」
     Measure(Vec<Node>, bool),
-    /// 小節列に関数を適用する。中身は Measure と Apply（ネスト）だけ。
+    /// 小節列に関数を適用する。中身は必ず `Seq`。
     /// 3つ目は「この関数の後ろで入力が改行されている」
-    Apply(Func, Vec<Box<Ast>>, bool),
-    Score(Vec<Box<Ast>>),
+    Apply(Func, Box<Expr>, bool),
+    /// `|` / 改行で連結した式の列。ファイル全体もこれ
+    Seq(Vec<Expr>),
 }
 
 /// 小節列に掛ける関数
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Func {
     /// パワーコード化
     Pow,
@@ -38,10 +37,10 @@ pub enum Func {
 }
 
 /// リズムパターン。長さは 1/2/4/8/16 のいずれか
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Pattern(pub Vec<Beat>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Beat {
     /// `o` 打弦
     Hit,
@@ -51,7 +50,7 @@ pub enum Beat {
     Brush,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Node {
     Chord(ChordNode),
     Arpeggio(ChordNode),
@@ -63,7 +62,7 @@ pub enum Node {
     Repeat,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Transform {
     S25,
     Sub,
@@ -119,7 +118,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ChordNode {
     pub key: Key,
     pub modifiers: BTreeSet<Modifier>,
@@ -230,5 +229,15 @@ mod tests {
         assert!(matches!(&nodes[0], Node::Chord(c) if c.key == Key::Absolute(Pitch::D)));
         assert_eq!(semis(&nodes[0]), vec![0, 3, 7, 10]);
         assert!(matches!(&nodes[1], Node::Chord(c) if c.key == Key::Absolute(Pitch::G)));
+    }
+
+    #[test]
+    fn test_ast_serializes_to_json() {
+        use crate::import::{Importer, RechordImporter};
+        let ast = RechordImporter.import("key: C\nC | Am |\n").unwrap();
+        let json = serde_json::to_string(&ast).unwrap();
+        // 構造が見えること。コード名とディレクティブが JSON に現れる
+        assert!(json.contains("Measure"), "{}", json);
+        assert!(json.contains("\"C\""), "{}", json);
     }
 }

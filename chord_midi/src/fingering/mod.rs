@@ -11,7 +11,7 @@ pub use identify::{identify, Candidate, Source};
 
 use crate::model::modifier::Modifier;
 use crate::model::{
-    ast::{Ast, ChordNode, Func, Node, Pattern},
+    ast::{ChordNode, Expr, Func, Node, Pattern},
     key::Key,
     pitch::Pitch,
     scale::Scale,
@@ -124,9 +124,9 @@ pub struct ChordRef {
 
 /// AST に現れるコードを出現順に取り出す。
 ///
-/// 呼ぶ前に [`Ast::resolve`] を通しておくこと。度数表記のままだと
+/// 呼ぶ前に [`Expr::resolve`] を通しておくこと。度数表記のままだと
 /// ピッチクラスが決まらずエラーになる。
-pub fn chord_refs(ast: &Ast) -> Result<Vec<ChordRef>> {
+pub fn chord_refs(ast: &Expr) -> Result<Vec<ChordRef>> {
     Ok(measure_refs(ast)?
         .into_iter()
         .flat_map(|m| m.chords)
@@ -145,8 +145,8 @@ pub struct MeasureRef {
 
 /// AST に現れるコードを小節ごとにまとめて取り出す。
 ///
-/// 呼ぶ前に [`Ast::resolve`] を通しておくこと。
-pub fn measure_refs(ast: &Ast) -> Result<Vec<MeasureRef>> {
+/// 呼ぶ前に [`Expr::resolve`] を通しておくこと。
+pub fn measure_refs(ast: &Expr) -> Result<Vec<MeasureRef>> {
     let mut out = Vec::new();
     collect_ast(ast, None, &mut out)?;
     Ok(out)
@@ -154,14 +154,14 @@ pub fn measure_refs(ast: &Ast) -> Result<Vec<MeasureRef>> {
 
 /// `pattern` は外側の `pat()` から降ってきたリズム。
 /// 内側の `pat()` が優先されるのは export/midi.rs の解釈と同じ
-fn collect_ast(ast: &Ast, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>) -> Result<()> {
+fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>) -> Result<()> {
     match ast {
-        Ast::Score(items) => {
+        Expr::Seq(items) => {
             for item in items {
                 collect_ast(item, pattern, out)?;
             }
         }
-        Ast::Measure(nodes, line_break) => {
+        Expr::Measure(nodes, line_break) => {
             let mut chords = Vec::new();
             for node in nodes {
                 collect_node(node, &mut chords)?;
@@ -172,16 +172,16 @@ fn collect_ast(ast: &Ast, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>) 
                 pattern: pattern.cloned(),
             });
         }
-        Ast::Apply(func, items, _) => {
-            let inner = match func {
+        Expr::Apply(func, inner, _) => {
+            let next = match func {
                 Func::Pat(p) => Some(p),
                 _ => pattern,
             };
-            for item in items {
-                collect_ast(item, inner, out)?;
-            }
+            collect_ast(inner, next, out)?;
         }
-        Ast::Comment(_) | Ast::Directive(_) => {}
+        // resolve() 済みなら包みは消えている。念のため中身へ潜る
+        Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => collect_ast(inner, pattern, out)?,
+        Expr::Comment(_) => {}
     }
     Ok(())
 }
@@ -202,7 +202,7 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
 }
 
 /// `ChordNode` から押さえ方検索用の情報を取り出す。
-/// 呼ぶ前に [`Ast::resolve`] を通しておくこと
+/// 呼ぶ前に [`Expr::resolve`] を通しておくこと
 pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
     // ラベルに `@N` は含めない。弦の指定は押さえ方への指示であって
     // コード名の一部ではなく、どの弦で取ったかは図を見れば分かる。
@@ -250,7 +250,7 @@ fn pitch_class(key: &Key) -> Result<u8> {
     match key {
         Key::Absolute(p) => Ok(*p as u8),
         Key::Relative(d) => Err(anyhow::anyhow!(
-            "relative key {} is not resolved; call Ast::resolve() first",
+            "relative key {} is not resolved; call Expr::resolve() first",
             d
         )),
     }
@@ -762,7 +762,6 @@ mod tests {
             }
         }
     }
-
 
     #[test]
     fn find_picks_octave_shapes_for_oct() {

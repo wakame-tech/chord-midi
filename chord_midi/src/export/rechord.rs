@@ -1,35 +1,37 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Ast, Beat, ChordNode, Directive, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
 impl Exporter for RechordExporter {
-    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()> {
+    fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()> {
         writeln!(f, "{}", ast)?;
         Ok(())
     }
 }
 
-impl Display for Ast {
+impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ast::Score(nodes) => {
+            Expr::Seq(nodes) => {
                 for node in nodes {
                     write!(f, "{}", node)?;
                 }
                 Ok(())
             }
-            Ast::Comment(comment) => {
+            Expr::Comment(comment) => {
                 writeln!(f, "# {}", comment)
             }
-            Ast::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
-            Ast::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
-            Ast::Apply(func, items, br) => {
-                let inner = items
-                    .iter()
-                    .map(|item| item.to_string())
-                    .collect::<Vec<_>>()
-                    .join("");
+            Expr::Keyed(p, inner) => {
+                writeln!(f, "key: {}", p)?;
+                write!(f, "{}", inner)
+            }
+            Expr::Scaled(s, inner) => {
+                writeln!(f, "scale: {}", s)?;
+                write!(f, "{}", inner)
+            }
+            Expr::Apply(func, inner, br) => {
+                let inner = inner.to_string();
                 // 小節の Display は末尾に " | " を出すので、関数の中では
                 // 最後の区切りを落として `pow(C | E D)` の形に揃える
                 let inner = inner.trim_end();
@@ -45,7 +47,7 @@ impl Display for Ast {
                     write!(f, " ")
                 }
             }
-            Ast::Measure(nodes, br) => {
+            Expr::Measure(nodes, br) => {
                 write!(
                     f,
                     "{}",
@@ -155,7 +157,13 @@ mod tests {
 
     fn roundtrip(code: &str) -> String {
         let ast = RechordImporter.import(&format!("{}\n", code)).unwrap();
-        format!("{}", ast).trim_end().to_string()
+        format!("{}", ast)
+            .lines()
+            .map(|l| l.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim_end()
+            .to_string()
     }
 
     #[test]
@@ -168,12 +176,18 @@ mod tests {
     fn test_oct_roundtrip() {
         assert_eq!(roundtrip("oct(A@6 | D@5)"), "oct(A@6 | D@5)");
         assert_eq!(roundtrip("oct(A)"), "oct(A)");
-        assert_eq!(roundtrip("pat(\"oxox\", oct(A@6))"), "pat(\"oxox\", oct(A@6))");
+        assert_eq!(
+            roundtrip("pat(\"oxox\", oct(A@6))"),
+            "pat(\"oxox\", oct(A@6))"
+        );
     }
 
     #[test]
     fn test_pat_roundtrip() {
-        assert_eq!(roundtrip("pat(\"o.o.oxox\", C | E D)"), "pat(\"o.o.oxox\", C | E D)");
+        assert_eq!(
+            roundtrip("pat(\"o.o.oxox\", C | E D)"),
+            "pat(\"o.o.oxox\", C | E D)"
+        );
     }
 
     #[test]
@@ -183,7 +197,10 @@ mod tests {
 
     #[test]
     fn test_apply_keeps_line_breaks_roundtrip() {
-        assert_eq!(roundtrip("pow(C)\npat(\"oo\", D)"), "pow(C)\npat(\"oo\", D)");
+        assert_eq!(
+            roundtrip("pow(C)\npat(\"oo\", D)"),
+            "pow(C)\npat(\"oo\", D)"
+        );
     }
 
     #[test]
@@ -196,5 +213,66 @@ mod tests {
         assert_eq!(roundtrip("A@6 |"), "A@6 |");
         assert_eq!(roundtrip("A/E@6 |"), "A/E@6 |");
         assert_eq!(roundtrip("pow(A@6 | D@5)"), "pow(A@6 | D@5)");
+    }
+
+    #[test]
+    fn test_key_directive_roundtrip() {
+        assert_eq!(roundtrip("key: C\nC | Am |"), "key: C\nC | Am |");
+    }
+
+    #[test]
+    fn test_scale_directive_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nscale: dorian\nI | IV |"),
+            "key: C\nscale: dorian\nI | IV |"
+        );
+    }
+
+    #[test]
+    fn test_scale_only_directive_roundtrip() {
+        assert_eq!(
+            roundtrip("scale: dorian\nC | Am |"),
+            "scale: dorian\nC | Am |"
+        );
+    }
+
+    #[test]
+    fn test_comment_and_key_roundtrip() {
+        assert_eq!(roundtrip("# memo\nkey: C\nC |"), "# memo\nkey: C\nC |");
+    }
+
+    #[test]
+    fn test_key_then_comment_roundtrip() {
+        assert_eq!(roundtrip("key: C\n# memo\nC |"), "key: C\n# memo\nC |");
+    }
+
+    #[test]
+    fn test_comment_mid_song_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nC |\n# memo\nAm |"),
+            "key: C\nC |\n# memo\nAm |"
+        );
+    }
+
+    #[test]
+    fn test_mid_song_key_change_roundtrip() {
+        assert_eq!(
+            roundtrip("key: C\nI |\nkey: D\nI |"),
+            "key: C\nI |\nkey: D\nI |"
+        );
+    }
+
+    #[test]
+    fn test_key_with_apply_roundtrip() {
+        assert_eq!(roundtrip("key: C\npow(C | E D)"), "key: C\npow(C | E D)");
+        assert_eq!(
+            roundtrip("key: C\npat(\"oxox\", C)"),
+            "key: C\npat(\"oxox\", C)"
+        );
+    }
+
+    #[test]
+    fn test_blank_line_roundtrip() {
+        assert_eq!(roundtrip("key: C\nC |\n\nAm |"), "key: C\nC |\nAm |");
     }
 }

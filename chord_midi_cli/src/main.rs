@@ -3,7 +3,7 @@ use chord_midi::edit::{set_scale, shift_key};
 use chord_midi::export::{Exporter, RechordExporter};
 use chord_midi::fingering;
 use chord_midi::import::{Importer, SexpImporter};
-use chord_midi::model::ast::Ast;
+use chord_midi::model::ast::Expr;
 use chord_midi::model::scale::Scale;
 use chord_midi::presets::PRESETS;
 use chord_midi::{export::MidiExporter, import::RechordImporter};
@@ -16,6 +16,16 @@ use std::{
 };
 
 mod diagram;
+
+#[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
+enum AstForm {
+    /// パース直後の構文木を JSON で
+    Syntax,
+    /// key/scale を解決し pow/oct を潰した後の木を JSON で
+    Expanded,
+    /// rechord 記法に書き戻したテキスト
+    Text,
+}
 
 #[derive(Debug, clap::Parser)]
 #[command(version, about = "rechord 記法のコード進行を MIDI などに変換する")]
@@ -40,9 +50,14 @@ struct Cli {
     /// スケールを張り替える (major, minor, dorian, ...)
     #[arg(long, value_name = "SCALE")]
     scale: Option<String>,
-    /// AST を度数表記のまま標準出力に書く
-    #[arg(long)]
-    print_ast: bool,
+    /// AST を表示する。syntax = 構文木 (既定), expanded = 解決後, text = rechord 記法
+    #[arg(
+        long,
+        value_name = "FORM",
+        num_args = 0..=1,
+        default_missing_value = "syntax"
+    )]
+    print_ast: Option<AstForm>,
     /// ギターの押さえ方を標準出力に書く
     #[arg(long)]
     fingering: bool,
@@ -95,7 +110,7 @@ fn edit_source(code: String, args: &Cli) -> Result<String> {
 }
 
 /// 押さえ方を小節ごとに書く。`|` で小節を区切り、入力の改行もそのまま出す
-fn print_fingerings(ast: Ast) -> Result<()> {
+fn print_fingerings(ast: Expr) -> Result<()> {
     let resolved = ast.resolve();
     for measure in fingering::measure_refs(&resolved)? {
         for chord in &measure.chords {
@@ -106,7 +121,7 @@ fn print_fingerings(ast: Ast) -> Result<()> {
     Ok(())
 }
 
-fn export(args: &Cli, path: &Path, ast: Ast) -> Result<()> {
+fn export(args: &Cli, path: &Path, ast: Expr) -> Result<()> {
     let mut out = OpenOptions::new()
         .create(true)
         .write(true)
@@ -144,9 +159,9 @@ fn main() -> Result<()> {
     };
     let code = edit_source(code, &args)?;
 
-    // Ast は Clone できず resolve() / export() が consume するので、
+    // Expr は Clone できず resolve() / export() が consume するので、
     // 必要になるたびに読み直す。パースは十分安い
-    let parse = || -> Result<Ast> {
+    let parse = || -> Result<Expr> {
         let importer = if sexp {
             Box::new(SexpImporter) as Box<dyn Importer>
         } else {
@@ -155,8 +170,15 @@ fn main() -> Result<()> {
         importer.import(code.as_str())
     };
 
-    if args.print_ast {
-        println!("{}", parse()?);
+    if let Some(form) = args.print_ast {
+        let ast = parse()?;
+        match form {
+            AstForm::Syntax => println!("{}", serde_json::to_string_pretty(&ast)?),
+            AstForm::Expanded => {
+                println!("{}", serde_json::to_string_pretty(&ast.resolve())?)
+            }
+            AstForm::Text => print!("{}", ast),
+        }
     }
     if args.fingering {
         print_fingerings(parse()?)?;
@@ -164,7 +186,7 @@ fn main() -> Result<()> {
     match &args.output {
         Some(path) => export(&args, path, parse()?)?,
         // 出力先も表示指定も無いときは、書き換えた入力をそのまま返す
-        None if !args.print_ast && !args.fingering => {
+        None if args.print_ast.is_none() && !args.fingering => {
             print!("{}", code);
             if !code.ends_with('\n') {
                 println!();

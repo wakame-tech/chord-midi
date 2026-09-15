@@ -3,17 +3,17 @@ use super::{
     SexpImporter,
 };
 use crate::model::{
-    ast::{Ast, ChordNode, Node},
+    ast::{ChordNode, Expr, Node},
     key::Key,
     pitch::{Accidental, Pitch},
-    scale::{Degree, Scale},
+    scale::Degree,
 };
 use anyhow::Result;
 use std::{collections::BTreeSet, str::FromStr};
 use symbolic_expressions::{parser::parse_str, Sexp};
 
 impl super::Importer for SexpImporter {
-    fn import(&self, code: &str) -> Result<Ast> {
+    fn import(&self, code: &str) -> Result<Expr> {
         let score = parse_str(code)?;
         parse_ast(&score)
     }
@@ -65,27 +65,28 @@ fn starts_with(sexp: &Sexp, tag: &str) -> bool {
     sexp.is_list() && sexp.list_name().ok() == Some(&tag.to_string())
 }
 
-fn parse_ast(sexp: &Sexp) -> Result<Ast> {
+fn parse_ast(sexp: &Sexp) -> Result<Expr> {
     match sexp {
-        // score(...: Measure) -> Score
+        // score(...: Measure) -> Seq
         Sexp::List(list) if starts_with(&sexp, "score") => {
             let measures = list[1..]
                 .iter()
-                .map(|ast| parse_ast(ast).map(Box::new))
+                .map(parse_ast)
                 .collect::<Result<Vec<_>>>()?;
-            Ok(Ast::Score(measures))
+            Ok(Expr::Seq(measures))
         }
-        // keyed(pitch: Pitch, measure: Measure) -> Measure
+        // keyed(pitch: Pitch, measure: Measure) -> Expr::Keyed
         Sexp::List(list) if starts_with(sexp, "keyed") => {
             let key = parse_key(list[1].string()?)?;
             let Key::Absolute(pitch) = key else {
                 return Err(anyhow::anyhow!("pitch must be absolute: {:?}", key));
             };
-            let measure = parse_ast(&list[2])?.into_pitch(pitch, Scale::Major);
-            Ok(measure)
+            // 解決は resolve() の仕事。ここでは包むだけ
+            let inner = parse_ast(&list[2])?;
+            Ok(Expr::Keyed(pitch, Box::new(inner)))
         }
         // (...: Node): Measure
-        Sexp::List(list) => Ok(Ast::Measure(
+        Sexp::List(list) => Ok(Expr::Measure(
             list.into_iter()
                 .map(parse_node)
                 .collect::<Result<Vec<_>>>()?,
@@ -99,7 +100,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Ast> {
 mod tests {
     use crate::{
         import::{Importer, SexpImporter},
-        model::ast::{Ast, ChordNode, Node},
+        model::ast::{ChordNode, Expr, Node},
         model::pitch::{Accidental, Pitch},
         model::scale::Degree,
     };
@@ -113,9 +114,9 @@ mod tests {
         let f = Node::Chord(ChordNode::absolute(Pitch::F));
         assert_eq!(
             SexpImporter.import("(score (C D) (E F))")?,
-            Ast::Score(vec![
-                Box::new(Ast::Measure(vec![c, d], false)),
-                Box::new(Ast::Measure(vec![e, f], false))
+            Expr::Seq(vec![
+                Expr::Measure(vec![c, d], false),
+                Expr::Measure(vec![e, f], false)
             ])
         );
 
@@ -124,15 +125,75 @@ mod tests {
         let iv = Node::Chord(ChordNode::relative(Degree(4, Accidental::Natural)));
         assert_eq!(
             SexpImporter.import("(score (I# IV))")?,
-            Ast::Score(vec![Box::new(Ast::Measure(vec![is, iv], false))])
+            Expr::Seq(vec![Expr::Measure(vec![is, iv], false)])
         );
         Ok(())
     }
 
     #[test]
     fn test_modifier() -> Result<()> {
+        // keyed はもう parse 時に解決しない (Expr::Keyed のまま残る) ので、
+        // 生の Expr は (C F)(D G) と構造が異なる。
+        // 最終的な音が同じであることは resolve() 後に確認する
         let score = SexpImporter.import("(score (keyed C (I IV)) (keyed D (I IV)))")?;
-        assert_eq!(score, SexpImporter.import("(score (C F) (D G))")?);
+        assert_eq!(
+            score.resolve(),
+            SexpImporter.import("(score (C F) (D G))")?.resolve()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_keyed_becomes_keyed_expr() -> Result<()> {
+        use crate::model::ast::Expr;
+        use crate::model::pitch::Pitch;
+        let ast = SexpImporter.import("(score (keyed C (I IV)))")?;
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
+        assert!(
+            matches!(&items[0], Expr::Keyed(Pitch::C, _)),
+            "keyed は Expr::Keyed になる: {:?}",
+            items[0]
+        );
+        Ok(())
+    }
+
+    /// keyed が入れ子になった場合、内側の keyed が以降のスコープで
+    /// 外側の tonic を上書きする (rechord の `key:` と同じ挙動)
+    #[test]
+    fn test_nested_keyed_inner_wins() -> Result<()> {
+        use crate::model::ast::{ChordNode, Node};
+        use crate::model::pitch::Pitch;
+        let ast = SexpImporter.import("(score (keyed C (keyed D (I IV))))")?;
+        let resolved = ast.resolve();
+        let expected = Expr::Seq(vec![Expr::Measure(
+            vec![
+                Node::Chord(ChordNode::absolute(Pitch::D)),
+                Node::Chord(ChordNode::absolute(Pitch::G)),
+            ],
+            false,
+        )]);
+        assert_eq!(resolved, expected);
+        Ok(())
+    }
+
+    /// (score (keyed C (I IV))) を resolve() した結果、度数が実音になること。
+    /// keyed のパース時解決をやめても最終的な音は変わらないことを固定する
+    #[test]
+    fn test_keyed_resolves_to_absolute_pitches() -> Result<()> {
+        use crate::model::ast::{ChordNode, Node};
+        use crate::model::pitch::Pitch;
+        let ast = SexpImporter.import("(score (keyed C (I IV)))")?;
+        let resolved = ast.resolve();
+        let expected = Expr::Seq(vec![Expr::Measure(
+            vec![
+                Node::Chord(ChordNode::absolute(Pitch::C)),
+                Node::Chord(ChordNode::absolute(Pitch::F)),
+            ],
+            false,
+        )]);
+        assert_eq!(resolved, expected);
         Ok(())
     }
 }

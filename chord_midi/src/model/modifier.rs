@@ -1,7 +1,8 @@
 use super::scale::Degree;
+use serde::Serialize;
 use std::fmt::Display;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub enum Modifier {
     Major(u8),
     Minor(u8),

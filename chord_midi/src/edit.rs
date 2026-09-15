@@ -1,5 +1,5 @@
 use crate::import::{Importer, RechordImporter};
-use crate::model::ast::{Ast, ChordNode, Directive, Node};
+use crate::model::ast::{ChordNode, Expr, Node};
 use crate::model::key::Key;
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
@@ -49,28 +49,26 @@ struct Seen {
     key_directive: bool,
 }
 
-fn shift_ast(ast: &mut Ast, delta: i8, seen: &mut Seen) {
+fn shift_ast(ast: &mut Expr, delta: i8, seen: &mut Seen) {
     match ast {
-        Ast::Score(items) => {
+        Expr::Seq(items) => {
             for item in items {
                 shift_ast(item, delta, seen);
             }
         }
-        Ast::Directive(Directive::Key(p)) => {
+        Expr::Keyed(p, inner) => {
             seen.key_directive = true;
             *p = shift_pitch(*p, delta);
+            shift_ast(inner, delta, seen);
         }
-        Ast::Measure(nodes, _) => {
+        Expr::Scaled(_, inner) => shift_ast(inner, delta, seen),
+        Expr::Measure(nodes, _) => {
             for node in nodes {
                 shift_node(node, delta, seen);
             }
         }
-        Ast::Apply(_, items, _) => {
-            for item in items {
-                shift_ast(item, delta, seen);
-            }
-        }
-        Ast::Directive(Directive::Scale(_)) | Ast::Comment(_) => {}
+        Expr::Apply(_, inner, _) => shift_ast(inner, delta, seen),
+        Expr::Comment(_) => {}
     }
 }
 
@@ -101,7 +99,10 @@ fn shift_chord_key(key: &mut Key, delta: i8, seen: &mut Seen) {
 /// パースできないときのフォールバック。`key:` の行だけを書き換える
 fn shift_key_directive(text: &str, delta: i8) -> String {
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-    if let Some(line) = lines.iter_mut().find(|l| l.trim_start().starts_with("key:")) {
+    if let Some(line) = lines
+        .iter_mut()
+        .find(|l| l.trim_start().starts_with("key:"))
+    {
         if let Some((_, rest)) = line.split_once("key:") {
             if let Ok(p) = Pitch::from_str(rest.trim()) {
                 *line = format!("key: {}", shift_pitch(p, delta));
@@ -119,7 +120,10 @@ fn shift_key_directive(text: &str, delta: i8) -> String {
 /// `key:` line (or at the top if there is no key line).
 pub fn set_scale(text: &str, scale: Scale) -> String {
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-    if let Some(line) = lines.iter_mut().find(|l| l.trim_start().starts_with("scale:")) {
+    if let Some(line) = lines
+        .iter_mut()
+        .find(|l| l.trim_start().starts_with("scale:"))
+    {
         *line = format!("scale: {}", scale);
         lines.join("\n")
     } else {
@@ -175,10 +179,7 @@ mod tests {
 
     #[test]
     fn test_shift_key_keeps_multiple_lines() {
-        assert_eq!(
-            shift_key("C | Am |\nF | G |", 1),
-            "C# | A#m |\nF# | G# |"
-        );
+        assert_eq!(shift_key("C | Am |\nF | G |", 1), "C# | A#m |\nF# | G# |");
     }
 
     #[test]
@@ -186,10 +187,7 @@ mod tests {
         // 何度押しても書式が崩れないこと
         let once = shift_key("# memo\nkey: C\nscale: dorian\nC |", 1);
         assert_eq!(once, "# memo\nkey: C#\nscale: dorian\nC# |");
-        assert_eq!(
-            shift_key(&once, -1),
-            "# memo\nkey: C\nscale: dorian\nC |"
-        );
+        assert_eq!(shift_key(&once, -1), "# memo\nkey: C\nscale: dorian\nC |");
     }
 
     #[test]
@@ -200,12 +198,18 @@ mod tests {
 
     #[test]
     fn test_set_scale_existing() {
-        assert_eq!(set_scale("key: C\nscale: major\nI |", Scale::Dorian), "key: C\nscale: dorian\nI |");
+        assert_eq!(
+            set_scale("key: C\nscale: major\nI |", Scale::Dorian),
+            "key: C\nscale: dorian\nI |"
+        );
     }
 
     #[test]
     fn test_set_scale_absent_after_key() {
-        assert_eq!(set_scale("key: C\nI |", Scale::Lydian), "key: C\nscale: lydian\nI |");
+        assert_eq!(
+            set_scale("key: C\nI |", Scale::Lydian),
+            "key: C\nscale: lydian\nI |"
+        );
     }
 
     #[test]
@@ -233,5 +237,43 @@ mod tests {
     fn test_shift_key_keeps_root_string() {
         assert_eq!(shift_key("pow(A@6)", 1), "pow(A#@6)");
         assert_eq!(shift_key("pow(A#@6)", -1), "pow(A@6)");
+    }
+
+    #[test]
+    fn test_shift_key_transposes_every_key_directive() {
+        // 途中転調も両方ずれる
+        assert_eq!(
+            shift_key("key: C\nI |\nkey: D\nI |", 1),
+            "key: C#\nI |\nkey: D#\nI |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_scale_directive_survives() {
+        assert_eq!(
+            shift_key("key: C\nscale: dorian\nI |", 1),
+            "key: C#\nscale: dorian\nI |"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_transposes_inside_pow_under_key() {
+        // Keyed -> Apply -> Measure の2段階の潜り込みでも移調される
+        assert_eq!(
+            shift_key("key: C\npow(C | E D)", 1),
+            "key: C#\npow(C# | F D#)"
+        );
+        assert_eq!(
+            shift_key("key: C#\npow(C# | F D#)", -1),
+            "key: C\npow(C | E D)"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_round_trips_with_mid_song_key_change_and_apply() {
+        // 途中転調 + Apply を含む形でも往復で元に戻ること
+        let original = "key: C\npow(C | E D)\nkey: D\nI |";
+        let shifted = shift_key(original, 1);
+        assert_eq!(shift_key(&shifted, -1), original);
     }
 }

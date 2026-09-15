@@ -27,6 +27,22 @@ fn new_blob(arr: &[u8], mime_type: &str) -> Blob {
     Blob::new_with_blob_sequence_and_options(&parts, &options).unwrap()
 }
 
+/// 「解釈結果」に出す3つの形。CLI の `--print-ast` と同じ区分
+#[derive(Clone, Copy, PartialEq)]
+enum AstForm {
+    Syntax,
+    Expanded,
+    Text,
+}
+
+/// 解釈結果の3形。どれも文字列なので、表示側は選ぶだけ
+#[derive(Clone, Default, PartialEq)]
+struct AstViews {
+    syntax: String,
+    expanded: String,
+    text: String,
+}
+
 /// 入力の末尾に1行足す。空なら line だけ、それ以外は改行してから足す。
 /// 進行プリセットのボタンと運指タブの挿入、両方が使う共通の結合規則
 fn append_line(cur: &str, line: &str) -> String {
@@ -37,22 +53,32 @@ fn append_line(cur: &str, line: &str) -> String {
     }
 }
 
-fn compile(input: &str, bpm: u8) -> Result<(String, Vec<MeasureRef>, Vec<u8>), String> {
+fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>), String> {
     let ast = RechordImporter
         .import(&format!("{}\n", input))
         .map_err(|e| e.to_string())?;
-    // AST 表示は度数表記のまま出したいので resolve する前に文字列化する
-    let ast_str = format!("{}", ast);
+    // テキスト表示は度数表記のまま出したいので resolve する前に文字列化する
+    let text = format!("{}", ast);
+    let syntax = serde_json::to_string_pretty(&ast).map_err(|e| e.to_string())?;
     // resolve() も export() も self を consume するので、解決済みの AST を
     // 使い回す。MidiExporter は内部でもう一度 resolve() を呼ぶが冪等。
     let resolved = ast.resolve();
+    let expanded = serde_json::to_string_pretty(&resolved).map_err(|e| e.to_string())?;
     let measures = fingering::measure_refs(&resolved).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(Vec::new());
     MidiExporter { bpm }
         .export(&mut writer, resolved)
         .map_err(|e| e.to_string())?;
     let bytes = writer.into_inner().map_err(|e| e.to_string())?;
-    Ok((ast_str, measures, bytes))
+    Ok((
+        AstViews {
+            syntax,
+            expanded,
+            text,
+        },
+        measures,
+        bytes,
+    ))
 }
 
 /// 画面のタブ。プレイヤーはタブの外に置くので、切り替えても再生は止まらない
@@ -68,7 +94,8 @@ fn app() -> Html {
     let input = use_state(String::new);
     let bpm = use_state(|| 120u8);
     let loop_on = use_state(|| false);
-    let result = use_state(String::new);
+    let result = use_state(AstViews::default);
+    let ast_form = use_state(|| AstForm::Syntax);
     let measures = use_state(Vec::<MeasureRef>::new);
     let tab = use_state(|| Tab::Editor);
     // 運指タブで押さえた形。タブを離れても消さないので App が持つ
@@ -98,7 +125,7 @@ fn app() -> Html {
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
-                result.set(String::new());
+                result.set(AstViews::default());
                 measures.set(Vec::new());
                 let old_pending = pending.borrow_mut().take();
                 if let Some(old) = old_pending {
@@ -115,13 +142,12 @@ fn app() -> Html {
                 return;
             }
             match compile(input, *bpm) {
-                Ok((ast_str, ms, bytes)) => {
+                Ok((views, ms, bytes)) => {
                     error.set(String::new());
-                    result.set(ast_str);
+                    result.set(views);
                     measures.set(ms);
                     let blob = new_blob(&bytes, "audio/midi");
-                    let object_url =
-                        web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                    let object_url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
                     if *playing.borrow() {
                         let old_pending = pending.borrow_mut().replace(object_url);
                         if let Some(old) = old_pending {
@@ -182,8 +208,8 @@ fn app() -> Html {
                     let cb = Closure::<dyn FnMut()>::new(move || {
                         *playing.borrow_mut() = true;
                     });
-                    let _ = el
-                        .add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
+                    let _ =
+                        el.add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
                     cb.forget();
                 }
                 {
@@ -203,8 +229,8 @@ fn app() -> Html {
                             url.set(next);
                         }
                     });
-                    let _ = el
-                        .add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
+                    let _ =
+                        el.add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
                     cb.forget();
                 }
             }
@@ -268,8 +294,7 @@ fn app() -> Html {
     let cards = {
         // 出現するコード名ごとに色を割り当てる。同じコードは常に同じ色
         const PALETTE: [&str; 8] = [
-            "#c0392b", "#d35400", "#b7950b", "#1e8449", "#1f618d", "#6c3483", "#a93226",
-            "#117864",
+            "#c0392b", "#d35400", "#b7950b", "#1e8449", "#1f618d", "#6c3483", "#a93226", "#117864",
         ];
         let mut labels: Vec<String> = Vec::new();
         let mut rows: Vec<Html> = Vec::new();
@@ -426,7 +451,31 @@ fn app() -> Html {
 
             <details class="ast">
                 <summary>{"解釈結果"}</summary>
-                <pre>{(*result).clone()}</pre>
+                <div class="ast-forms">
+                    { for [
+                        (AstForm::Syntax, "構文"),
+                        (AstForm::Expanded, "展開後"),
+                        (AstForm::Text, "テキスト"),
+                    ].into_iter().map(|(form, label)| {
+                        let ast_form = ast_form.clone();
+                        let is_active = *ast_form == form;
+                        let onclick = Callback::from(move |_| ast_form.set(form));
+                        html! {
+                            <button
+                                class={classes!("btn", "btn-icon",
+                                    is_active.then_some("is-active"))}
+                                {onclick}
+                            >{label}</button>
+                        }
+                    }) }
+                </div>
+                <pre>{
+                    match *ast_form {
+                        AstForm::Syntax => result.syntax.clone(),
+                        AstForm::Expanded => result.expanded.clone(),
+                        AstForm::Text => result.text.clone(),
+                    }
+                }</pre>
             </details>
         </>
     };

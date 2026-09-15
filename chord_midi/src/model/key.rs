@@ -2,9 +2,10 @@ use super::{
     pitch::Pitch,
     scale::{Degree, Scale},
 };
+use serde::Serialize;
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum Key {
     Absolute(Pitch),
     Relative(Degree),
@@ -67,11 +68,20 @@ mod tests {
     #[test]
     fn test_into_pitch_with_scale() {
         let k = Key::Relative(Degree(3, Accidental::Natural));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Major), Key::Absolute(Pitch::E));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Major),
+            Key::Absolute(Pitch::E)
+        );
         let k = Key::Relative(Degree(3, Accidental::Natural));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Dorian), Key::Absolute(Pitch::Ds));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Dorian),
+            Key::Absolute(Pitch::Ds)
+        );
         let k = Key::Relative(Degree(3, Accidental::Flat));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Major), Key::Absolute(Pitch::Ds));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Major),
+            Key::Absolute(Pitch::Ds)
+        );
     }
 
     #[test]

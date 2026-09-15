@@ -594,6 +594,32 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     white-space: pre-wrap;
 }
 
+/* 解釈結果の表示3択。.btn-icon の正方形を打ち消してラベル幅に合わせる */
+.ast-forms {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.ast-forms .btn {
+    width: auto;
+    padding: 0 10px;
+    font-size: 12px;
+}
+
+/* .is-active の見た目は .tab 側にしか無いので、ここで別に当てる */
+.ast-forms .btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ast-forms .btn.is-active:hover {
+    background: #1a5378;
+    border-color: #1a5378;
+}
+
 .empty {
     color: var(--muted);
     text-align: center;

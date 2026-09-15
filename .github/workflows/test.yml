@@ -1,0 +1,17 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cd chord_midi_web && cargo fmt -- --check
+      - run: cargo test --workspace
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cd chord_midi_web && cargo check --target wasm32-unknown-unknown

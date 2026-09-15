@@ -1,4 +1,4 @@
-use crate::model::ast::Ast;
+use crate::model::ast::Expr;
 
 mod chord;
 mod parser_util;
@@ -6,7 +6,7 @@ mod rechord;
 mod sexp;
 
 pub trait Importer {
-    fn import(&self, code: &str) -> anyhow::Result<Ast>;
+    fn import(&self, code: &str) -> anyhow::Result<Expr>;
 }
 
 #[derive(Debug)]

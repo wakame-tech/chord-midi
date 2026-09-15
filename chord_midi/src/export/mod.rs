@@ -1,11 +1,11 @@
-use crate::model::ast::Ast;
+use crate::model::ast::Expr;
 use std::io::Write;
 
 mod midi;
 mod rechord;
 
 pub trait Exporter {
-    fn export(&self, f: &mut impl Write, ast: Ast) -> anyhow::Result<()>;
+    fn export(&self, f: &mut impl Write, ast: Expr) -> anyhow::Result<()>;
 }
 
 #[derive(Debug)]
