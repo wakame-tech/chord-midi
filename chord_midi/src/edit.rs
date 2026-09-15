@@ -285,4 +285,118 @@ mod tests {
         let shifted = shift_key(original, 1);
         assert_eq!(shift_key(&shifted, -1), original);
     }
+
+    #[test]
+    #[ignore = "Task 6 待ち: Ref の Display が末尾に `Ref(\"$riff\")` -> `$riff ` と\
+        末尾空白を出し、続く `|` を書き戻すと `$riff D# |` になり `|` が落ちる \
+        (現在の実際の出力: \"$riff = C# | F |\\n$riff D# |\")。\
+        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
+    fn test_shift_key_transposes_inside_define() {
+        assert_eq!(
+            shift_key("$riff = C | E |\n$riff | D |", 1),
+            "$riff = C# | F |\n$riff | D# |"
+        );
+    }
+
+    #[test]
+    #[ignore = "Task 6 待ち: Ref の Display が末尾に空白を出すため \
+        `pat($eight, C#)` が `pat($eight , C#)` になる。\
+        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
+    fn test_shift_key_keeps_pattern_define() {
+        // リズムの定義は移調の対象外
+        assert_eq!(
+            shift_key("$eight = \"o.o.o.o.\"\npat($eight, C)", 1),
+            "$eight = \"o.o.o.o.\"\npat($eight, C#)"
+        );
+    }
+
+    #[test]
+    #[ignore = "Task 6 待ち: Repeat の暫定 Display が壊れていて \
+        `C x4 |` が `C# |\\n x4` になる。\
+        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
+    fn test_shift_key_transposes_inside_repeat() {
+        assert_eq!(shift_key("C x4 |", 1), "C# x4 |");
+        assert_eq!(shift_key("(C | Am) x2", 1), "(C# | A#m) x2");
+    }
+
+    #[test]
+    #[ignore = "Task 6 待ち: Ref の Display の末尾空白と Repeat の暫定 Display の \
+        組み合わせで `$a x2` が `$a  x2` (二重空白) になり round trip が崩れる。\
+        Task 6 が Display を直したらこの #[ignore] を外すこと。"]
+    fn test_shift_key_round_trip_with_defines() {
+        let src = "key: C\n$a = I | IV |\n$a x2";
+        assert_eq!(shift_key(&shift_key(src, 1), -1), src);
+    }
+
+    #[test]
+    fn test_shift_ast_descends_into_define_and_repeat() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Node};
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        let mut ast = RechordImporter
+            .import("$riff = C | E |\n$riff x2 | D |\n")
+            .unwrap();
+        let mut seen = Seen::default();
+        shift_ast(&mut ast, 1, &mut seen);
+
+        fn pitches(e: &Expr, out: &mut Vec<Pitch>) {
+            match e {
+                Expr::Seq(items) => items.iter().for_each(|i| pitches(i, out)),
+                Expr::Define(_, body) => pitches(body, out),
+                Expr::Repeat(inner, _) => pitches(inner, out),
+                Expr::Apply(_, inner, _) => pitches(inner, out),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => pitches(inner, out),
+                Expr::Measure(nodes, _) => {
+                    for n in nodes {
+                        if let Node::Chord(c) = n {
+                            if let Key::Absolute(p) = c.key {
+                                out.push(p);
+                            }
+                        }
+                    }
+                }
+                Expr::Comment(_) | Expr::Pattern(_) | Expr::Ref(_) => {}
+            }
+        }
+
+        let mut got = Vec::new();
+        pitches(&ast, &mut got);
+        // 定義の本体 C E が C# F に、外の D が D# に
+        assert_eq!(got, vec![Pitch::Cs, Pitch::F, Pitch::Ds]);
+    }
+
+    #[test]
+    fn test_shift_ast_sets_relative_seen_inside_define() {
+        // 定義の本体が度数表記のときも seen.relative が立つこと。
+        // これが立たないと、度数だけの定義を移調したときに key: が
+        // 補われなくなってしまう
+        use crate::import::{Importer, RechordImporter};
+
+        let mut ast = RechordImporter.import("$a = I | IV |\n$a\n").unwrap();
+        let mut seen = Seen::default();
+        shift_ast(&mut ast, 1, &mut seen);
+        assert!(seen.relative);
+        assert!(!seen.key_directive);
+    }
+
+    #[test]
+    fn test_shift_key_inserts_key_when_only_define_is_relative() {
+        // 度数表記が定義の中にしか無くても key: が補われること
+        assert_eq!(
+            shift_key("$a = I | IV |\n$a", 1),
+            "key: C#\n$a = I | IV |\n$a"
+        );
+    }
+
+    #[test]
+    fn test_shift_key_preserves_key_directive_scope_across_ref() {
+        // key: のスコープは「使う位置」で効く。度数表記の定義の本体は
+        // 移調で変わらず、各 key: だけがずれる
+        assert_eq!(
+            shift_key("key: C\n$a = I | IV |\nkey: D\n$a", 1),
+            "key: C#\n$a = I | IV |\nkey: D#\n$a"
+        );
+    }
 }
