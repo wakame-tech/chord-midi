@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Expr, Beat, ChordNode, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
@@ -176,12 +176,18 @@ mod tests {
     fn test_oct_roundtrip() {
         assert_eq!(roundtrip("oct(A@6 | D@5)"), "oct(A@6 | D@5)");
         assert_eq!(roundtrip("oct(A)"), "oct(A)");
-        assert_eq!(roundtrip("pat(\"oxox\", oct(A@6))"), "pat(\"oxox\", oct(A@6))");
+        assert_eq!(
+            roundtrip("pat(\"oxox\", oct(A@6))"),
+            "pat(\"oxox\", oct(A@6))"
+        );
     }
 
     #[test]
     fn test_pat_roundtrip() {
-        assert_eq!(roundtrip("pat(\"o.o.oxox\", C | E D)"), "pat(\"o.o.oxox\", C | E D)");
+        assert_eq!(
+            roundtrip("pat(\"o.o.oxox\", C | E D)"),
+            "pat(\"o.o.oxox\", C | E D)"
+        );
     }
 
     #[test]
@@ -191,7 +197,10 @@ mod tests {
 
     #[test]
     fn test_apply_keeps_line_breaks_roundtrip() {
-        assert_eq!(roundtrip("pow(C)\npat(\"oo\", D)"), "pow(C)\npat(\"oo\", D)");
+        assert_eq!(
+            roundtrip("pow(C)\npat(\"oo\", D)"),
+            "pow(C)\npat(\"oo\", D)"
+        );
     }
 
     #[test]
@@ -221,7 +230,10 @@ mod tests {
 
     #[test]
     fn test_scale_only_directive_roundtrip() {
-        assert_eq!(roundtrip("scale: dorian\nC | Am |"), "scale: dorian\nC | Am |");
+        assert_eq!(
+            roundtrip("scale: dorian\nC | Am |"),
+            "scale: dorian\nC | Am |"
+        );
     }
 
     #[test]
@@ -252,10 +264,7 @@ mod tests {
 
     #[test]
     fn test_key_with_apply_roundtrip() {
-        assert_eq!(
-            roundtrip("key: C\npow(C | E D)"),
-            "key: C\npow(C | E D)"
-        );
+        assert_eq!(roundtrip("key: C\npow(C | E D)"), "key: C\npow(C | E D)");
         assert_eq!(
             roundtrip("key: C\npat(\"oxox\", C)"),
             "key: C\npat(\"oxox\", C)"

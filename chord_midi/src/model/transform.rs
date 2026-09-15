@@ -1,5 +1,5 @@
 use crate::{
-    model::ast::{Expr, ChordNode, Func, Node},
+    model::ast::{ChordNode, Expr, Func, Node},
     model::modifier::Modifier,
     model::pitch::Pitch,
     model::scale::Scale,
@@ -47,11 +47,9 @@ impl Expr {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Expr::Apply(func, inner, br) => Expr::Apply(
-                func,
-                Box::new(inner.into_degree(tonic, scale)),
-                br,
-            ),
+            Expr::Apply(func, inner, br) => {
+                Expr::Apply(func, Box::new(inner.into_degree(tonic, scale)), br)
+            }
             // into_degree は into_pitch の逆変換なので、包みは消さずに残す
             Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
             Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
@@ -82,11 +80,9 @@ impl Expr {
                     .collect::<Vec<_>>(),
                 br,
             ),
-            Expr::Apply(func, inner, br) => Expr::Apply(
-                func,
-                Box::new(inner.into_pitch(tonic, scale)),
-                br,
-            ),
+            Expr::Apply(func, inner, br) => {
+                Expr::Apply(func, Box::new(inner.into_pitch(tonic, scale)), br)
+            }
             // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
             Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
             Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),
@@ -147,10 +143,7 @@ fn splice(expr: Expr) -> Vec<Expr> {
 fn desugar_shapes(ast: Expr) -> Vec<Expr> {
     match ast {
         Expr::Seq(items) => vec![Expr::Seq(
-            items
-                .into_iter()
-                .flat_map(desugar_shapes)
-                .collect(),
+            items.into_iter().flat_map(desugar_shapes).collect(),
         )],
         Expr::Apply(Func::Pow, inner, _) => desugar_shapes(*inner)
             .into_iter()
@@ -192,11 +185,7 @@ fn mark(ast: Expr, modifier: Modifier) -> Expr {
                 .map(|item| mark(item, modifier.clone()))
                 .collect(),
         ),
-        Expr::Apply(func, inner, br) => Expr::Apply(
-            func,
-            Box::new(mark(*inner, modifier)),
-            br,
-        ),
+        Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(mark(*inner, modifier)), br),
         other => other,
     }
 }
@@ -219,7 +208,7 @@ fn mark_chord(mut chord: ChordNode, modifier: Modifier) -> ChordNode {
 #[cfg(test)]
 mod tests {
     use crate::model::{
-        ast::{Expr, ChordNode, Node},
+        ast::{ChordNode, Expr, Node},
         pitch::Pitch,
     };
 
@@ -247,7 +236,9 @@ mod tests {
         use crate::model::ast::{Expr, Node};
         let ast = RechordImporter.import("key: C\nV7 |\n").unwrap();
         let resolved = ast.resolve();
-        let Expr::Seq(items) = &resolved else { panic!() };
+        let Expr::Seq(items) = &resolved else {
+            panic!()
+        };
         let mut found = false;
         for it in items {
             // directives stripped: only Measure should remain
@@ -336,11 +327,15 @@ mod tests {
 
         fn semitones(code: &str) -> Vec<u8> {
             let ast = RechordImporter.import(code).unwrap().resolve();
-            let Expr::Seq(items) = &ast else { panic!("not a score") };
+            let Expr::Seq(items) = &ast else {
+                panic!("not a score")
+            };
             let Expr::Measure(nodes, _) = &items[0] else {
                 panic!("pow should be desugared into a measure: {:?}", items[0])
             };
-            let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+            let Node::Chord(c) = &nodes[0] else {
+                panic!("not a chord")
+            };
             c.to_chord().unwrap().semitones.into_iter().collect()
         }
 
@@ -359,9 +354,15 @@ mod tests {
         use crate::model::pitch::Pitch;
 
         let ast = RechordImporter.import("pow(C/E)\n").unwrap().resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
-        let Expr::Measure(nodes, _) = &items[0] else { panic!("not a measure") };
-        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Measure(nodes, _) = &items[0] else {
+            panic!("not a measure")
+        };
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
         assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
     }
 
@@ -370,7 +371,9 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
 
         let ast = RechordImporter.import("pow(C | E D)\n").unwrap().resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
         // Apply は消えて2つの Measure になる
         assert_eq!(items.len(), 2);
         assert!(items.iter().all(|i| matches!(i, Expr::Measure(_, _))));
@@ -381,8 +384,13 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Func;
 
-        let ast = RechordImporter.import("pat(\"oxox\", C)\n").unwrap().resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let ast = RechordImporter
+            .import("pat(\"oxox\", C)\n")
+            .unwrap()
+            .resolve();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
         // リズムは MIDI の関心なので resolve では展開しない
         assert!(matches!(&items[0], Expr::Apply(Func::Pat(_), _, _)));
     }
@@ -396,15 +404,27 @@ mod tests {
             .import("pat(\"oxox\", pow(C))\n")
             .unwrap()
             .resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
-        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
+            panic!("not a pat")
+        };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         let Expr::Measure(nodes, _) = &inner[0] else {
             panic!("pow should be desugared inside pat: {:?}", inner[0])
         };
-        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
         assert_eq!(
-            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            c.to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect::<Vec<_>>(),
             vec![0, 7]
         );
     }
@@ -420,15 +440,27 @@ mod tests {
             .import("pow(pat(\"oxox\", C))\n")
             .unwrap()
             .resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
-        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
+            panic!("not a pat")
+        };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         let Expr::Measure(nodes, _) = &inner[0] else {
             panic!("not a measure: {:?}", inner[0])
         };
-        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
         assert_eq!(
-            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            c.to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect::<Vec<_>>(),
             vec![0, 7]
         );
     }
@@ -440,11 +472,15 @@ mod tests {
 
         fn semitones(code: &str) -> Vec<u8> {
             let ast = RechordImporter.import(code).unwrap().resolve();
-            let Expr::Seq(items) = &ast else { panic!("not a score") };
+            let Expr::Seq(items) = &ast else {
+                panic!("not a score")
+            };
             let Expr::Measure(nodes, _) = &items[0] else {
                 panic!("oct should be desugared into a measure: {:?}", items[0])
             };
-            let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+            let Node::Chord(c) = &nodes[0] else {
+                panic!("not a chord")
+            };
             c.to_chord().unwrap().semitones.into_iter().collect()
         }
 
@@ -463,9 +499,15 @@ mod tests {
         use crate::model::pitch::Pitch;
 
         let ast = RechordImporter.import("oct(A/E)\n").unwrap().resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
-        let Expr::Measure(nodes, _) = &items[0] else { panic!("not a measure") };
-        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Measure(nodes, _) = &items[0] else {
+            panic!("not a measure")
+        };
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
         assert_eq!(c.on, Some(Key::Absolute(Pitch::E)));
     }
 
@@ -478,15 +520,27 @@ mod tests {
             .import("pat(\"oxox\", oct(A))\n")
             .unwrap()
             .resolve();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
-        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else { panic!("not a pat") };
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
+            panic!("not a pat")
+        };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         let Expr::Measure(nodes, _) = &inner[0] else {
             panic!("oct should be desugared inside pat: {:?}", inner[0])
         };
-        let Node::Chord(c) = &nodes[0] else { panic!("not a chord") };
+        let Node::Chord(c) = &nodes[0] else {
+            panic!("not a chord")
+        };
         assert_eq!(
-            c.to_chord().unwrap().semitones.into_iter().collect::<Vec<_>>(),
+            c.to_chord()
+                .unwrap()
+                .semitones
+                .into_iter()
+                .collect::<Vec<_>>(),
             vec![0]
         );
     }

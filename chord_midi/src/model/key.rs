@@ -68,11 +68,20 @@ mod tests {
     #[test]
     fn test_into_pitch_with_scale() {
         let k = Key::Relative(Degree(3, Accidental::Natural));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Major), Key::Absolute(Pitch::E));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Major),
+            Key::Absolute(Pitch::E)
+        );
         let k = Key::Relative(Degree(3, Accidental::Natural));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Dorian), Key::Absolute(Pitch::Ds));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Dorian),
+            Key::Absolute(Pitch::Ds)
+        );
         let k = Key::Relative(Degree(3, Accidental::Flat));
-        assert_eq!(k.into_pitch(Pitch::C, Scale::Major), Key::Absolute(Pitch::Ds));
+        assert_eq!(
+            k.into_pitch(Pitch::C, Scale::Major),
+            Key::Absolute(Pitch::Ds)
+        );
     }
 
     #[test]

@@ -3,7 +3,7 @@ use super::{
     SexpImporter,
 };
 use crate::model::{
-    ast::{Expr, ChordNode, Node},
+    ast::{ChordNode, Expr, Node},
     key::Key,
     pitch::{Accidental, Pitch},
     scale::Degree,
@@ -100,7 +100,7 @@ fn parse_ast(sexp: &Sexp) -> Result<Expr> {
 mod tests {
     use crate::{
         import::{Importer, SexpImporter},
-        model::ast::{Expr, ChordNode, Node},
+        model::ast::{ChordNode, Expr, Node},
         model::pitch::{Accidental, Pitch},
         model::scale::Degree,
     };
@@ -148,7 +148,9 @@ mod tests {
         use crate::model::ast::Expr;
         use crate::model::pitch::Pitch;
         let ast = SexpImporter.import("(score (keyed C (I IV)))")?;
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         assert!(
             matches!(&items[0], Expr::Keyed(Pitch::C, _)),
             "keyed は Expr::Keyed になる: {:?}",

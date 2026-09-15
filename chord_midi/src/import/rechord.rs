@@ -1,11 +1,10 @@
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
-use crate::model::ast::{Expr, Beat, Func, Pattern};
+use crate::model::ast::{Beat, Expr, Func, Pattern};
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
 use anyhow::Result;
-use std::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, not_line_ending, space0};
@@ -16,6 +15,7 @@ use nom::IResult;
 use nom_locate::LocatedSpan;
 use nom_tracable::tracable_parser;
 use nom_tracable::TracableInfo;
+use std::str::FromStr;
 
 impl super::Importer for RechordImporter {
     fn import(&self, code: &str) -> Result<Expr> {
@@ -42,13 +42,23 @@ fn directive_head(s: Span) -> IResult<Span, DirectiveHead> {
     // The terminator accepts eof so a trailing directive without a newline parses.
     alt((
         map_res(
-            tuple((tag("key:"), space0, not_line_ending, alt((line_ending, eof)))),
+            tuple((
+                tag("key:"),
+                space0,
+                not_line_ending,
+                alt((line_ending, eof)),
+            )),
             |(_, _, val, _): (Span, Span, Span, Span)| {
                 Pitch::from_str(val.fragment().trim()).map(DirectiveHead::Key)
             },
         ),
         map_res(
-            tuple((tag("scale:"), space0, not_line_ending, alt((line_ending, eof)))),
+            tuple((
+                tag("scale:"),
+                space0,
+                not_line_ending,
+                alt((line_ending, eof)),
+            )),
             |(_, _, val, _): (Span, Span, Span, Span)| {
                 Scale::from_str(val.fragment().trim()).map(DirectiveHead::Scale)
             },
@@ -178,9 +188,7 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             opt(peek(line_ending)),
             space_or_line_ending_many0,
         )),
-        |(func, items, _, _, _, br, _)| {
-            Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some())
-        },
+        |(func, items, _, _, _, br, _)| Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some()),
     )(s)
 }
 
@@ -239,12 +247,16 @@ mod tests {
         use crate::model::scale::Scale;
         // `key:` / `scale:` の値がそれぞれ正しく読まれること。
         // 平らな Directive 列ではなく、以降を包む Keyed / Scaled になった
-        let ast = RechordImporter.import("key: C\nscale: dorian\nC |\n").unwrap();
+        let ast = RechordImporter
+            .import("key: C\nscale: dorian\nC |\n")
+            .unwrap();
         let Expr::Seq(items) = &ast else { panic!() };
         let Expr::Keyed(Pitch::C, inner) = &items[0] else {
             panic!("key: は Keyed になる: {:?}", items[0])
         };
-        let Expr::Seq(inner_items) = inner.as_ref() else { panic!("中身は Seq") };
+        let Expr::Seq(inner_items) = inner.as_ref() else {
+            panic!("中身は Seq")
+        };
         assert!(matches!(&inner_items[0], Expr::Scaled(Scale::Dorian, _)));
     }
 
@@ -296,13 +308,17 @@ mod tests {
         use crate::model::ast::Expr;
         use crate::model::pitch::Pitch;
         let ast = RechordImporter.import("key: C\nC | Am |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         // key: 以降は Keyed に包まれるので、トップの Seq は要素1つ
         assert_eq!(items.len(), 1);
         let Expr::Keyed(Pitch::C, inner) = &items[0] else {
             panic!("key: は Keyed になる: {:?}", items[0])
         };
-        let Expr::Seq(measures) = inner.as_ref() else { panic!("中身は Seq") };
+        let Expr::Seq(measures) = inner.as_ref() else {
+            panic!("中身は Seq")
+        };
         assert_eq!(measures.len(), 2);
     }
 
@@ -311,7 +327,9 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Expr;
         let ast = RechordImporter.import("# memo\nkey: C\nC |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         assert_eq!(items.len(), 2);
         assert!(matches!(&items[0], Expr::Comment(_)));
         assert!(matches!(&items[1], Expr::Keyed(_, _)));
@@ -321,10 +339,18 @@ mod tests {
     fn test_scale_nests_inside_key() {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Expr;
-        let ast = RechordImporter.import("key: C\nscale: dorian\nI |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
-        let Expr::Keyed(_, inner) = &items[0] else { panic!("not keyed") };
-        let Expr::Seq(inner_items) = inner.as_ref() else { panic!("中身は Seq") };
+        let ast = RechordImporter
+            .import("key: C\nscale: dorian\nI |\n")
+            .unwrap();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
+        let Expr::Keyed(_, inner) = &items[0] else {
+            panic!("not keyed")
+        };
+        let Expr::Seq(inner_items) = inner.as_ref() else {
+            panic!("中身は Seq")
+        };
         assert!(matches!(&inner_items[0], Expr::Scaled(_, _)));
     }
 
@@ -333,27 +359,37 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pow(C | E D)\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a seq")
+        };
         assert_eq!(items.len(), 1);
         let Expr::Apply(Func::Pow, inner, _) = &items[0] else {
             panic!("not a pow apply: {:?}", items[0])
         };
         // 中身は Seq 1つ
-        let Expr::Seq(measures) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(measures) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         // C の小節と E D の小節
         assert_eq!(measures.len(), 2);
-        let Expr::Measure(nodes, _) = &measures[0] else { panic!("not a measure") };
+        let Expr::Measure(nodes, _) = &measures[0] else {
+            panic!("not a measure")
+        };
         assert_eq!(nodes.len(), 1);
-        let Expr::Measure(nodes, _) = &measures[1] else { panic!("not a measure") };
+        let Expr::Measure(nodes, _) = &measures[1] else {
+            panic!("not a measure")
+        };
         assert_eq!(nodes.len(), 2);
     }
 
     #[test]
     fn test_pat_parser() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Expr, Beat, Func};
+        use crate::model::ast::{Beat, Expr, Func};
         let ast = RechordImporter.import("pat(\"o.ox\", C | E D)\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
         let Expr::Apply(Func::Pat(pattern), inner, _) = &items[0] else {
             panic!("not a pat apply: {:?}", items[0])
         };
@@ -361,7 +397,9 @@ mod tests {
             pattern.0,
             vec![Beat::Hit, Beat::Rest, Beat::Hit, Beat::Brush]
         );
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         assert_eq!(inner.len(), 2);
     }
 
@@ -370,11 +408,15 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::{Expr, Func};
         let ast = RechordImporter.import("pat(\"oxox\", pow(C))\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
         let Expr::Apply(Func::Pat(_), inner, _) = &items[0] else {
             panic!("not a pat apply")
         };
-        let Expr::Seq(inner) = inner.as_ref() else { panic!("apply の中身は Seq") };
+        let Expr::Seq(inner) = inner.as_ref() else {
+            panic!("apply の中身は Seq")
+        };
         assert!(matches!(&inner[0], Expr::Apply(Func::Pow, _, _)));
     }
 
@@ -383,7 +425,9 @@ mod tests {
         use crate::import::{Importer, RechordImporter};
         use crate::model::ast::Expr;
         let ast = RechordImporter.import("pow(C) F |\n").unwrap();
-        let Expr::Seq(items) = &ast else { panic!("not a score") };
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
         assert_eq!(items.len(), 2);
         assert!(matches!(&items[0], Expr::Apply(_, _, _)));
         assert!(matches!(&items[1], Expr::Measure(_, _)));

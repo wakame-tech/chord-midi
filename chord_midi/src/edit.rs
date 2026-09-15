@@ -1,5 +1,5 @@
 use crate::import::{Importer, RechordImporter};
-use crate::model::ast::{Expr, ChordNode, Node};
+use crate::model::ast::{ChordNode, Expr, Node};
 use crate::model::key::Key;
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
@@ -99,7 +99,10 @@ fn shift_chord_key(key: &mut Key, delta: i8, seen: &mut Seen) {
 /// パースできないときのフォールバック。`key:` の行だけを書き換える
 fn shift_key_directive(text: &str, delta: i8) -> String {
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-    if let Some(line) = lines.iter_mut().find(|l| l.trim_start().starts_with("key:")) {
+    if let Some(line) = lines
+        .iter_mut()
+        .find(|l| l.trim_start().starts_with("key:"))
+    {
         if let Some((_, rest)) = line.split_once("key:") {
             if let Ok(p) = Pitch::from_str(rest.trim()) {
                 *line = format!("key: {}", shift_pitch(p, delta));
@@ -117,7 +120,10 @@ fn shift_key_directive(text: &str, delta: i8) -> String {
 /// `key:` line (or at the top if there is no key line).
 pub fn set_scale(text: &str, scale: Scale) -> String {
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-    if let Some(line) = lines.iter_mut().find(|l| l.trim_start().starts_with("scale:")) {
+    if let Some(line) = lines
+        .iter_mut()
+        .find(|l| l.trim_start().starts_with("scale:"))
+    {
         *line = format!("scale: {}", scale);
         lines.join("\n")
     } else {
@@ -173,10 +179,7 @@ mod tests {
 
     #[test]
     fn test_shift_key_keeps_multiple_lines() {
-        assert_eq!(
-            shift_key("C | Am |\nF | G |", 1),
-            "C# | A#m |\nF# | G# |"
-        );
+        assert_eq!(shift_key("C | Am |\nF | G |", 1), "C# | A#m |\nF# | G# |");
     }
 
     #[test]
@@ -184,10 +187,7 @@ mod tests {
         // 何度押しても書式が崩れないこと
         let once = shift_key("# memo\nkey: C\nscale: dorian\nC |", 1);
         assert_eq!(once, "# memo\nkey: C#\nscale: dorian\nC# |");
-        assert_eq!(
-            shift_key(&once, -1),
-            "# memo\nkey: C\nscale: dorian\nC |"
-        );
+        assert_eq!(shift_key(&once, -1), "# memo\nkey: C\nscale: dorian\nC |");
     }
 
     #[test]
@@ -198,12 +198,18 @@ mod tests {
 
     #[test]
     fn test_set_scale_existing() {
-        assert_eq!(set_scale("key: C\nscale: major\nI |", Scale::Dorian), "key: C\nscale: dorian\nI |");
+        assert_eq!(
+            set_scale("key: C\nscale: major\nI |", Scale::Dorian),
+            "key: C\nscale: dorian\nI |"
+        );
     }
 
     #[test]
     fn test_set_scale_absent_after_key() {
-        assert_eq!(set_scale("key: C\nI |", Scale::Lydian), "key: C\nscale: lydian\nI |");
+        assert_eq!(
+            set_scale("key: C\nI |", Scale::Lydian),
+            "key: C\nscale: lydian\nI |"
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ pub use data::FINGERINGS;
 
 use crate::model::modifier::Modifier;
 use crate::model::{
-    ast::{Expr, ChordNode, Func, Node, Pattern},
+    ast::{ChordNode, Expr, Func, Node, Pattern},
     key::Key,
     pitch::Pitch,
     scale::Scale,
@@ -759,7 +759,6 @@ mod tests {
             }
         }
     }
-
 
     #[test]
     fn find_picks_octave_shapes_for_oct() {

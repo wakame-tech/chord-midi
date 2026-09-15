@@ -132,8 +132,7 @@ fn app() -> Html {
                     result.set(views);
                     measures.set(ms);
                     let blob = new_blob(&bytes, "audio/midi");
-                    let object_url =
-                        web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                    let object_url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
                     if *playing.borrow() {
                         let old_pending = pending.borrow_mut().replace(object_url);
                         if let Some(old) = old_pending {
@@ -194,8 +193,8 @@ fn app() -> Html {
                     let cb = Closure::<dyn FnMut()>::new(move || {
                         *playing.borrow_mut() = true;
                     });
-                    let _ = el
-                        .add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
+                    let _ =
+                        el.add_event_listener_with_callback("start", cb.as_ref().unchecked_ref());
                     cb.forget();
                 }
                 {
@@ -215,8 +214,8 @@ fn app() -> Html {
                             url.set(next);
                         }
                     });
-                    let _ = el
-                        .add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
+                    let _ =
+                        el.add_event_listener_with_callback("stop", cb.as_ref().unchecked_ref());
                     cb.forget();
                 }
             }
@@ -280,8 +279,7 @@ fn app() -> Html {
     let cards = {
         // 出現するコード名ごとに色を割り当てる。同じコードは常に同じ色
         const PALETTE: [&str; 8] = [
-            "#c0392b", "#d35400", "#b7950b", "#1e8449", "#1f618d", "#6c3483", "#a93226",
-            "#117864",
+            "#c0392b", "#d35400", "#b7950b", "#1e8449", "#1f618d", "#6c3483", "#a93226", "#117864",
         ];
         let mut labels: Vec<String> = Vec::new();
         let mut rows: Vec<Html> = Vec::new();

@@ -1,6 +1,6 @@
 use super::Exporter;
 use super::MidiExporter;
-use crate::model::ast::{Expr, Beat, ChordNode, Func, Node, Pattern};
+use crate::model::ast::{Beat, ChordNode, Expr, Func, Node, Pattern};
 use crate::model::chord::Chord;
 use crate::model::key::Key;
 use anyhow::anyhow;
@@ -359,7 +359,9 @@ mod tests {
     #[test]
     fn test_keyless_degree_progression_plays_in_c() {
         // no key: directive -> resolve defaults to C, produces notes (must not panic)
-        let ast = RechordImporter.import("IVM7 | V7 | IIIm7 | VIm7 |\n").unwrap();
+        let ast = RechordImporter
+            .import("IVM7 | V7 | IIIm7 | VIm7 |\n")
+            .unwrap();
         let mut score = Score::new();
         score.interpret(ast.resolve()).unwrap();
         assert!(!score.notes.is_empty());
@@ -367,7 +369,9 @@ mod tests {
 
     #[test]
     fn test_degree_progression_midi() {
-        let ast = RechordImporter.import("key: C\nI | IV | V | I |\n").unwrap();
+        let ast = RechordImporter
+            .import("key: C\nI | IV | V | I |\n")
+            .unwrap();
         let mut score = Score::new();
         score.interpret(ast.resolve()).unwrap();
         assert!(!score.notes.is_empty());
@@ -548,7 +552,6 @@ mod tests {
             assert!(p.windows(2).all(|w| w[0] < w[1]), "{}: {:?}", code, p);
         }
     }
-
 
     #[test]
     fn test_octave_shape_sounds_the_fingering() {
