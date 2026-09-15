@@ -124,6 +124,7 @@ fn apply_parser(s: Span) -> IResult<Span, Ast> {
         tuple((
             alt((
                 map(tuple((tag("pow("), space0)), |_| Func::Pow),
+                map(tuple((tag("oct("), space0)), |_| Func::Oct),
                 map(
                     tuple((
                         tag("pat("),

@@ -7,6 +7,7 @@ mod data;
 
 pub use data::FINGERINGS;
 
+use crate::model::modifier::Modifier;
 use crate::model::{
     ast::{Ast, ChordNode, Node},
     key::Key,
@@ -39,6 +40,17 @@ impl Finger {
     }
 }
 
+/// 押さえ方の種類。`find` のガードに使う
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKind {
+    /// 原典の押さえ方
+    Normal,
+    /// 可動パワーコード形（ルート + 5th）
+    Power,
+    /// オクターブ形（ルート + 1オクターブ上のルート）
+    Octave,
+}
+
 /// 1つの押さえ方。配列はすべて 6弦→1弦 の順
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fingering {
@@ -56,8 +68,8 @@ pub struct Fingering {
     pub bass: u8,
     /// 最低音が鳴る弦。0 = 6弦, 5 = 1弦
     pub lowest_string: u8,
-    /// 可動パワーコード形かどうか。`find` のガードに使う
-    pub is_power: bool,
+    /// 押さえ方の種類
+    pub kind: ShapeKind,
 }
 
 impl Fingering {
@@ -100,6 +112,8 @@ pub struct ChordRef {
     pub bass: Option<u8>,
     /// `@N` の指定。`Fingering.lowest_string` に合わせて 0 = 6弦 に正規化する
     pub root_string: Option<u8>,
+    /// `pow()` / `oct()` で明示された押さえ方の種類
+    pub wanted: Option<ShapeKind>,
 }
 
 /// AST に現れるコードを出現順に取り出す。
@@ -197,6 +211,15 @@ pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         }
         None => None,
     };
+    // 書かれた関数の種類をそのまま持ち回す。構成音から推測すると
+    // oct(A/E) の構成音 {A, E} がパワーコードの条件と一致してしまう
+    let wanted = if node.modifiers.contains(&Modifier::Octave) {
+        Some(ShapeKind::Octave)
+    } else if node.modifiers.contains(&Modifier::Power) {
+        Some(ShapeKind::Power)
+    } else {
+        None
+    };
     Ok(ChordRef {
         label,
         root,
@@ -204,6 +227,7 @@ pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         bass,
         // 記法は 1 = 1弦。Fingering.lowest_string は 0 = 6弦 なので変換する
         root_string: node.root_string.map(|n| 6 - n),
+        wanted,
     })
 }
 
@@ -250,14 +274,17 @@ fn extra_cost(semitone: u8) -> u32 {
 /// 代用させる構成なので、部分集合だけに絞ると素の三和音が軒並み引けなくなる。
 pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
     let expected_bass = chord.bass.unwrap_or(chord.root);
-    // 可動パワーコード形は2音しか無いので、無条件に候補へ入れると
-    // 3rd や 7th が欠けた形が本来のコードを押しのける。ルートと5th
-    // ちょうどのときか、弦指定があるときだけ候補にする
-    let power_target =
-        chord.pitch_classes == (1u16 << chord.root) | (1u16 << ((chord.root + 7) % 12));
     FINGERINGS
         .iter()
-        .filter(|f| !f.is_power || power_target || chord.root_string.is_some())
+        // Normal は常に候補。可動形 (Power / Octave) は、書かれた関数で
+        // 種類が明示されていればその種類だけ、明示が無ければ @N の指定が
+        // あるときだけ候補にする
+        // pow() / oct() で種類が明示されたら、その種類の押さえ方だけを候補にする。
+        // 明示が無ければ原典の押さえ方だけ。ただし @N があれば可動形も開放する
+        .filter(|f| match chord.wanted {
+            Some(wanted) => f.kind == wanted,
+            None => f.kind == ShapeKind::Normal || chord.root_string.is_some(),
+        })
         .filter(|f| match chord.root_string {
             Some(string) => f.lowest_string == string,
             None => true,
@@ -285,6 +312,9 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 開放弦の MIDI ノート番号。6弦→1弦
+    const OPEN_STRING_PITCHES: [u8; 6] = [40, 45, 50, 55, 59, 64];
 
     fn refs(input: &str) -> Vec<ChordRef> {
         use crate::import::{Importer, RechordImporter};
@@ -392,7 +422,7 @@ mod tests {
 
     #[test]
     fn data_is_consistent() {
-        assert_eq!(FINGERINGS.len(), 91);
+        assert_eq!(FINGERINGS.len(), 115);
         for f in FINGERINGS {
             let mut pcs = 0u16;
             for (i, v) in f.frets.iter().enumerate() {
@@ -524,6 +554,7 @@ mod tests {
             pitch_classes: 1u16 << 1,
             bass: None,
             root_string: None,
+            wanted: None,
         };
         assert!(find(&c).is_none());
     }
@@ -548,15 +579,18 @@ mod tests {
 
     #[test]
     fn power_chord_shapes_are_present() {
-        let powers: Vec<_> = FINGERINGS.iter().filter(|f| f.is_power).collect();
+        let powers: Vec<_> = FINGERINGS
+            .iter()
+            .filter(|f| f.kind == ShapeKind::Power)
+            .collect();
         // 6弦ルート12キー + 5弦ルート12キー
         assert_eq!(powers.len(), 24);
-        assert_eq!(FINGERINGS.len(), 67 + 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24 + 24);
     }
 
     #[test]
     fn power_chord_shapes_sound_root_and_fifth() {
-        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Power) {
             // 鳴るのは2音だけ
             assert_eq!(f.pitch_classes.count_ones(), 2, "{} {}", f.name, tab(f));
             // 最低音がルート、その完全5度上がもう1音
@@ -568,7 +602,7 @@ mod tests {
 
     #[test]
     fn power_chord_fingers_are_index_and_ring() {
-        for f in FINGERINGS.iter().filter(|f| f.is_power) {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Power) {
             let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
             match used.len() {
                 // 開放弦がルートの形は押さえるのが5thだけ
@@ -589,7 +623,7 @@ mod tests {
     fn power_chord_shapes_reach_high_frets() {
         // 6弦ルートの D5 は 10fr + 12fr。桁あふれせずに持てていること
         let d5 = shape([Some(10), Some(12), None, None, None, None]);
-        assert!(d5.is_power);
+        assert_eq!(d5.kind, ShapeKind::Power);
         assert_eq!(tab(d5), "10-12-x-x-x-x");
     }
 
@@ -641,6 +675,88 @@ mod tests {
     #[test]
     fn power_shapes_do_not_displace_normal_chords() {
         // 2音しか無いパワーコード形が3rdや7thを持つ形を押しのけないこと
+        assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
+        assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
+        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
+        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
+    }
+
+    #[test]
+    fn octave_shapes_are_present() {
+        let octaves: Vec<_> = FINGERINGS
+            .iter()
+            .filter(|f| f.kind == ShapeKind::Octave)
+            .collect();
+        // 6弦ルート12キー + 5弦ルート12キー
+        assert_eq!(octaves.len(), 24);
+        assert_eq!(FINGERINGS.len(), 67 + 24 + 24);
+    }
+
+    #[test]
+    fn octave_shapes_sound_one_pitch_class_twice() {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Octave) {
+            // 鳴る音は1種類だけ
+            assert_eq!(f.pitch_classes.count_ones(), 1, "{} {}", f.name, tab(f));
+            // 鳴る弦は2本で、ちょうど12半音離れている
+            let sounding: Vec<u8> = f
+                .frets
+                .iter()
+                .enumerate()
+                .filter_map(|(i, v)| v.map(|n| OPEN_STRING_PITCHES[i] + n))
+                .collect();
+            assert_eq!(sounding.len(), 2, "{} {}", f.name, tab(f));
+            assert_eq!(sounding[1] - sounding[0], 12, "{} {}", f.name, tab(f));
+        }
+    }
+
+    #[test]
+    fn octave_shape_fingers_are_index_and_ring() {
+        for f in FINGERINGS.iter().filter(|f| f.kind == ShapeKind::Octave) {
+            let used: Vec<Finger> = f.fingers.iter().flatten().copied().collect();
+            match used.len() {
+                // 開放弦がルートの形は押さえるのがオクターブ側だけ
+                1 => assert_eq!(used, vec![Finger::Ring], "{} {}", f.name, tab(f)),
+                2 => assert_eq!(
+                    used,
+                    vec![Finger::Index, Finger::Ring],
+                    "{} {}",
+                    f.name,
+                    tab(f)
+                ),
+                n => panic!("unexpected pressed count {} for {}", n, f.name),
+            }
+        }
+    }
+
+
+    #[test]
+    fn find_picks_octave_shapes_for_oct() {
+        assert_eq!(tab_of("oct(A@6)\n"), "5-x-7-x-x-x");
+        assert_eq!(tab_of("oct(G#@6)\n"), "4-x-6-x-x-x");
+        assert_eq!(tab_of("oct(C#@6)\n"), "9-x-11-x-x-x");
+        assert_eq!(tab_of("oct(A@5)\n"), "x-0-x-2-x-x");
+    }
+
+    #[test]
+    fn find_keeps_power_and_octave_apart() {
+        // 同じ弦指定でも、書かれた関数どおりの種類が選ばれる
+        assert_eq!(tab_of("pow(A@6)\n"), "5-7-x-x-x-x");
+        assert_eq!(tab_of("oct(A@6)\n"), "5-x-7-x-x-x");
+    }
+
+    #[test]
+    fn find_picks_octave_shape_for_slash_bass() {
+        // スラッシュのベースが構成音に足されてパワーコードの条件と一致しても、
+        // 書かれた関数が oct なのでオクターブ形が選ばれる
+        let r = refs("oct(A/E@6)\n");
+        let f = find(&r[0]).expect("no fingering found");
+        assert_eq!(f.kind, ShapeKind::Octave);
+    }
+
+    #[test]
+    fn octave_shapes_do_not_displace_normal_chords() {
+        // 鳴る音が1種類しかないオクターブ形が通常のコードを押しのけないこと
         assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
         assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
         assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");

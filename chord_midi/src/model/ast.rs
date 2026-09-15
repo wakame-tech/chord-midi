@@ -31,6 +31,8 @@ pub enum Ast {
 pub enum Func {
     /// パワーコード化
     Pow,
+    /// オクターブ奏法化
+    Oct,
     /// リズムパターン
     Pat(Pattern),
 }

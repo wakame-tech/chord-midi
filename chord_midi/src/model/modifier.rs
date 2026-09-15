@@ -21,6 +21,9 @@ pub enum Modifier {
     /// パワーコード。ルートと5thだけを鳴らす。他の修飾を上書きするため
     /// enum の末尾に置いて BTreeSet の順で最後に適用させる
     Power,
+    /// オクターブ奏法。ルートだけを鳴らす。Power と同じ理由で末尾に置き、
+    /// BTreeSet の順で最後に適用させて他の修飾を上書きする
+    Octave,
 }
 
 impl Display for Modifier {
@@ -45,6 +48,7 @@ impl Display for Modifier {
             // Degree(number, accidental): notation writes the accidental first (e.g. "b9")
             Modifier::Tension(Degree(number, accidental)) => write!(f, "{}{}", accidental, number),
             Modifier::Power => write!(f, "5"),
+            Modifier::Octave => write!(f, "oct"),
         }
     }
 }

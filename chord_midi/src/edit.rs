@@ -145,6 +145,12 @@ mod tests {
     }
 
     #[test]
+    fn test_shift_key_transposes_inside_oct() {
+        assert_eq!(shift_key("oct(A@6)", 1), "oct(A#@6)");
+        assert_eq!(shift_key("oct(A#@6)", -1), "oct(A@6)");
+    }
+
+    #[test]
     fn test_shift_key_absent_inserts() {
         assert_eq!(shift_key("I | IV |", 2), "key: D\nI | IV |");
     }

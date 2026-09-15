@@ -36,6 +36,7 @@ impl Display for Ast {
                 let inner = inner.strip_suffix('|').unwrap_or(inner).trim_end();
                 match func {
                     Func::Pow => write!(f, "pow({})", inner)?,
+                    Func::Oct => write!(f, "oct({})", inner)?,
                     Func::Pat(pattern) => write!(f, "pat(\"{}\", {})", pattern, inner)?,
                 }
                 if *br {
@@ -161,6 +162,13 @@ mod tests {
     fn test_pow_roundtrip() {
         assert_eq!(roundtrip("pow(C | E D)"), "pow(C | E D)");
         assert_eq!(roundtrip("pow(C)"), "pow(C)");
+    }
+
+    #[test]
+    fn test_oct_roundtrip() {
+        assert_eq!(roundtrip("oct(A@6 | D@5)"), "oct(A@6 | D@5)");
+        assert_eq!(roundtrip("oct(A)"), "oct(A)");
+        assert_eq!(roundtrip("pat(\"oxox\", oct(A@6))"), "pat(\"oxox\", oct(A@6))");
     }
 
     #[test]
