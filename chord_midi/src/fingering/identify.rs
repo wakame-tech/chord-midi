@@ -69,11 +69,21 @@ fn played(frets: &[Option<u8>; 6]) -> Option<Played> {
 /// 返す候補の最大件数
 const MAX_CANDIDATES: usize = 5;
 
+/// ルートが1音も鳴っていない呼び方に足す点。[`score`] を見よ。
+/// 測って決めた値ではなく、`missing_cost` のルート4点・3rd3点と釣り合う
+/// あたりに置いた経験則
+const ROOT_NOT_SOUNDING: u32 = 3;
+
+/// 最低音がルートでないのにスラッシュで書いていない呼び方に足す点。
+/// [`score`] を見よ。これも測って決めた値ではなく経験則
+const BASS_NOT_WRITTEN_AS_SLASH: u32 = 2;
+
 /// 自分のルート以外がベースに来るパワーコードに足す点。[`score`] を見よ。
 ///
-/// 115形すべてで測ると 1〜4 のどれでも先頭の候補は同じになる。2 にしてあるのは、
-/// 1 だと実際の名前とパワーコードが同点になり、勝敗が QUALITIES の並び順の
-/// タイブレーク（`Power` が末尾）頼みになるため。2 以上なら点そのもので決まる
+/// この値だけは115形すべてで測って決めた。1〜4 のどれでも先頭の候補は同じに
+/// なる。2 にしてあるのは、1 だと実際の名前とパワーコードが同点になり、勝敗が
+/// QUALITIES の並び順のタイブレーク（`Power` が末尾）頼みになるため。
+/// 2 以上なら点そのもので決まる
 const POWER_ON_FOREIGN_BASS: u32 = 2;
 
 /// 逆引きで当てにいくコードの品質。`Modifier::Major(5)` は `chord_node_parser`
@@ -124,6 +134,9 @@ fn node(root: Pitch, quality: &[Modifier], on: Option<Pitch>) -> ChordNode {
 /// 押さえた音のうちコードで説明できない音が2つ以上なら候補にしない
 fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
     let extra_mask = played.pitch_classes & !chord.pitch_classes;
+    // `find()` の `(f.pitch_classes & !chord.pitch_classes).count_ones() <= 1`
+    // と同じ足切りを裏返したもの。この関数全体が「`find()` の採点を逆向きに
+    // 走らせたもの」だと思って読める
     if extra_mask.count_ones() >= 2 {
         return None;
     }
@@ -135,13 +148,13 @@ fn score(played: &Played, chord: &ChordRef) -> Option<u32> {
         .sum();
     // ルートが鳴っていない呼び方は疑わしい
     let root_silent = if (played.pitch_classes >> chord.root) & 1 == 0 {
-        3
+        ROOT_NOT_SOUNDING
     } else {
         0
     };
     // 最低音がルートでないのにスラッシュで書いていない
     let bass_mismatch = if chord.bass.is_none() && played.bass != chord.root {
-        2
+        BASS_NOT_WRITTEN_AS_SLASH
     } else {
         0
     };
@@ -253,6 +266,9 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             }
         }
     }
+    // `(score, QUALITIES の並び順)` が同点のときは、`on` 無し（`C`）を `on` 付き
+    // （`C/E`）より先に出す。これは先に push した方が残る安定ソートに頼っている
+    // ので、`sort_unstable_by_key` に替えてはいけない
     scored.sort_by_key(|(s, qi, _, _)| (*s, *qi));
 
     // 同じ形が押さえ方データにあるか。名前はここから取らない（原典表記で
