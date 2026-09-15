@@ -1,7 +1,7 @@
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
 use crate::import::RechordImporter;
-use crate::model::ast::{Expr, Beat, Directive, Func, Pattern};
+use crate::model::ast::{Expr, Beat, Func, Pattern};
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
 use anyhow::Result;
@@ -29,24 +29,14 @@ impl super::Importer for RechordImporter {
     }
 }
 
-#[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Expr> {
-    map(
-        tuple((
-            many1(alt((
-                directive_parser,
-                comment_parser,
-                apply_parser,
-                measure_parser,
-            ))),
-            eof,
-        )),
-        |(score, _)| Expr::Seq(score),
-    )(s)
+/// `key:` / `scale:` の1行。値だけを返す。以降を包むのは seq_parser の仕事
+enum DirectiveHead {
+    Key(Pitch),
+    Scale(Scale),
 }
 
 #[tracable_parser]
-fn directive_parser(s: Span) -> IResult<Span, Expr> {
+fn directive_head(s: Span) -> IResult<Span, DirectiveHead> {
     // a bad value (e.g. `key: H`) fails the parse gracefully (map_res) rather
     // than panicking — important for the realtime web editor while typing.
     // The terminator accepts eof so a trailing directive without a newline parses.
@@ -54,16 +44,59 @@ fn directive_parser(s: Span) -> IResult<Span, Expr> {
         map_res(
             tuple((tag("key:"), space0, not_line_ending, alt((line_ending, eof)))),
             |(_, _, val, _): (Span, Span, Span, Span)| {
-                Pitch::from_str(val.fragment().trim()).map(|p| Expr::Directive(Directive::Key(p)))
+                Pitch::from_str(val.fragment().trim()).map(DirectiveHead::Key)
             },
         ),
         map_res(
             tuple((tag("scale:"), space0, not_line_ending, alt((line_ending, eof)))),
             |(_, _, val, _): (Span, Span, Span, Span)| {
-                Scale::from_str(val.fragment().trim()).map(|s| Expr::Directive(Directive::Scale(s)))
+                Scale::from_str(val.fragment().trim()).map(DirectiveHead::Scale)
             },
         ),
     ))(s)
+}
+
+/// 式の列。`key:` / `scale:` に当たったら、そこから後ろを再帰で読んで包む
+fn seq_parser(s: Span) -> IResult<Span, Expr> {
+    let mut items: Vec<Expr> = Vec::new();
+    let mut rest = s;
+    loop {
+        if let Ok((r, head)) = directive_head(rest) {
+            let (r2, inner) = seq_parser(r)?;
+            items.push(match head {
+                DirectiveHead::Key(p) => Expr::Keyed(p, Box::new(inner)),
+                DirectiveHead::Scale(sc) => Expr::Scaled(sc, Box::new(inner)),
+            });
+            rest = r2;
+            // 以降は inner が飲み切っている
+            break;
+        }
+        match alt((comment_parser, apply_parser, measure_parser))(rest) {
+            Ok((r, item)) => {
+                // 入力が減らないまま成功するパーサがあると無限ループになる。
+                // 念のため「進んでいない」ときは打ち切る
+                if r.fragment().len() >= rest.fragment().len() {
+                    break;
+                }
+                items.push(item);
+                rest = r;
+            }
+            Err(_) => break,
+        }
+    }
+    Ok((rest, Expr::Seq(items)))
+}
+
+#[tracable_parser]
+fn ast_parser(s: Span) -> IResult<Span, Expr> {
+    // 旧実装は many1 だったので空入力を拒んでいた。その挙動を保つ
+    map_res(tuple((seq_parser, eof)), |(seq, _)| {
+        if matches!(&seq, Expr::Seq(items) if items.is_empty()) {
+            Err(anyhow::anyhow!("empty input"))
+        } else {
+            Ok(seq)
+        }
+    })(s)
 }
 
 #[tracable_parser]
@@ -201,13 +234,18 @@ mod tests {
     #[test]
     fn test_directive_parser() {
         use crate::import::{Importer, RechordImporter};
-        use crate::model::ast::{Expr, Directive};
+        use crate::model::ast::Expr;
         use crate::model::pitch::Pitch;
         use crate::model::scale::Scale;
+        // `key:` / `scale:` の値がそれぞれ正しく読まれること。
+        // 平らな Directive 列ではなく、以降を包む Keyed / Scaled になった
         let ast = RechordImporter.import("key: C\nscale: dorian\nC |\n").unwrap();
         let Expr::Seq(items) = &ast else { panic!() };
-        assert!(matches!(&items[0], Expr::Directive(Directive::Key(Pitch::C))));
-        assert!(matches!(&items[1], Expr::Directive(Directive::Scale(Scale::Dorian))));
+        let Expr::Keyed(Pitch::C, inner) = &items[0] else {
+            panic!("key: は Keyed になる: {:?}", items[0])
+        };
+        let Expr::Seq(inner_items) = inner.as_ref() else { panic!("中身は Seq") };
+        assert!(matches!(&inner_items[0], Expr::Scaled(Scale::Dorian, _)));
     }
 
     #[test]
@@ -243,6 +281,44 @@ mod tests {
         };
         assert_eq!(first_key(&major), Key::Absolute(Pitch::E));
         assert_eq!(first_key(&dorian), Key::Absolute(Pitch::Ds));
+    }
+
+    #[test]
+    fn test_key_directive_wraps_the_rest() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        use crate::model::pitch::Pitch;
+        let ast = RechordImporter.import("key: C\nC | Am |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        // key: 以降は Keyed に包まれるので、トップの Seq は要素1つ
+        assert_eq!(items.len(), 1);
+        let Expr::Keyed(Pitch::C, inner) = &items[0] else {
+            panic!("key: は Keyed になる: {:?}", items[0])
+        };
+        let Expr::Seq(measures) = inner.as_ref() else { panic!("中身は Seq") };
+        assert_eq!(measures.len(), 2);
+    }
+
+    #[test]
+    fn test_comment_before_key_stays_outside() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("# memo\nkey: C\nC |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        assert_eq!(items.len(), 2);
+        assert!(matches!(&items[0], Expr::Comment(_)));
+        assert!(matches!(&items[1], Expr::Keyed(_, _)));
+    }
+
+    #[test]
+    fn test_scale_nests_inside_key() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        let ast = RechordImporter.import("key: C\nscale: dorian\nI |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!("not a seq") };
+        let Expr::Keyed(_, inner) = &items[0] else { panic!("not keyed") };
+        let Expr::Seq(inner_items) = inner.as_ref() else { panic!("中身は Seq") };
+        assert!(matches!(&inner_items[0], Expr::Scaled(_, _)));
     }
 
     #[test]

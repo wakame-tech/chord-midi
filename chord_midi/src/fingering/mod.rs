@@ -173,7 +173,9 @@ fn collect_ast(ast: &Expr, pattern: Option<&Pattern>, out: &mut Vec<MeasureRef>)
             };
             collect_ast(inner, next, out)?;
         }
-        Expr::Comment(_) | Expr::Directive(_) => {}
+        // resolve() 済みなら包みは消えている。念のため中身へ潜る
+        Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => collect_ast(inner, pattern, out)?,
+        Expr::Comment(_) => {}
     }
     Ok(())
 }

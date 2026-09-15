@@ -1,5 +1,5 @@
 use super::{Exporter, RechordExporter};
-use crate::model::ast::{Expr, Beat, ChordNode, Directive, Func, Node, Pattern};
+use crate::model::ast::{Expr, Beat, ChordNode, Func, Node, Pattern};
 use crate::model::modifier::Modifier;
 use std::{fmt::Display, io::Write};
 
@@ -22,8 +22,14 @@ impl Display for Expr {
             Expr::Comment(comment) => {
                 writeln!(f, "# {}", comment)
             }
-            Expr::Directive(Directive::Key(p)) => writeln!(f, "key: {}", p),
-            Expr::Directive(Directive::Scale(s)) => writeln!(f, "scale: {}", s),
+            Expr::Keyed(p, inner) => {
+                writeln!(f, "key: {}", p)?;
+                write!(f, "{}", inner)
+            }
+            Expr::Scaled(s, inner) => {
+                writeln!(f, "scale: {}", s)?;
+                write!(f, "{}", inner)
+            }
             Expr::Apply(func, inner, br) => {
                 let inner = inner.to_string();
                 // 小節の Display は末尾に " | " を出すので、関数の中では

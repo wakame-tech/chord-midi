@@ -204,7 +204,8 @@ impl Score {
     fn interpret(&mut self, ast: Expr) -> Result<()> {
         match ast {
             Expr::Comment(_) => Ok(()),
-            Expr::Directive(_) => Ok(()),
+            // resolve() 済みなら包みは消えている。念のため中身へ潜る
+            Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => self.interpret(*inner),
             Expr::Seq(score) => {
                 for node in score.into_iter() {
                     self.interpret(node)?

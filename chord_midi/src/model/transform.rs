@@ -1,5 +1,5 @@
 use crate::{
-    model::ast::{Expr, ChordNode, Directive, Func, Node},
+    model::ast::{Expr, ChordNode, Func, Node},
     model::modifier::Modifier,
     model::pitch::Pitch,
     model::scale::Scale,
@@ -52,6 +52,9 @@ impl Expr {
                 Box::new(inner.into_degree(tonic, scale)),
                 br,
             ),
+            // into_degree は into_pitch の逆変換なので、包みは消さずに残す
+            Expr::Keyed(p, inner) => Expr::Keyed(p, Box::new(inner.into_degree(p, scale))),
+            Expr::Scaled(s, inner) => Expr::Scaled(s, Box::new(inner.into_degree(tonic, s))),
             other => other,
         }
     }
@@ -84,45 +87,47 @@ impl Expr {
                 Box::new(inner.into_pitch(tonic, scale)),
                 br,
             ),
+            // key: は以降のスコープ。中身を新しい tonic で解決し、包みは消す
+            Expr::Keyed(p, inner) => inner.into_pitch(p, scale),
+            Expr::Scaled(s, inner) => inner.into_pitch(tonic, s),
             other => other,
         }
     }
 
-    /// Apply key/scale directives: transpose degrees to pitches (including the
-    /// inner chord of Transform/Arpeggio nodes) and strip Directive/Comment nodes,
-    /// yielding a playback-ready AST. Transform nodes are expanded later, at
-    /// MIDI interpret time (`Score::interpret_node`).
+    /// key/scale のスコープを解いて度数を実音にし、Comment を落とした
+    /// 再生可能な AST を返す。Transform は MIDI 解釈時に展開する。
     ///
-    /// When no `key:` directive is present the tonic defaults to C, so a
-    /// degree-notation progression (e.g. a preset) always resolves to concrete
-    /// pitches and plays, rather than leaving unplayable relative keys.
+    /// `key:` が無いときの tonic は C。度数表記の進行 (プリセット等) が
+    /// 常に実音に解決されて鳴るようにするため。
     pub fn resolve(self) -> Expr {
-        let mut tonic = Pitch::C;
-        let mut scale = Scale::Major;
-        if let Expr::Seq(items) = &self {
-            for it in items {
-                match it {
-                    Expr::Directive(Directive::Key(p)) => tonic = *p,
-                    Expr::Directive(Directive::Scale(s)) => scale = *s,
-                    _ => {}
-                }
-            }
-        }
-        let transposed = self.into_pitch(tonic, scale);
+        let transposed = self.into_pitch(Pitch::C, Scale::Major);
         // pow は音程の話なのでここで潰す。pat はリズムの話なので残す
         let desugared = desugar_shapes(transposed)
             .into_iter()
             .next()
             .expect("desugar_shapes always yields at least one node for a Seq");
-        match desugared {
-            Expr::Seq(items) => Expr::Seq(
-                items
-                    .into_iter()
-                    .filter(|it| !matches!(it, Expr::Directive(_) | Expr::Comment(_)))
-                    .collect(),
-            ),
-            other => other,
-        }
+        strip_comments(desugared)
+    }
+}
+
+/// Comment を落とす。`Keyed`/`Scaled` は into_pitch が解いて消えている。
+///
+/// 包みが消えた跡に残る入れ子の `Seq` は親へ畳む。resolve 後の形を
+/// 「小節が平らに並んだ Seq」に保つため (`Apply` の中身の `Seq` は畳まない)
+fn strip_comments(expr: Expr) -> Expr {
+    match expr {
+        Expr::Seq(items) => Expr::Seq(
+            items
+                .into_iter()
+                .filter(|it| !matches!(it, Expr::Comment(_)))
+                .flat_map(|it| match strip_comments(it) {
+                    Expr::Seq(inner) => inner,
+                    other => vec![other],
+                })
+                .collect(),
+        ),
+        Expr::Apply(func, inner, br) => Expr::Apply(func, Box::new(strip_comments(*inner)), br),
+        other => other,
     }
 }
 
@@ -246,7 +251,7 @@ mod tests {
         let mut found = false;
         for it in items {
             // directives stripped: only Measure should remain
-            assert!(!matches!(it, Expr::Directive(_)));
+            assert!(!matches!(it, Expr::Keyed(_, _) | Expr::Scaled(_, _)));
             if let Expr::Measure(nodes, _) = it {
                 for n in nodes {
                     if let Node::Chord(c) = n {
@@ -257,6 +262,59 @@ mod tests {
             }
         }
         assert!(found);
+    }
+
+    #[test]
+    fn test_key_scope_applies_to_following_measures() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Node};
+        use crate::model::key::Key;
+        use crate::model::pitch::Pitch;
+
+        fn first_pitches(expr: &Expr, out: &mut Vec<Pitch>) {
+            match expr {
+                Expr::Seq(items) => items.iter().for_each(|i| first_pitches(i, out)),
+                Expr::Apply(_, inner, _) => first_pitches(inner, out),
+                Expr::Keyed(_, inner) | Expr::Scaled(_, inner) => first_pitches(inner, out),
+                Expr::Measure(nodes, _) => {
+                    for n in nodes {
+                        if let Node::Chord(c) = n {
+                            if let Key::Absolute(p) = c.key {
+                                out.push(p);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // 途中の key: がそこから後ろにだけ効く
+        let ast = RechordImporter
+            .import("key: C\nI |\nkey: D\nI |\n")
+            .unwrap()
+            .resolve();
+        let mut got = Vec::new();
+        first_pitches(&ast, &mut got);
+        assert_eq!(got, vec![Pitch::C, Pitch::D]);
+    }
+
+    #[test]
+    fn test_resolve_removes_keyed_wrappers() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+
+        fn has_wrapper(expr: &Expr) -> bool {
+            match expr {
+                Expr::Keyed(_, _) | Expr::Scaled(_, _) => true,
+                Expr::Seq(items) => items.iter().any(has_wrapper),
+                Expr::Apply(_, inner, _) => has_wrapper(inner),
+                _ => false,
+            }
+        }
+
+        let ast = RechordImporter.import("key: C\nI |\n").unwrap().resolve();
+        assert!(!has_wrapper(&ast), "resolve 後に Keyed/Scaled が残っている");
     }
 
     #[test]

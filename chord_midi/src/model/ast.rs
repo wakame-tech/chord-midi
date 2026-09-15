@@ -10,15 +10,12 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 
 #[derive(Debug, PartialEq, Serialize)]
-pub enum Directive {
-    Key(Pitch),
-    Scale(Scale),
-}
-
-#[derive(Debug, PartialEq, Serialize)]
 pub enum Expr {
     Comment(String),
-    Directive(Directive),
+    /// `key:` 以降を包む
+    Keyed(Pitch, Box<Expr>),
+    /// `scale:` 以降を包む
+    Scaled(Scale, Box<Expr>),
     /// 小節。2つ目は「この小節の後ろで入力が改行されている」
     Measure(Vec<Node>, bool),
     /// 小節列に関数を適用する。中身は必ず `Seq`。
