@@ -21,6 +21,7 @@ use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
+mod chord_table;
 mod cursor;
 mod defines;
 mod diagram;
