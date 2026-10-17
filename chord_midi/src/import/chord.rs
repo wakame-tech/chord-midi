@@ -7,8 +7,8 @@ use crate::model::scale::Degree;
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::one_of;
-use nom::combinator::{map, opt};
+use nom::character::complete::{digit1, one_of, space0, space1};
+use nom::combinator::{map, map_res, opt, value};
 use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, tuple};
 use nom::IResult;
@@ -61,9 +61,49 @@ fn chord_expr_parser(s: Span) -> IResult<Span, ChordExpr> {
     ))(s)
 }
 
+/// `tab()` に書けるフレットの上限。ギターの実用上限に合わせる
+const MAX_TAB_FRET: u8 = 24;
+
+/// `tab(...)` の中の1弦ぶん。`x` はミュート、それ以外は 0〜24 の10進
+fn fret_parser(s: Span) -> IResult<Span, Option<u8>> {
+    alt((
+        value(None, tag("x")),
+        map_res(digit1, |d: Span| -> Result<Option<u8>> {
+            let n: u32 = d.fragment().parse()?;
+            if n <= MAX_TAB_FRET as u32 {
+                Ok(Some(n as u8))
+            } else {
+                Err(anyhow::anyhow!("フレットは 0〜{}: {}", MAX_TAB_FRET, n))
+            }
+        }),
+    ))(s)
+}
+
+/// `tab(8 6 6 x x x)`。6弦→1弦の順でちょうど6本書く
+#[tracable_parser]
+fn tab_parser(s: Span) -> IResult<Span, Node> {
+    map_res(
+        delimited(
+            tuple((tag("tab("), space0)),
+            separated_list1(space1, fret_parser),
+            tuple((space0, tag(")"))),
+        ),
+        |frets: Vec<Option<u8>>| -> Result<Node> {
+            let len = frets.len();
+            let frets: [Option<u8>; 6] = frets
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("tab は6弦ぶん書くこと: {} 本だった", len))?;
+            Ok(Node::Tab(frets, false))
+        },
+    )(s)
+}
+
 #[tracable_parser]
 pub fn node_parser(s: Span) -> IResult<Span, Node> {
     alt((
+        // `tab(` は他のどの枝とも先頭が重ならないが、コード名の枝より
+        // 前に置いて読み落としが起きないようにする
+        tab_parser,
         map(tag("="), |_| Node::Sustain),
         map(tag("_"), |_| Node::Rest),
         map(tag("%"), |_| Node::Repeat),

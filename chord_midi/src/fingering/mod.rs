@@ -245,7 +245,8 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
                 out.push(chord_ref(&c)?);
             }
         }
-        Node::Rest | Node::Sustain | Node::Repeat => {}
+        // tab の図は Task 3 で足す
+        Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _) => {}
     }
     Ok(())
 }

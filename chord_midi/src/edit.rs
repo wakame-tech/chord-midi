@@ -91,7 +91,8 @@ fn shift_node(node: &mut Node, delta: i8, seen: &mut Seen) {
         Node::Chord(e) | Node::Arpeggio(e) | Node::Split(e) | Node::Brush(e) => {
             shift_chord(e.innermost_mut(), delta, seen)
         }
-        Node::Rest | Node::Sustain | Node::Repeat => {}
+        // tab の移調は Task 5 で足す
+        Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _) => {}
     }
 }
 

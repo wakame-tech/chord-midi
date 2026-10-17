@@ -1120,4 +1120,80 @@ mod tests {
         };
         assert_eq!(p.to_string(), "oxox");
     }
+
+    #[test]
+    fn test_tab_parses_six_frets() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Node};
+        let ast = RechordImporter.import("tab(8 6 6 x x x) |\n").unwrap();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Measure(nodes, _) = &items[0] else {
+            panic!("not a measure: {:?}", items[0])
+        };
+        assert_eq!(
+            nodes[0],
+            Node::Tab([Some(8), Some(6), Some(6), None, None, None], false)
+        );
+    }
+
+    #[test]
+    fn test_tab_rejects_bad_input() {
+        use crate::import::{Importer, RechordImporter};
+        // 弦の数が6本でない
+        assert!(RechordImporter.import("tab(8 6 6 x x) |\n").is_err());
+        assert!(RechordImporter.import("tab(8 6 6 x x x x) |\n").is_err());
+        // フレットが範囲外
+        assert!(RechordImporter.import("tab(25 0 0 0 0 0) |\n").is_err());
+        // 空
+        assert!(RechordImporter.import("tab() |\n").is_err());
+    }
+
+    /// tab はコード名を持たないので、コード1つを取る関数には渡せない。
+    /// 小節列に掛かる関数 (`pow` / `oct` / `pat`) は tab を含む小節を
+    /// 包めるが、`N.C.` と同じく tab には何も効かない
+    #[test]
+    fn test_tab_cannot_be_wrapped_by_chord_functions() {
+        use crate::import::{Importer, RechordImporter};
+        for code in [
+            "arp(tab(8 6 6 x x x)) |\n",
+            "blk(tab(8 6 6 x x x)) |\n",
+            "s25(tab(8 6 6 x x x)) |\n",
+            "sub(tab(8 6 6 x x x)) |\n",
+            "dom(tab(8 6 6 x x x)) |\n",
+        ] {
+            assert!(
+                RechordImporter.import(code).is_err(),
+                "コードを取る関数に tab を渡せてしまう: {:?}",
+                code
+            );
+        }
+        for code in [
+            "pat(\"o.o.\", tab(8 6 6 x x x)) |\n",
+            "pow(tab(8 6 6 x x x)) |\n",
+            "oct(tab(8 6 6 x x x)) |\n",
+        ] {
+            assert!(
+                RechordImporter.import(code).is_ok(),
+                "小節列に掛かる関数は tab を包める: {:?}",
+                code
+            );
+        }
+    }
+
+    #[test]
+    fn test_tab_accepts_two_digit_frets_and_extra_spaces() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::{Expr, Node};
+        let ast = RechordImporter.import("tab(10  12 12 x x x) |\n").unwrap();
+        let Expr::Seq(items) = &ast else { panic!() };
+        let Expr::Measure(nodes, _) = &items[0] else {
+            panic!()
+        };
+        assert_eq!(
+            nodes[0],
+            Node::Tab([Some(10), Some(12), Some(12), None, None, None], false)
+        );
+    }
 }
