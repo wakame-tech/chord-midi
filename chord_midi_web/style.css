@@ -1224,3 +1224,62 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 .syntax-example:hover {
     background: var(--accent-soft, #e8f0f7);
 }
+
+/* ---- コード表タブ ---- */
+
+.chord-table {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ルート名の列 + 品質の列。横に長いので狭い画面ではスクロールさせる */
+.chord-table-grid {
+    display: grid;
+    grid-template-columns: 44px repeat(11, minmax(56px, 1fr));
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.chord-table-head {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.chord-table-root {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.chord-table-cell {
+    padding: 6px 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.chord-table-cell.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.chord-table-detail {
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+}
+
+.chord-table-name {
+    margin-bottom: 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
