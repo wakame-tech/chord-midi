@@ -40,7 +40,7 @@ pub fn fretboard(props: &FretboardProps) -> Html {
             <p class="fretboard-help">
                 {"指板を押すとその弦の音が決まる。同じところをもう一度押すとミュート。"}
             </p>
-            { board(props.frets, &props.on_change) }
+            { board(props.frets, Some(&props.on_change)) }
             <div class="block">
                 <button class="btn" onclick={on_clear}>{"クリア"}</button>
             </div>
@@ -52,7 +52,12 @@ pub fn fretboard(props: &FretboardProps) -> Html {
     }
 }
 
-fn board(frets: [Option<u8>; 6], on_change: &Callback<[Option<u8>; 6]>) -> Html {
+/// 指板のマス目を描く。
+///
+/// `on_change` が `None` なら表示専用で、マスを `<button>` ではなく
+/// `<div>` で描く。コード表タブは押さえ方を見るだけなので、押せる
+/// 見た目にしない
+pub(crate) fn board(frets: [Option<u8>; 6], on_change: Option<&Callback<[Option<u8>; 6]>>) -> Html {
     // 1弦を上に描く。frets は 6弦→1弦 の順なので逆から回す
     let rows = (0..6usize)
         .rev()
@@ -64,6 +69,20 @@ fn board(frets: [Option<u8>; 6], on_change: &Callback<[Option<u8>; 6]>) -> Html 
             };
             let cells = (0..=MAX_FRET)
                 .map(|fret| {
+                    let on = frets[s] == Some(fret);
+                    // 0列は開放弦。ナットの左側なので弦だけ描いてフレット線は描かない。
+                    // ナットを0の右ではなく1の左に引くのは、0列にはそもそもフレット線を
+                    // 描かないので引く場所が無いため
+                    let class = classes!(
+                        "fretboard-cell",
+                        (fret == 0).then_some("is-open"),
+                        (fret == 1).then_some("is-nut"),
+                    );
+                    let dot = on.then(|| html! { <span class="fretboard-dot"></span> });
+                    let Some(on_change) = on_change else {
+                        // 表示専用。押せないので button にしない
+                        return html! { <div {class}>{dot}</div> };
+                    };
                     let onclick = {
                         let on_change = on_change.clone();
                         Callback::from(move |_| {
@@ -77,16 +96,6 @@ fn board(frets: [Option<u8>; 6], on_change: &Callback<[Option<u8>; 6]>) -> Html 
                             on_change.emit(next);
                         })
                     };
-                    let on = frets[s] == Some(fret);
-                    // 0列は開放弦。ナットの左側なので弦だけ描いてフレット線は描かない。
-                    // ナットを0の右ではなく1の左に引くのは、0列にはそもそもフレット線を
-                    // 描かないので引く場所が無いため
-                    let class = classes!(
-                        "fretboard-cell",
-                        (fret == 0).then_some("is-open"),
-                        (fret == 1).then_some("is-nut"),
-                    );
-                    let dot = on.then(|| html! { <span class="fretboard-dot"></span> });
                     // キーボードでも押せるよう実ボタンにする。弦とフレットは
                     // 見た目のグリッド位置でしか区別できないので aria-label で言葉にする
                     html! {
