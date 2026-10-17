@@ -162,8 +162,9 @@ impl Display for Expr {
                     // 参照とグループの繰り返しも小節の位置にあるので `|` で
                     // 閉じる。`$a` が `$a |` に、`C` が `C |` になるのと同じ。
                     // 閉じないと `$a x2 | D |` の `|` が書き戻しで落ちる。
-                    // `Apply` だけ別なのは、パーサが `pow(C) x2 |` の `|` を
-                    // 受け付けない (apply_parser に measure_sep が無い) ため
+                    // `Apply` だけ `|` を付けないのは、閉じ括弧が小節の終わりを
+                    // 示していて区切りが要らないため。パーサは `pow(C) x2 |` の
+                    // `|` も読めるが、書き戻しでは落ちる (小節数は変わらない)
                     Expr::Ref(name, _) => write_tail(f, format_args!("${} x{} |", name, n), *br),
                     // 2小節以上のまとまりと、入れ子の繰り返しにだけ `( )` を
                     // 出す。括弧が無いと `xN` がどこに掛かるか読み戻せない
@@ -363,6 +364,16 @@ mod tests {
     #[test]
     fn test_apply_then_measure_roundtrip() {
         assert_eq!(roundtrip("pow(C) F |"), "pow(C) F |");
+    }
+
+    /// `)` の後ろの `|` は区切りとして読むだけで式には残らないので、
+    /// 書き戻すと落ちる。閉じ括弧が小節の終わりを示すので小節数は変わらない
+    #[test]
+    fn test_apply_measure_sep_is_dropped_on_write_back() {
+        assert_eq!(roundtrip("pow(C) | F |"), "pow(C) F |");
+        assert_eq!(roundtrip("pow(G#) | G#/C |"), "pow(G#) G#/C |");
+        // 行末の `|` は改行だけが残る
+        assert_eq!(roundtrip("pow(C) |\nF |"), "pow(C)\nF |");
     }
 
     #[test]

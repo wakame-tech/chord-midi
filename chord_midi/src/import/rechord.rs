@@ -398,18 +398,17 @@ fn apply_parser(s: Span) -> IResult<Span, Expr> {
             space0,
             tag(")"),
             space0,
-            // `pow(C) x2` の `x2` は閉じ括弧の後ろ、行末の判定より前
+            // `pow(C) x2` の `x2` は閉じ括弧の後ろ、区切りの判定より前
             opt(repeat_suffix),
-            // 閉じ括弧の直後が行末なら、この関数でひと行が終わる
-            opt(peek(line_ending)),
+            // 閉じ括弧の後ろの区切り。`group_parser` と同じものを使う。
+            // 行末しか見ていないと `pow(C) | F |` の `|` が誰にも食われず、
+            // seq_parser がそこで打ち切られて Eof になる
+            opt(measure_sep),
             space_or_line_ending_many0,
         )),
         |(func, items, _, _, _, n, br, _)| {
-            repeated(
-                Expr::Apply(func, Box::new(Expr::Seq(items)), br.is_some()),
-                n,
-                br.is_some(),
-            )
+            let br = br.unwrap_or(false);
+            repeated(Expr::Apply(func, Box::new(Expr::Seq(items)), br), n, br)
         },
     )(s)
 }
@@ -679,6 +678,52 @@ mod tests {
         assert_eq!(items.len(), 2);
         assert!(matches!(&items[0], Expr::Apply(_, _, _)));
         assert!(matches!(&items[1], Expr::Measure(_, _)));
+    }
+
+    /// `)` の後ろの `|` も小節の区切りとして読む。
+    ///
+    /// `group_parser` は `opt(measure_sep)` を持っていたので `(G#) | C |` は
+    /// 読めていたのに、`apply_parser` だけ行末しか見ていなかったため
+    /// `pow(G#) | G#/C |` が `|` の位置 (offset 8) で Eof になっていた
+    #[test]
+    fn test_apply_followed_by_measure_sep() {
+        use crate::import::{Importer, RechordImporter};
+        use crate::model::ast::Expr;
+        for code in [
+            "pow(G#) | G#/C | pow(F#) | pow(F)",
+            "pow(C) |\n",
+            "pow(C) | F |\n",
+            "pow(C) x2 | F |\n",
+            "pat(\"oxox\", C) | F |\n",
+            "(pow(C) | F) x2\n",
+            "pow(pow(C) | F)\n",
+        ] {
+            assert!(
+                RechordImporter.import(code).is_ok(),
+                "読めなかった: {:?} -> {:?}",
+                code,
+                RechordImporter.import(code)
+            );
+        }
+        // `|` を飲んでも小節は増えない。`pow(C)` と `F` の2つ
+        let ast = RechordImporter.import("pow(C) | F |\n").unwrap();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        assert_eq!(items.len(), 2);
+        // `| <改行>` は行末。`|` だけなら行は続く
+        let Expr::Apply(_, _, br) = &items[0] else {
+            panic!("not an apply")
+        };
+        assert!(!br, "`pow(C) | F |` の pow の後ろで行は終わらない");
+        let ast = RechordImporter.import("pow(C) |\nF |\n").unwrap();
+        let Expr::Seq(items) = &ast else {
+            panic!("not a score")
+        };
+        let Expr::Apply(_, _, br) = &items[0] else {
+            panic!("not an apply")
+        };
+        assert!(br, "`pow(C) |` の後ろが改行なら行末");
     }
 
     #[test]
