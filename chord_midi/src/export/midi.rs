@@ -333,9 +333,12 @@ impl Score {
                 (_, Node::Rest) => Node::Rest,
                 (Beat::Rest, _) => Node::Rest,
                 (Beat::Hit, Node::Brush(c)) => Node::Chord(c),
+                (Beat::Hit, Node::Tab(frets, _)) => Node::Tab(frets, false),
                 (Beat::Hit, other) => other,
                 (Beat::Brush, Node::Chord(c)) => Node::Brush(c),
                 (Beat::Brush, Node::Arpeggio(c)) => Node::Brush(c),
+                // tab はブラッシング用の別変種を持たず、自分のフラグを立てる
+                (Beat::Brush, Node::Tab(frets, _)) => Node::Tab(frets, true),
                 (Beat::Brush, other) => other,
             };
             self.interpret_node(node, slot_dur)?;
@@ -658,5 +661,20 @@ mod tests {
             .map(|n| n.get())
             .collect();
         assert_eq!(chord, vec![53, 57, 60]);
+    }
+
+    #[test]
+    fn test_tab_takes_brush_from_pattern() {
+        // "oxox" の 2/4 スロットがブラッシング。音は同じで強さだけ落ちる
+        let notes = notes_of("pat(\"oxox\", tab(0 2 2 1 0 0))");
+        let velocities: Vec<u8> = notes
+            .iter()
+            .filter(|n| n.chord.is_some())
+            .map(|n| n.velocity.get())
+            .collect();
+        assert_eq!(velocities.len(), 4);
+        assert!(velocities[0] > velocities[1], "打弦よりブラッシングが弱い");
+        assert_eq!(velocities[0], velocities[2]);
+        assert_eq!(velocities[1], velocities[3]);
     }
 }
