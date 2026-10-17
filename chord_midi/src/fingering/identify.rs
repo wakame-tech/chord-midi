@@ -72,8 +72,8 @@ fn played(frets: &[Option<u8>; 6]) -> Option<Played> {
 const MAX_CANDIDATES: usize = 5;
 
 /// ルートが1音も鳴っていない呼び方に足す点。[`score`] を見よ。
-/// 測って決めた値ではなく、`missing_cost` のルート4点・3rd3点と釣り合う
-/// あたりに置いた経験則
+/// 測って決めた値ではなく、`missing_cost` のルート6点・3rd5点に上乗せする
+/// 重みとして置いた経験則
 const ROOT_NOT_SOUNDING: u32 = 3;
 
 /// 最低音がルートでないのにスラッシュで書いていない呼び方に足す点。

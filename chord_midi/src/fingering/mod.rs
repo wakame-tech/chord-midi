@@ -409,25 +409,46 @@ pub(crate) fn relative_semitones(mask: u16, root: u8) -> impl Iterator<Item = u8
         .map(move |p| (p + 12 - root) % 12)
 }
 
-/// 構成音にあるのに押さえ方に無い音のコスト。ルートからの半音数で引く
+/// 構成音にあるのに押さえ方に無い音のコスト。ルートからの半音数で引く。
+///
+/// ルートと 3rd はコードの素性そのものなので、どの「余計な音」より重くする。
+/// 落としてよいのは 5th とテンションだけ。押さえ方は MIDI の声部配置にも
+/// 使われる (`export::midi::voicing`) ので、3rd が抜けると `Cm` が
+/// パワーコードで鳴ってしまう
 pub(crate) fn missing_cost(semitone: u8) -> u32 {
     match semitone {
-        0 => 4,       // ルート
-        3 | 4 => 3,   // 3rd
+        0 => 6,       // ルート
+        3 | 4 => 5,   // 3rd
         10 | 11 => 2, // 7th
         _ => 1,       // 5th とテンション
     }
 }
 
-/// 押さえ方にあるのに構成音に無い音のコスト。ルートからの半音数で引く
+/// 押さえ方にあるのに構成音に無い音のコスト。ルートからの半音数で引く。
+///
+/// 5th とテンションの不足 (1点) より重くする。音が足りないのは「薄い同じ
+/// コード」で済むが、余計な音は別のコードに聞こえてしまうため
+/// (`G#/C` に 11th の F が乗ると `Fm` に化ける)。
+/// 逆に、ルートと 3rd の不足 (6 / 5点) よりは軽くする。そちらを削る方が
+/// コードの素性を失う
 pub(crate) fn extra_cost(semitone: u8) -> u32 {
     match semitone {
-        10 | 11 | 2 | 5 | 9 => 1, // b7 / M7 / 9th / 11th / 13th は自然に足せる
-        0 | 7 => 2,               // ルート / 5th
-        3 | 4 => 3,               // 3rd
-        _ => 4,                   // b9 / b5 / b6 はコードの性格を壊す
+        11 => 2,    // M7。足しても元のコードの性格は残る
+        10 => 3,    // b7。ドミナントに化ける
+        2 | 9 => 3, // 9th / 13th
+        0 | 7 => 3, // ルート / 5th
+        5 => 4,     // 11th。3rd とぶつかって sus に聞こえる
+        3 | 4 => 6, // 3rd。長短が決まってしまうので、3rd の不足より重い
+        _ => 7,     // b9 / b5 / b6 はコードの性格を壊す
     }
 }
+
+/// ベースが合わないときに足すコスト。
+///
+/// スラッシュコードは最低音こそが指定なので、合わない形は別物に聞こえる。
+/// 以前は同点のときのタイブレークだったが、それだと `G#/C` に最低音 F の
+/// `Fm` が選ばれてしまう
+const BASS_MISMATCH_COST: u32 = 3;
 
 /// コードに一番合う押さえ方を返す。
 ///
@@ -459,9 +480,13 @@ pub fn find(chord: &ChordRef) -> Option<&'static Fingering> {
                 relative_semitones(chord.pitch_classes & !f.pitch_classes, chord.root)
                     .map(missing_cost)
                     .sum();
+            let bass = if f.bass == expected_bass {
+                0
+            } else {
+                BASS_MISMATCH_COST
+            };
             (
-                extra + missing,
-                u8::from(f.bass != expected_bass),
+                extra + missing + bass,
                 // 鳴る弦は多い方が良い
                 std::cmp::Reverse(f.sounding_strings()),
                 // 同点ならローポジション優先
@@ -896,14 +921,59 @@ mod tests {
         assert!(find(&r[0]).is_none());
     }
 
+    /// 余計な音は不足より重い。音が足りない形は「薄い同じコード」だが、
+    /// 余計な音が乗った形は別のコードに聞こえてしまう
+    #[test]
+    fn extra_notes_cost_more_than_missing_ones() {
+        // Cm の 3rd を持つ形は原典に無い。かつては 13th が乗る Am7-5 が
+        // 選ばれていた。今は 5th を落として m3 を残す Cm7 の形になる
+        assert_eq!(tab_of("Cm |\n"), "x-3-x-3-4-x");
+        // G# のトライアドも原典に無い。7th を足すなら、ドミナントに化ける
+        // b7 (G#7) より性格の残る M7 を選ぶ
+        assert_eq!(tab_of("G# |\n"), "4-x-5-5-x-x");
+    }
+
+    /// ルートと 3rd の不足は、どの余計な音より重い。押さえ方は MIDI の
+    /// 声部配置にも使われるので、ここが抜けるとコードの素性が消える
+    #[test]
+    fn root_and_third_are_never_dropped_when_a_shape_has_them() {
+        // 3rd を持たない形 (C5 相当) に流れないこと
+        assert_eq!(tab_of("Cm |\n"), "x-3-x-3-4-x");
+        // ルートの G# を持たない形 (Fm など) に流れないこと
+        assert!(tab_of("G#m |\n").contains("0-2-2-1-0-0"));
+    }
+
+    /// 最低音が合わない形は減点する。構成音がちょうど一致していても、
+    /// 最低音が違えば別のコードに聞こえる (`C6` を `Am7` の形で弾くなど)
+    #[test]
+    fn bass_mismatch_is_penalised() {
+        // Am7 (= C6/A) は C6 と構成音が完全に一致するが最低音が A。
+        // 6th を落としてでも最低音が C の形を選ぶ
+        assert_eq!(tab_of("C6 |\n"), "x-3-2-0-1-x");
+        // 同じく G6 と Em7
+        assert_eq!(tab_of("G6 |\n"), "3-x-0-0-0-x");
+    }
+
+    /// スラッシュコードの最低音がデータに無いときの落としどころ。
+    /// ルートと 3rd を持つ形に落ち、余計な音が乗る形には行かない
+    #[test]
+    fn slash_chord_without_the_written_bass_keeps_root_and_third() {
+        // 最低音が C の A♭ トライアドは原典に無い。かつては 11th の F が
+        // 乗って最低音も F の Fm (x-x-3-1-1-x) が選ばれていた
+        assert_eq!(tab_of("G#/C |\n"), "4-x-5-5-x-x");
+    }
+
     #[test]
     fn power_shapes_do_not_displace_normal_chords() {
         // 2音しか無いパワーコード形が3rdや7thを持つ形を押しのけないこと
         assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
         assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
-        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        // どちらも原典に形が無く、3rd を残す形が選ばれる。
+        // D#m7 -> D#dim (5th が b5 に化けるが root + m3 は残る)、
+        // G#m -> E (= E/G#。root + m3 を残し 5th を落とす)
+        assert_eq!(tab_of("D#m7 |\n"), "x-x-1-2-x-2");
         assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
-        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
+        assert_eq!(tab_of("G#m |\n"), "0-2-2-1-0-0");
     }
 
     #[test]
@@ -982,9 +1052,12 @@ mod tests {
         // 鳴る音が1種類しかないオクターブ形が通常のコードを押しのけないこと
         assert_eq!(tab_of("C |\n"), "x-3-2-0-1-x");
         assert_eq!(tab_of("Am7 |\n"), "x-0-2-0-1-x");
-        assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
+        // どちらも原典に形が無く、3rd を残す形が選ばれる。
+        // D#m7 -> D#dim (5th が b5 に化けるが root + m3 は残る)、
+        // G#m -> E (= E/G#。root + m3 を残し 5th を落とす)
+        assert_eq!(tab_of("D#m7 |\n"), "x-x-1-2-x-2");
         assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
-        assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
+        assert_eq!(tab_of("G#m |\n"), "0-2-2-1-0-0");
     }
 
     #[test]
