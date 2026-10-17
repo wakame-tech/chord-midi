@@ -300,13 +300,23 @@ fn app() -> Html {
             loop_on.set(el.checked());
         })
     };
+    // 移調は失敗することがある (開放弦を含む tab は下げられない)。
+    // 失敗したときはテキストを変えず、既存のエラー欄に理由を出す
     let on_key_up = {
         let input = input.clone();
-        Callback::from(move |_| input.set(shift_key(input.as_str(), 1)))
+        let error = error.clone();
+        Callback::from(move |_| match shift_key(input.as_str(), 1) {
+            Ok(next) => input.set(next),
+            Err(e) => error.set(e.to_string()),
+        })
     };
     let on_key_down = {
         let input = input.clone();
-        Callback::from(move |_| input.set(shift_key(input.as_str(), -1)))
+        let error = error.clone();
+        Callback::from(move |_| match shift_key(input.as_str(), -1) {
+            Ok(next) => input.set(next),
+            Err(e) => error.set(e.to_string()),
+        })
     };
     let on_scale = {
         let input = input.clone();
@@ -345,7 +355,7 @@ fn app() -> Html {
                 cards.push(html! {
                     <ChordDiagram
                         label={c.label.clone()}
-                        fingering={fingering::find(c)}
+                        shape={fingering::shape_of(c)}
                         color={PALETTE[index % PALETTE.len()].to_string()}
                     />
                 });

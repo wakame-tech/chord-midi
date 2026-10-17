@@ -56,8 +56,9 @@ impl Expr {
                         Node::Arpeggio(e) => Node::Arpeggio(expr_into_degree(e, tonic, scale)),
                         Node::Split(e) => Node::Split(expr_into_degree(e, tonic, scale)),
                         Node::Brush(e) => Node::Brush(expr_into_degree(e, tonic, scale)),
-                        // 音程を持たないものはそのまま
-                        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
+                        // 音程や度数を持たないものはそのまま。tab は絶対的な
+                        // 押さえ方なので、度数にも修飾にも関係しない
+                        n @ (Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _)) => n,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -102,8 +103,9 @@ impl Expr {
                         Node::Arpeggio(e) => Node::Arpeggio(expr_into_pitch(e, tonic, scale)),
                         Node::Split(e) => Node::Split(expr_into_pitch(e, tonic, scale)),
                         Node::Brush(e) => Node::Brush(expr_into_pitch(e, tonic, scale)),
-                        // 音程を持たないものはそのまま
-                        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
+                        // 音程や度数を持たないものはそのまま。tab は絶対的な
+                        // 押さえ方なので、度数にも修飾にも関係しない
+                        n @ (Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _)) => n,
                     })
                     .collect::<Vec<_>>(),
                 br,
@@ -285,7 +287,7 @@ fn mark_node(node: Node, modifier: Modifier) -> Node {
         Node::Arpeggio(e) => Node::Arpeggio(mark_expr(e, modifier)),
         Node::Brush(e) => Node::Brush(mark_expr(e, modifier)),
         Node::Split(e) => Node::Split(mark_expr(e, modifier)),
-        n @ (Node::Rest | Node::Sustain | Node::Repeat) => n,
+        n @ (Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _)) => n,
     }
 }
 

@@ -106,7 +106,7 @@ fn edit_source(code: String, args: &Cli) -> Result<String> {
         None => code,
     };
     let code = match args.transpose {
-        Some(delta) => shift_key(code.as_str(), delta),
+        Some(delta) => shift_key(code.as_str(), delta)?,
         None => code,
     };
     Ok(code)
@@ -117,7 +117,10 @@ fn print_fingerings(ast: Expr) -> Result<()> {
     let resolved = ast.resolve()?;
     for measure in fingering::measure_refs(&resolved)? {
         for chord in &measure.chords {
-            print!("{}", diagram::render(&chord.label, fingering::find(chord)));
+            print!(
+                "{}",
+                diagram::render(&chord.label, fingering::shape_of(chord))
+            );
             println!();
         }
     }

@@ -187,6 +187,19 @@ impl Display for Node {
             Node::Brush(e) => write!(f, "{}", e),
             Node::Arpeggio(e) => write!(f, "arp({})", e),
             Node::Split(e) => write!(f, "s25({})", e),
+            Node::Tab(frets, _) => {
+                // ブラッシングのフラグは出さない。記法には無いもので、
+                // `pat` の `x` が作る値だけが持つ (`Node::Brush` と同じ)
+                let body = frets
+                    .iter()
+                    .map(|fret| match fret {
+                        Some(n) => n.to_string(),
+                        None => "x".to_string(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                write!(f, "tab({})", body)
+            }
             Node::Rest => write!(f, "N.C."),
             Node::Sustain => write!(f, "="),
             Node::Repeat => write!(f, "%"),
@@ -303,12 +316,12 @@ mod tests {
             "key: C\narp(blk(sub(G7))) |",
             "key: C\ns25(blk(IV)) |",
         ] {
-            let up = crate::edit::shift_key(code, 1);
+            let up = crate::edit::shift_key(code, 1).unwrap();
             // 移調した結果も読み戻せる (パースが通る) こと
             RechordImporter
                 .import(&format!("{}\n", up))
                 .unwrap_or_else(|e| panic!("移調後にパースできない: {:?}\n{}", e, up));
-            let back = crate::edit::shift_key(&up, -1);
+            let back = crate::edit::shift_key(&up, -1).unwrap();
             assert_eq!(back, code, "+1 -1 の往復で元に戻らない: {:?}", code);
         }
     }
@@ -622,5 +635,13 @@ mod tests {
             let once = roundtrip(code);
             assert_eq!(roundtrip(&once), once, "冪等でない: {:?}", code);
         }
+    }
+
+    #[test]
+    fn test_tab_roundtrip() {
+        assert_eq!(roundtrip("tab(8 6 6 x x x) |"), "tab(8 6 6 x x x) |");
+        assert_eq!(roundtrip("tab(0 2 2 1 0 0) |"), "tab(0 2 2 1 0 0) |");
+        // 入力の余分な空白は正規化される
+        assert_eq!(roundtrip("tab(10  12 12 x x x) |"), "tab(10 12 12 x x x) |");
     }
 }

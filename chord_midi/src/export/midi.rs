@@ -63,6 +63,16 @@ fn voicing(node: &ChordNode) -> Result<Vec<NoteNumber>> {
     into_note_numbers(&node.to_chord()?)
 }
 
+/// `tab(...)` の押さえ方を実音にする。`voicing` が押さえ方データに当たった
+/// ときと同じ計算で、ミュートした弦は飛ばす
+fn tab_notes(frets: &[Option<u8>; 6]) -> Vec<NoteNumber> {
+    frets
+        .iter()
+        .enumerate()
+        .filter_map(|(i, fret)| fret.map(|n| NoteNumber::new(OPEN_STRING_NOTES[i] + n)))
+        .collect()
+}
+
 /// ブラッシング（ミュートした空振り）のベロシティ
 const BRUSH_VELOCITY: Velocity = Velocity::new(40);
 
@@ -173,6 +183,16 @@ impl Score {
                 let notes = voicing(&e.eval(Pitch::C, Scale::Major))?;
                 self.pre = Some(notes.clone());
                 self.notes.push(Note::brushed(Some(notes), dur));
+            }
+            Node::Tab(ref frets, brushed) => {
+                let notes = tab_notes(frets);
+                self.pre = Some(notes.clone());
+                if brushed {
+                    self.notes.push(Note::brushed(Some(notes), dur));
+                } else {
+                    // `Node::Chord` と同じく、次のノードまで伸ばす
+                    self.sustain = dur;
+                }
             }
             Node::Repeat => {
                 self.sustain = dur;
@@ -313,9 +333,12 @@ impl Score {
                 (_, Node::Rest) => Node::Rest,
                 (Beat::Rest, _) => Node::Rest,
                 (Beat::Hit, Node::Brush(c)) => Node::Chord(c),
+                (Beat::Hit, Node::Tab(frets, _)) => Node::Tab(frets, false),
                 (Beat::Hit, other) => other,
                 (Beat::Brush, Node::Chord(c)) => Node::Brush(c),
                 (Beat::Brush, Node::Arpeggio(c)) => Node::Brush(c),
+                // tab はブラッシング用の別変種を持たず、自分のフラグを立てる
+                (Beat::Brush, Node::Tab(frets, _)) => Node::Tab(frets, true),
                 (Beat::Brush, other) => other,
             };
             self.interpret_node(node, slot_dur)?;
@@ -604,5 +627,54 @@ mod tests {
         assert_eq!(pitches_of("oct(G#@6)"), vec![44, 56]);
         // 6弦9fr=C#3(49) + 4弦11fr=C#4(61)
         assert_eq!(pitches_of("oct(C#@6)"), vec![49, 61]);
+    }
+
+    /// 小節列に掛かる関数 (`pow` / `oct`) は tab を素通しする。
+    /// パワーコード化で音を減らしたりしないこと
+    #[test]
+    fn test_pow_does_not_change_a_tab() {
+        let bare = notes_of("tab(0 2 2 1 0 0)");
+        let powed = notes_of("pow(tab(0 2 2 1 0 0))");
+        assert_eq!(bare[0].chord, powed[0].chord);
+    }
+
+    #[test]
+    fn test_tab_sounds_the_pressed_strings() {
+        // E メジャーの押さえ方。開放弦の MIDI 番号 + フレット
+        let notes = notes_of("tab(0 2 2 1 0 0)");
+        let chord: Vec<u8> = notes
+            .iter()
+            .filter_map(|n| n.chord.as_ref())
+            .flatten()
+            .map(|n| n.get())
+            .collect();
+        assert_eq!(chord, vec![40, 47, 52, 56, 59, 64]);
+    }
+
+    #[test]
+    fn test_tab_skips_muted_strings() {
+        let notes = notes_of("tab(x x 3 2 1 x)");
+        let chord: Vec<u8> = notes
+            .iter()
+            .filter_map(|n| n.chord.as_ref())
+            .flatten()
+            .map(|n| n.get())
+            .collect();
+        assert_eq!(chord, vec![53, 57, 60]);
+    }
+
+    #[test]
+    fn test_tab_takes_brush_from_pattern() {
+        // "oxox" の 2/4 スロットがブラッシング。音は同じで強さだけ落ちる
+        let notes = notes_of("pat(\"oxox\", tab(0 2 2 1 0 0))");
+        let velocities: Vec<u8> = notes
+            .iter()
+            .filter(|n| n.chord.is_some())
+            .map(|n| n.velocity.get())
+            .collect();
+        assert_eq!(velocities.len(), 4);
+        assert!(velocities[0] > velocities[1], "打弦よりブラッシングが弱い");
+        assert_eq!(velocities[0], velocities[2]);
+        assert_eq!(velocities[1], velocities[3]);
     }
 }

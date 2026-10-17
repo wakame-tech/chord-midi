@@ -92,6 +92,14 @@ pub const SYMBOLS: &[Symbol] = &[
         example: "C/E |",
     },
     Symbol {
+        // 関数ではなくリテラルなので FUNCTIONS ではなくここに置く。
+        // 関数の表に載せると web のパレットが選択範囲を `tab(...)` で
+        // 包むボタンを作ってしまう
+        symbol: "tab(...)",
+        summary: "押さえ方を直接書く。6弦→1弦、x はミュート",
+        example: "tab(8 6 6 x x x) |",
+    },
+    Symbol {
         symbol: "@N",
         summary: "最低音を取る弦 (1〜6)",
         example: "pow(A@6)",

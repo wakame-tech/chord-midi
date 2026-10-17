@@ -51,6 +51,25 @@ fn parse_node(sexp: &Sexp) -> Result<Node> {
             on: None,
             root_string: None,
         }))),
+        // `(tab 8 6 6 x x x)`。6弦→1弦のフレット。`x` はミュート
+        Sexp::List(list) if starts_with(sexp, "tab") => {
+            let frets = list[1..]
+                .iter()
+                .map(|s| {
+                    let token = s.string()?;
+                    if token == "x" {
+                        Ok(None)
+                    } else {
+                        Ok(Some(token.parse::<u8>()?))
+                    }
+                })
+                .collect::<Result<Vec<Option<u8>>>>()?;
+            let len = frets.len();
+            let frets: [Option<u8>; 6] = frets
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("tab は6弦ぶん書くこと: {} 本だった", len))?;
+            Ok(Node::Tab(frets, false))
+        }
         Sexp::List(list) if starts_with(&sexp, "chord") => {
             Ok(Node::Chord(ChordExpr::Chord(ChordNode {
                 key: parse_key(list[1].string()?)?,
@@ -206,5 +225,36 @@ mod tests {
         )]);
         assert_eq!(resolved, expected);
         Ok(())
+    }
+
+    #[test]
+    fn test_tab_node() {
+        use super::parse_node;
+        use symbolic_expressions::Sexp;
+        let sexp = Sexp::List(vec![
+            Sexp::String("tab".into()),
+            Sexp::String("8".into()),
+            Sexp::String("6".into()),
+            Sexp::String("6".into()),
+            Sexp::String("x".into()),
+            Sexp::String("x".into()),
+            Sexp::String("x".into()),
+        ]);
+        assert_eq!(
+            parse_node(&sexp).unwrap(),
+            Node::Tab([Some(8), Some(6), Some(6), None, None, None], false)
+        );
+    }
+
+    #[test]
+    fn test_tab_node_needs_six_strings() {
+        use super::parse_node;
+        use symbolic_expressions::Sexp;
+        let sexp = Sexp::List(vec![
+            Sexp::String("tab".into()),
+            Sexp::String("8".into()),
+            Sexp::String("6".into()),
+        ]);
+        assert!(parse_node(&sexp).is_err());
     }
 }

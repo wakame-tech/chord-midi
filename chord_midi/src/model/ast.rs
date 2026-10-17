@@ -112,6 +112,11 @@ pub enum Node {
     Brush(ChordExpr),
     /// ツーファイブ分割。自分の尺を2つに割る
     Split(ChordExpr),
+    /// `tab(...)`。6弦→1弦のフレット。`None` はミュート、`Some(0)` は開放弦。
+    /// コード名を持たないので `ChordExpr` には入らない (`eval` が `ChordNode`
+    /// を返す契約に合わないため)。2つ目はブラッシングで、`Node::Brush` と
+    /// 同じくパーサは常に false で作り、`pat` の `x` スロットだけが true にする
+    Tab([Option<u8>; 6], bool),
     Rest,
     Sustain,
     Repeat,

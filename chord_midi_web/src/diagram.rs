@@ -1,4 +1,4 @@
-use chord_midi::fingering::Fingering;
+use chord_midi::fingering::Shape;
 use yew::prelude::*;
 
 /// 一度に描くフレット数
@@ -11,25 +11,25 @@ pub(crate) const POSITION_MARKS: [u8; 8] = [3, 5, 7, 9, 12, 15, 17, 19];
 pub struct ChordDiagramProps {
     /// 入力に書かれたコード名
     pub label: String,
-    /// 見つかった押さえ方。無ければ None
-    pub fingering: Option<&'static Fingering>,
+    /// 描く押さえ方。無ければ None
+    pub shape: Option<Shape>,
     /// カードの色 (CSS の色文字列)
     pub color: String,
 }
 
 #[function_component(ChordDiagram)]
 pub fn chord_diagram(props: &ChordDiagramProps) -> Html {
-    let body = match props.fingering {
-        Some(f) => diagram(f),
+    let body = match &props.shape {
+        Some(s) => diagram(s),
         None => html! { <div class="diagram-empty">{"データなし"}</div> },
     };
-    // 代替の押さえ方が選ばれたときだけ、コード名の直後に原典での名前を出す
-    let alias = props.fingering.and_then(|f| {
-        if f.name == props.label {
-            None
-        } else {
-            Some(html! { <span class="chord-alias">{format!(" (≒ {})", f.name)}</span> })
-        }
+    // 代替の押さえ方が選ばれたときだけ、コード名の直後に原典での名前を出す。
+    // tab() の形は代替ではないので name が None で、ここには来ない
+    let alias = props.shape.as_ref().and_then(|s| match s.name {
+        Some(name) if name != props.label => Some(html! {
+            <span class="chord-alias">{format!(" (≒ {})", name)}</span>
+        }),
+        _ => None,
     });
     html! {
         <div class="chord-card" style={format!("--chord-color: {}", props.color)}>
@@ -40,14 +40,14 @@ pub fn chord_diagram(props: &ChordDiagramProps) -> Html {
 }
 
 /// 描き始めるフレット。5フレットに収まらないときだけ最小フレットから始める
-fn window_start(f: &Fingering) -> u8 {
+fn window_start(f: &Shape) -> u8 {
     match (f.min_fret(), f.max_fret()) {
         (Some(min), Some(max)) if max > FRET_COUNT => min,
         _ => 1,
     }
 }
 
-fn diagram(f: &Fingering) -> Html {
+fn diagram(f: &Shape) -> Html {
     let start = window_start(f);
     // 1弦を上に描く。frets は 6弦→1弦 の順なので逆から回す
     let rows = (0..6usize)
