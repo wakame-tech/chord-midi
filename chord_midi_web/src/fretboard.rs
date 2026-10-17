@@ -3,7 +3,7 @@
 //! テキストは持たない。`palette.rs` と同じく、やりたいことを
 //! `Callback<Edit>` で親に投げるだけ
 
-use chord_midi::fingering::{identify, Candidate, Source};
+use chord_midi::fingering::{identify, Candidate, Finger, Source};
 use yew::prelude::*;
 
 use crate::cursor::Edit;
@@ -40,7 +40,7 @@ pub fn fretboard(props: &FretboardProps) -> Html {
             <p class="fretboard-help">
                 {"指板を押すとその弦の音が決まる。同じところをもう一度押すとミュート。"}
             </p>
-            { board(props.frets, Some(&props.on_change)) }
+            { board(props.frets, [None; 6], Some(&props.on_change)) }
             <div class="block">
                 <button class="btn" onclick={on_clear}>{"クリア"}</button>
             </div>
@@ -56,8 +56,15 @@ pub fn fretboard(props: &FretboardProps) -> Html {
 ///
 /// `on_change` が `None` なら表示専用で、マスを `<button>` ではなく
 /// `<div>` で描く。コード表タブは押さえ方を見るだけなので、押せる
-/// 見た目にしない
-pub(crate) fn board(frets: [Option<u8>; 6], on_change: Option<&Callback<[Option<u8>; 6]>>) -> Html {
+/// 見た目にしない。
+///
+/// `fingers` はドットの中に出す指。自分で押した形には指のデータが
+/// 無いので、エディタタブの指板は全部 `None` を渡す
+pub(crate) fn board(
+    frets: [Option<u8>; 6],
+    fingers: [Option<Finger>; 6],
+    on_change: Option<&Callback<[Option<u8>; 6]>>,
+) -> Html {
     // 1弦を上に描く。frets は 6弦→1弦 の順なので逆から回す
     let rows = (0..6usize)
         .rev()
@@ -78,7 +85,15 @@ pub(crate) fn board(frets: [Option<u8>; 6], on_change: Option<&Callback<[Option<
                         (fret == 0).then_some("is-open"),
                         (fret == 1).then_some("is-nut"),
                     );
-                    let dot = on.then(|| html! { <span class="fretboard-dot"></span> });
+                    // 指が分かっている形ではドットの中に出す。小さいコード図
+                    // (`diagram.rs`) と同じ規則
+                    let dot = on.then(|| {
+                        html! {
+                            <span class="fretboard-dot">
+                                {fingers[s].map(|g| g.label()).unwrap_or("")}
+                            </span>
+                        }
+                    });
                     let Some(on_change) = on_change else {
                         // 表示専用。押せないので button にしない
                         return html! { <div {class}>{dot}</div> };
