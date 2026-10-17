@@ -345,7 +345,7 @@ fn app() -> Html {
                 cards.push(html! {
                     <ChordDiagram
                         label={c.label.clone()}
-                        fingering={fingering::find(c)}
+                        shape={fingering::shape_of(c)}
                         color={PALETTE[index % PALETTE.len()].to_string()}
                     />
                 });
