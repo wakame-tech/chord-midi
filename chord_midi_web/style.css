@@ -18,7 +18,7 @@
     /* 指板/コード図で弦とフレットの線に使う灰色。2つの図が別々に持つと
        ずれるので1箇所にまとめる */
     --string: #8a9099;
-    /* 運指タブの指板の列。fretboard.rs の MAX_FRET + 1 (弦名の列 + 0-12fr の
+    /* 指板の列。fretboard.rs の MAX_FRET + 1 (弦名の列 + 0-12fr の
        13列) と噛み合わせる必要がある */
     --fretboard-cols: 56px repeat(13, 34px);
 }
@@ -818,7 +818,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     border-radius: 4px;
 }
 
-/* ---- 運指タブ（逆引き） ---- */
+/* ---- 指板（逆引き）: エディタタブの textarea の下 ---- */
 
 .fretboard-help {
     color: var(--muted);

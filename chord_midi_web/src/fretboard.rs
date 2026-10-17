@@ -1,6 +1,12 @@
+//! 指板をクリックして作った押さえ方から、コード名と rechord 記法を逆引きする。
+//!
+//! テキストは持たない。`palette.rs` と同じく、やりたいことを
+//! `Callback<Edit>` で親に投げるだけ
+
 use chord_midi::fingering::{identify, Candidate, Source};
 use yew::prelude::*;
 
+use crate::cursor::Edit;
 use crate::diagram::POSITION_MARKS;
 
 /// 描く一番上のフレット。0（開放）から数える。12 はオクターブなので、
@@ -13,8 +19,8 @@ pub struct FretboardProps {
     /// 6弦→1弦。None = ミュート、Some(0) = 開放
     pub frets: [Option<u8>; 6],
     pub on_change: Callback<[Option<u8>; 6]>,
-    /// 記法をエディタに挿入する
-    pub on_insert: Callback<String>,
+    /// 候補の記法をエディタのカーソル位置に挿入する
+    pub on_edit: Callback<Edit>,
 }
 
 #[function_component(Fretboard)]
@@ -29,7 +35,8 @@ pub fn fretboard(props: &FretboardProps) -> Html {
         Callback::from(move |_| on_change.emit([None; 6]))
     };
     html! {
-        <div>
+        <div class="block">
+            <span class="block-label">{"指板から逆引き"}</span>
             <p class="fretboard-help">
                 {"指板を押すとその弦の音が決まる。同じところをもう一度押すとミュート。"}
             </p>
@@ -38,8 +45,8 @@ pub fn fretboard(props: &FretboardProps) -> Html {
                 <button class="btn" onclick={on_clear}>{"クリア"}</button>
             </div>
             <div class="block">
-                <span class="block-label">{"コードの候補"}</span>
-                { candidate_cards(&candidates, &props.on_insert, all_muted) }
+                <span class="block-label">{"コードの候補 (カーソル位置に挿入)"}</span>
+                { candidate_cards(&candidates, &props.on_edit, all_muted) }
             </div>
         </div>
     }
@@ -127,11 +134,7 @@ fn board(frets: [Option<u8>; 6], on_change: &Callback<[Option<u8>; 6]>) -> Html 
     }
 }
 
-fn candidate_cards(
-    candidates: &[Candidate],
-    on_insert: &Callback<String>,
-    all_muted: bool,
-) -> Html {
+fn candidate_cards(candidates: &[Candidate], on_edit: &Callback<Edit>, all_muted: bool) -> Html {
     if candidates.is_empty() {
         let message = if all_muted {
             "指板を押すと候補が出ます"
@@ -144,9 +147,11 @@ fn candidate_cards(
         .iter()
         .map(|c| {
             let onclick = {
-                let on_insert = on_insert.clone();
-                let notation = c.notation.clone();
-                Callback::from(move |_| on_insert.emit(notation.clone()))
+                let on_edit = on_edit.clone();
+                // 1小節ぶんの記法なので `|` まで入れる。カーソルが行の
+                // 途中にあっても、押さえ方1つが1小節になる形で入る
+                let edit = Edit::Insert(format!("{} |", c.notation));
+                Callback::from(move |_| on_edit.emit(edit.clone()))
             };
             let (label, is_data) = match c.source {
                 Source::Data(_) => ("原典", true),
