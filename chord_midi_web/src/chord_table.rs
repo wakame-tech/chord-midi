@@ -43,6 +43,95 @@ pub fn shape_for(name: &str) -> Option<Shape> {
     shape_of(refs.first()?)
 }
 
+/// 押している組み合わせ。`(ROOTS の添字, QUALITIES の添字)`
+type Selected = Option<(usize, usize)>;
+
+#[function_component(ChordTable)]
+pub fn chord_table() -> Html {
+    let selected = use_state(|| None as Selected);
+
+    let header = QUALITIES
+        .iter()
+        .map(|(label, _)| html! { <div class="chord-table-head">{*label}</div> })
+        .collect::<Html>();
+
+    let rows = ROOTS
+        .iter()
+        .enumerate()
+        .map(|(ri, root)| {
+            let cells = QUALITIES
+                .iter()
+                .enumerate()
+                .map(|(qi, (_, suffix))| {
+                    let onclick = {
+                        let selected = selected.clone();
+                        Callback::from(move |_| selected.set(Some((ri, qi))))
+                    };
+                    let is_active = *selected == Some((ri, qi));
+                    let class =
+                        classes!("btn", "chord-table-cell", is_active.then_some("is-active"));
+                    html! {
+                        <button type="button" {class} {onclick}>
+                            {format!("{}{}", root, suffix)}
+                        </button>
+                    }
+                })
+                .collect::<Html>();
+            html! {
+                <>
+                    <div class="chord-table-root">{*root}</div>
+                    {cells}
+                </>
+            }
+        })
+        .collect::<Html>();
+
+    let detail = match *selected {
+        None => html! {
+            <p class="empty">{"コードを押すと押さえ方が出ます。"}</p>
+        },
+        Some((ri, qi)) => {
+            let name = format!("{}{}", ROOTS[ri], QUALITIES[qi].1);
+            match shape_for(&name) {
+                None => html! {
+                    <>
+                        <div class="chord-table-name">{name}</div>
+                        <p class="empty">{"押さえ方データなし"}</p>
+                    </>
+                },
+                Some(shape) => {
+                    // 代替の押さえ方が選ばれたときだけ原典での名前を併記する。
+                    // プレビューの図と同じ規則
+                    let alias = match shape.name {
+                        Some(n) if n != name => html! {
+                            <span class="chord-alias">{format!(" (≒ {})", n)}</span>
+                        },
+                        _ => html! {},
+                    };
+                    html! {
+                        <>
+                            <div class="chord-table-name">{name}{alias}</div>
+                            { board(shape.frets, None) }
+                        </>
+                    }
+                }
+            }
+        }
+    };
+
+    html! {
+        <div class="chord-table">
+            <div class="chord-table-grid">
+                // 左上の角。ルート名の列の見出しは無い
+                <div class="chord-table-head"></div>
+                {header}
+                {rows}
+            </div>
+            <div class="chord-table-detail">{detail}</div>
+        </div>
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,7 +158,10 @@ mod tests {
     #[test]
     fn shape_for_finds_a_known_chord() {
         let shape = shape_for("Am7").expect("Am7 は原典にある");
-        assert_eq!(shape.frets, [None, Some(0), Some(2), Some(0), Some(1), None]);
+        assert_eq!(
+            shape.frets,
+            [None, Some(0), Some(2), Some(0), Some(1), None]
+        );
         assert_eq!(shape.name, Some("Am7"));
     }
 
