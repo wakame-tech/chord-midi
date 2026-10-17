@@ -316,12 +316,12 @@ mod tests {
             "key: C\narp(blk(sub(G7))) |",
             "key: C\ns25(blk(IV)) |",
         ] {
-            let up = crate::edit::shift_key(code, 1);
+            let up = crate::edit::shift_key(code, 1).unwrap();
             // 移調した結果も読み戻せる (パースが通る) こと
             RechordImporter
                 .import(&format!("{}\n", up))
                 .unwrap_or_else(|e| panic!("移調後にパースできない: {:?}\n{}", e, up));
-            let back = crate::edit::shift_key(&up, -1);
+            let back = crate::edit::shift_key(&up, -1).unwrap();
             assert_eq!(back, code, "+1 -1 の往復で元に戻らない: {:?}", code);
         }
     }

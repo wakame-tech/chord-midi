@@ -106,7 +106,7 @@ fn edit_source(code: String, args: &Cli) -> Result<String> {
         None => code,
     };
     let code = match args.transpose {
-        Some(delta) => shift_key(code.as_str(), delta),
+        Some(delta) => shift_key(code.as_str(), delta)?,
         None => code,
     };
     Ok(code)
