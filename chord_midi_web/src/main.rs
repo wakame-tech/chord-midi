@@ -59,7 +59,8 @@ struct AstViews {
 type Warnings = Vec<String>;
 
 /// 入力の末尾に1行足す。空なら line だけ、それ以外は改行してから足す。
-/// 進行プリセットのボタンと運指タブの挿入、両方が使う共通の結合規則
+/// 進行プリセットのボタンだけが使う。記法パネルと指板はカーソル位置に入れる
+/// (`cursor::insert_at_cursor`)
 fn append_line(cur: &str, line: &str) -> String {
     if cur.trim().is_empty() {
         line.to_string()
@@ -105,7 +106,6 @@ fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>, 
 enum Tab {
     Editor,
     Preview,
-    Fretboard,
 }
 
 #[function_component(App)]
@@ -117,7 +117,7 @@ fn app() -> Html {
     let ast_form = use_state(|| AstForm::Syntax);
     let measures = use_state(Vec::<MeasureRef>::new);
     let tab = use_state(|| Tab::Editor);
-    // 運指タブで押さえた形。タブを離れても消さないので App が持つ
+    // 指板で押さえた形。タブを離れても消さないので App が持つ
     let held = use_state(|| [None::<u8>; 6]);
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
@@ -393,25 +393,12 @@ fn app() -> Html {
         let tab = tab.clone();
         Callback::from(move |_| tab.set(Tab::Preview))
     };
-    let on_fretboard_tab = {
-        let tab = tab.clone();
-        Callback::from(move |_| tab.set(Tab::Fretboard))
-    };
     let on_held_change = {
         let held = held.clone();
         Callback::from(move |next: [Option<u8>; 6]| held.set(next))
     };
-    // 記法をエディタ末尾に足す。改行結合の規則は進行プリセットと共通
-    // (append_line)。挿入するのは1小節ぶんの記法なので ` |` は呼び出し側で足す
-    let on_insert = {
-        let input = input.clone();
-        Callback::from(move |notation: String| {
-            let line = format!("{} |", notation);
-            input.set(append_line(&input, &line));
-        })
-    };
 
-    // 記法パネルの全部品がここを通る。テキストの持ち主は input なので、
+    // 記法パネルと指板の全部品がここを通る。テキストの持ち主は input なので、
     // 部品は「何をしたいか」だけを投げてくる
     let on_edit = {
         let input = input.clone();
@@ -469,6 +456,12 @@ fn app() -> Html {
                         value={(*input).clone()}
                     ></textarea>
                 </div>
+
+                // 指板はエディタの直下。押さえた形から引いた記法を
+                // そのままカーソル位置に入れられるよう、同じタブに置く
+                <Fretboard frets={*held} on_change={on_held_change}
+                    on_edit={on_edit.clone()} />
+
                 if has_error {
                     <p class="error">{(*error).clone()}</p>
                 }
@@ -590,10 +583,6 @@ fn app() -> Html {
         html! { <div class="fingerings">{cards}</div> }
     };
 
-    let fretboard = html! {
-        <Fretboard frets={*held} on_change={on_held_change} on_insert={on_insert} />
-    };
-
     html! {
         <>
             <header class="app-header">
@@ -619,12 +608,6 @@ fn app() -> Html {
                 >
                     {"プレビュー"}
                 </button>
-                <button
-                    class={classes!("tab", (*tab == Tab::Fretboard).then_some("is-active"))}
-                    onclick={on_fretboard_tab}
-                >
-                    {"運指"}
-                </button>
             </nav>
 
             <main class="panel">
@@ -632,7 +615,6 @@ fn app() -> Html {
                     match *tab {
                         Tab::Editor => editor,
                         Tab::Preview => preview,
-                        Tab::Fretboard => fretboard,
                     }
                 }
             </main>
