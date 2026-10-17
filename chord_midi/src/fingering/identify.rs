@@ -25,9 +25,6 @@ pub struct Candidate {
     /// そのまま入力に書ける記法。"C/E@6" や "pow(A@6)"
     pub notation: String,
     pub source: Source,
-    /// `notation` を書くと、押さえた形がそのまま戻ってくる。false なら音は
-    /// 合っているが別の押さえ方になる（今のデータでこの形は名指しできない）
-    pub reproduces_shape: bool,
     /// 小さいほど良い。表示順に使う
     pub score: u32,
 }
@@ -238,7 +235,6 @@ fn movable_candidate(f: &'static Fingering) -> Option<Candidate> {
         name: format!("{}{}", root, suffix),
         notation: format!("{}({}@{})", func, root, string),
         source: Source::Data(f),
-        reproduces_shape: true,
         score: 0,
     })
 }
@@ -312,7 +308,6 @@ pub fn identify(frets: [Option<u8>; 6]) -> Vec<Candidate> {
             name: r.label.clone(),
             notation,
             source,
-            reproduces_shape: reproduces,
             score: s,
         });
     }
@@ -438,7 +433,6 @@ mod tests {
         assert_eq!(c[0].name, "C");
         assert_eq!(c[0].notation, "C");
         assert!(matches!(c[0].source, Source::Data(_)));
-        assert!(c[0].reproduces_shape);
     }
 
     #[test]
@@ -447,7 +441,6 @@ mod tests {
         let c = identify(frets("x3555x"));
         assert_eq!(c[0].name, "C");
         assert_eq!(c[0].source, Source::Theory);
-        assert!(!c[0].reproduces_shape);
     }
 
     /// ピッチクラス集合を "C, E, G" のような音名の並びにする。
@@ -499,7 +492,6 @@ mod tests {
         assert_eq!(c[0].name, "A5");
         assert_eq!(c[0].notation, "pow(A@6)");
         assert!(matches!(c[0].source, Source::Data(_)));
-        assert!(c[0].reproduces_shape);
     }
 
     /// 可動形に当たったとき、原典のバッジが付くのは `movable_candidate` が出した

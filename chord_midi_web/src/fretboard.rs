@@ -46,7 +46,7 @@ pub fn fretboard(props: &FretboardProps) -> Html {
             </div>
             <div class="block">
                 <span class="block-label">{"コードの候補 (カーソル位置に挿入)"}</span>
-                { candidate_cards(&candidates, &props.on_edit, all_muted) }
+                { candidate_cards(&candidates, props.frets, &props.on_edit, all_muted) }
             </div>
         </div>
     }
@@ -134,7 +134,12 @@ fn board(frets: [Option<u8>; 6], on_change: &Callback<[Option<u8>; 6]>) -> Html 
     }
 }
 
-fn candidate_cards(candidates: &[Candidate], on_edit: &Callback<Edit>, all_muted: bool) -> Html {
+fn candidate_cards(
+    candidates: &[Candidate],
+    frets: [Option<u8>; 6],
+    on_edit: &Callback<Edit>,
+    all_muted: bool,
+) -> Html {
     if candidates.is_empty() {
         let message = if all_muted {
             "指板を押すと候補が出ます"
@@ -148,9 +153,10 @@ fn candidate_cards(candidates: &[Candidate], on_edit: &Callback<Edit>, all_muted
         .map(|c| {
             let onclick = {
                 let on_edit = on_edit.clone();
-                // 1小節ぶんの記法なので `|` まで入れる。カーソルが行の
-                // 途中にあっても、押さえ方1つが1小節になる形で入る
-                let edit = Edit::Insert(format!("{} |", c.notation));
+                // 押さえた形をそのまま入れる。コード名を経由すると
+                // `fingering::find` の近似を通って別の形に化けることがある。
+                // 1小節ぶんなので `|` まで入れる
+                let edit = Edit::Insert(format!("{} |", tab_notation(frets)));
                 Callback::from(move |_| on_edit.emit(edit.clone()))
             };
             let (label, is_data) = match c.source {
@@ -166,13 +172,6 @@ fn candidate_cards(candidates: &[Candidate], on_edit: &Callback<Edit>, all_muted
                 }),
                 _ => None,
             };
-            let note = (!c.reproduces_shape).then(|| {
-                html! {
-                    <div class="fretboard-note">
-                        {"この形は今の押さえ方データでは再現できない"}
-                    </div>
-                }
-            });
             html! {
                 <div class="fretboard-card">
                     <div class="fretboard-card-head">
@@ -184,10 +183,22 @@ fn candidate_cards(candidates: &[Candidate], on_edit: &Callback<Edit>, all_muted
                         <code class="fretboard-notation">{&c.notation}</code>
                         <button class="btn" {onclick}>{"挿入"}</button>
                     </div>
-                    {note}
                 </div>
             }
         })
         .collect::<Html>();
     html! { <div class="fretboard-cards">{cards}</div> }
+}
+
+/// 押さえ方を `tab(...)` の記法にする。6弦→1弦、ミュートは `x`
+fn tab_notation(frets: [Option<u8>; 6]) -> String {
+    let body = frets
+        .iter()
+        .map(|fret| match fret {
+            Some(n) => n.to_string(),
+            None => "x".to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("tab({})", body)
 }
