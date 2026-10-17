@@ -105,6 +105,52 @@ impl Fingering {
     }
 }
 
+/// 図に描ける押さえ方。原典の形 (`Fingering`) と `tab()` が書いた形を
+/// 同じ型で扱うための所有型。`tab()` の形は実行時の値で `'static` に
+/// できないので、図の側は `&'static Fingering` を受けられない
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shape {
+    /// 6弦→1弦。None = ミュート、Some(0) = 開放
+    pub frets: [Option<u8>; 6],
+    /// 押さえる指。`tab()` 由来なら全部 None
+    pub fingers: [Option<Finger>; 6],
+    /// 原典での呼び名。`tab()` 由来なら None。
+    /// 図はこれが Some でコード名と違うときだけ「≒」を併記する
+    pub name: Option<&'static str>,
+}
+
+impl Shape {
+    /// 開放弦を除いた一番低いフレット。図の窓の開始位置に使う
+    pub fn min_fret(&self) -> Option<u8> {
+        self.frets
+            .iter()
+            .flatten()
+            .copied()
+            .filter(|f| *f > 0)
+            .min()
+    }
+
+    /// 開放弦を除いた一番高いフレット
+    pub fn max_fret(&self) -> Option<u8> {
+        self.frets
+            .iter()
+            .flatten()
+            .copied()
+            .filter(|f| *f > 0)
+            .max()
+    }
+}
+
+impl From<&'static Fingering> for Shape {
+    fn from(f: &'static Fingering) -> Self {
+        Shape {
+            frets: f.frets,
+            fingers: f.fingers,
+            name: Some(f.name),
+        }
+    }
+}
+
 /// 入力に現れた1つのコード。押さえ方を引くための情報だけを持つ
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChordRef {
@@ -120,6 +166,9 @@ pub struct ChordRef {
     pub root_string: Option<u8>,
     /// `pow()` / `oct()` で明示された押さえ方の種類
     pub wanted: Option<ShapeKind>,
+    /// `tab()` が直接書いた押さえ方。書かれていれば `find` を通さず
+    /// この形をそのまま図に出す
+    pub tab: Option<[Option<u8>; 6]>,
 }
 
 /// AST に現れるコードを出現順に取り出す。
@@ -245,8 +294,8 @@ fn collect_node(node: &Node, out: &mut Vec<ChordRef>) -> Result<()> {
                 out.push(chord_ref(&c)?);
             }
         }
-        // tab の図は Task 3 で足す
-        Node::Rest | Node::Sustain | Node::Repeat | Node::Tab(_, _) => {}
+        Node::Tab(frets, _) => out.push(tab_ref(*frets)),
+        Node::Rest | Node::Sustain | Node::Repeat => {}
     }
     Ok(())
 }
@@ -293,6 +342,8 @@ pub fn chord_ref(node: &ChordNode) -> Result<ChordRef> {
         // 記法は 1 = 1弦。Fingering.lowest_string は 0 = 6弦 なので変換する
         root_string: node.root_string.map(|n| 6 - n),
         wanted,
+        // コード名から引く経路。押さえ方は `find` が選ぶ
+        tab: None,
     })
 }
 
@@ -303,6 +354,51 @@ fn pitch_class(key: &Key) -> Result<u8> {
             "relative key {} is not resolved; call Expr::resolve() first",
             d
         )),
+    }
+}
+
+/// 図に出す押さえ方。`tab()` が書いた形があればそれを、無ければ `find` の
+/// 結果を返す。見つからなければ None
+pub fn shape_of(chord: &ChordRef) -> Option<Shape> {
+    if let Some(frets) = chord.tab {
+        return Some(Shape {
+            frets,
+            fingers: [None; 6],
+            name: None,
+        });
+    }
+    find(chord).map(Shape::from)
+}
+
+/// `tab()` の押さえ方から `ChordRef` を作る。
+///
+/// 見出しは逆引きの先頭候補。候補が無ければ記法そのものを見出しにする。
+/// `pitch_classes` と `bass` も鳴る音から出しておく。`tab` が立っている
+/// 限り `find` には流れないが、空の集合を配って事故るのを避ける
+fn tab_ref(frets: [Option<u8>; 6]) -> ChordRef {
+    let mut pitch_classes = 0u16;
+    let mut lowest: Option<(u16, u8)> = None;
+    for (s, fret) in frets.iter().enumerate() {
+        let Some(fret) = fret else { continue };
+        let midi = u16::from(OPEN_STRING_PITCHES[s]) + u16::from(*fret);
+        let pc = (midi % 12) as u8;
+        pitch_classes |= 1u16 << pc;
+        if lowest.is_none_or(|(m, _)| midi < m) {
+            lowest = Some((midi, pc));
+        }
+    }
+    let label = match identify(frets).first() {
+        Some(c) => c.name.clone(),
+        None => Node::Tab(frets, false).to_string(),
+    };
+    ChordRef {
+        label,
+        root: lowest.map(|(_, pc)| pc).unwrap_or(0),
+        pitch_classes,
+        bass: lowest.map(|(_, pc)| pc),
+        root_string: None,
+        wanted: None,
+        tab: Some(frets),
     }
 }
 
@@ -682,6 +778,7 @@ mod tests {
             bass: None,
             root_string: None,
             wanted: None,
+            tab: None,
         };
         assert!(find(&c).is_none());
     }
@@ -888,5 +985,49 @@ mod tests {
         assert_eq!(tab_of("D#m7 |\n"), "x-3-x-3-4-x");
         assert_eq!(tab_of("C#sus4 |\n"), "x-1-x-1-2-x");
         assert_eq!(tab_of("G#m |\n"), "1-x-1-1-x-x");
+    }
+
+    #[test]
+    fn tab_node_becomes_a_chord_ref_with_its_own_shape() {
+        let r = refs("tab(8 6 6 x x x) |\n");
+        assert_eq!(r.len(), 1);
+        assert_eq!(
+            r[0].tab,
+            Some([Some(8), Some(6), Some(6), None, None, None])
+        );
+        let shape = shape_of(&r[0]).expect("tab は必ず形を持つ");
+        assert_eq!(shape.frets, [Some(8), Some(6), Some(6), None, None, None]);
+        // 原典の形ではないので「≒」用の名前は無い
+        assert_eq!(shape.name, None);
+        // 指番号のデータは無い
+        assert_eq!(shape.fingers, [None; 6]);
+    }
+
+    #[test]
+    fn shape_of_falls_back_to_the_data_shape() {
+        let r = refs("C |\n");
+        let shape = shape_of(&r[0]).expect("C は原典にある");
+        assert_eq!(
+            shape.frets,
+            [None, Some(3), Some(2), Some(0), Some(1), None]
+        );
+        assert_eq!(shape.name, Some("C"));
+    }
+
+    #[test]
+    fn tab_label_comes_from_identify() {
+        // 6弦8/5弦6/4弦6 = C, D#, G# = G# のトライアドで最低音が C
+        let r = refs("tab(8 6 6 x x x) |\n");
+        assert_eq!(r[0].label, "G#/C");
+    }
+
+    #[test]
+    fn tab_label_falls_back_to_the_notation() {
+        // 全ミュートは鳴る音が無いので候補が出ない。記法をそのまま見出しにする。
+        // 1音だけなら候補は出る (`tab(x x x x x 0)` は E5)
+        let r = refs("tab(x x x x x x) |\n");
+        assert_eq!(r[0].label, "tab(x x x x x x)");
+        let one = refs("tab(x x x x x 0) |\n");
+        assert_eq!(one[0].label, "E5");
     }
 }

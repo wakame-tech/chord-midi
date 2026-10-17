@@ -5,7 +5,7 @@
 //! (人差し指=1, 中指=2, 薬指=3, 親指=T) を使う。日本語1文字だと端末で
 //! 全角幅になって桁がずれるため。
 
-use chord_midi::fingering::{Finger, Fingering};
+use chord_midi::fingering::{Finger, Shape};
 
 /// 一度に描くフレット数。web 版と揃える
 const FRET_COUNT: u8 = 5;
@@ -26,7 +26,7 @@ fn finger_label(f: Finger) -> char {
 }
 
 /// 描き始めるフレット。5フレットに収まらないときだけ最小フレットから始める
-fn window_start(f: &Fingering) -> u8 {
+fn window_start(f: &Shape) -> u8 {
     match (f.min_fret(), f.max_fret()) {
         (Some(min), Some(max)) if max > FRET_COUNT => min,
         _ => 1,
@@ -34,18 +34,18 @@ fn window_start(f: &Fingering) -> u8 {
 }
 
 /// コード1つ分の図。見つからなければ「押さえ方データなし」だけ返す
-pub fn render(label: &str, fingering: Option<&'static Fingering>) -> String {
-    let Some(f) = fingering else {
+pub fn render(label: &str, shape: Option<Shape>) -> String {
+    let Some(f) = shape else {
         return format!("{}\n  (押さえ方データなし)\n", label);
     };
-    // 代替の押さえ方が選ばれたときだけ、原典での名前を併記する
-    let head = if f.name == label {
-        label.to_string()
-    } else {
-        format!("{} (≒ {})", label, f.name)
+    // 代替の押さえ方が選ばれたときだけ、原典での名前を併記する。
+    // tab() の形は代替ではないので name が None で、ここには来ない
+    let head = match f.name {
+        Some(name) if name != label => format!("{} (≒ {})", label, name),
+        _ => label.to_string(),
     };
 
-    let start = window_start(f);
+    let start = window_start(&f);
     let mut out = String::new();
     out.push_str(&head);
     out.push('\n');
@@ -87,8 +87,8 @@ mod tests {
     use super::*;
     use chord_midi::fingering::FINGERINGS;
 
-    fn by_name(name: &str) -> &'static Fingering {
-        FINGERINGS.iter().find(|f| f.name == name).unwrap()
+    fn by_name(name: &str) -> Shape {
+        FINGERINGS.iter().find(|f| f.name == name).unwrap().into()
     }
 
     #[test]
