@@ -87,10 +87,15 @@
 `readonly` を足す。
 
 ```rust
-/// `readonly` ならマスを <button> ではなく <div> で描く。
-/// コード表タブは押さえ方を見るだけなので、押せる見た目にしない
-fn board(frets: [Option<u8>; 6], readonly: bool, on_change: &Callback<[Option<u8>; 6]>) -> Html
+/// マス目を描く。`on_change` が `None` なら表示専用で、マスを
+/// `<button>` ではなく `<div>` で描く。コード表タブは押さえ方を
+/// 見るだけなので、押せる見た目にしない
+fn board(frets: [Option<u8>; 6], on_change: Option<&Callback<[Option<u8>; 6]>>) -> Html
 ```
+
+`readonly` のフラグと `on_change` を別々に渡すと「読み取り専用なのに
+コールバックがある」という組み合わせが型の上で作れてしまうので、
+`Option` 1つにまとめる。
 
 エディタタブの指板 (`Fretboard` コンポーネント) の見た目と挙動は変えない。
 コード表タブは `board()` を直接呼ぶ。
