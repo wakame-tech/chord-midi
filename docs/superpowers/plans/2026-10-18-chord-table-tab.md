@@ -311,19 +311,6 @@ type Selected = Option<(usize, usize)>;
 pub fn chord_table() -> Html {
     let selected = use_state(|| None as Selected);
 
-    // 132通りを1度だけ引いて、押さえ方が無いボタンを薄く出す。
-    // 押すまで有無が分からないと、空振りのボタンを何度も押すことになる。
-    // 依存が `()` なので初回の1回だけ走る
-    let available = use_memo((), |_| {
-        let mut out = [[false; QUALITIES.len()]; ROOTS.len()];
-        for (ri, root) in ROOTS.iter().enumerate() {
-            for (qi, (_, suffix)) in QUALITIES.iter().enumerate() {
-                out[ri][qi] = shape_for(&format!("{}{}", root, suffix)).is_some();
-            }
-        }
-        out
-    });
-
     let header = QUALITIES
         .iter()
         .map(|(label, _)| html! { <div class="chord-table-head">{*label}</div> })
@@ -342,13 +329,8 @@ pub fn chord_table() -> Html {
                         Callback::from(move |_| selected.set(Some((ri, qi))))
                     };
                     let is_active = *selected == Some((ri, qi));
-                    let class = classes!(
-                        "btn",
-                        "chord-table-cell",
-                        is_active.then_some("is-active"),
-                        // 押さえ方が無い組み合わせは薄く出す。押せはする
-                        (!available[ri][qi]).then_some("is-empty"),
-                    );
+                    let class =
+                        classes!("btn", "chord-table-cell", is_active.then_some("is-active"));
                     html! {
                         <button type="button" {class} {onclick}>
                             {format!("{}{}", root, suffix)}
@@ -554,11 +536,6 @@ MSG
     font-weight: 600;
 }
 
-/* 押さえ方データが無い組み合わせ。押せはするが、空振りだと分かるようにする */
-.chord-table-cell.is-empty {
-    opacity: 0.4;
-}
-
 .chord-table-detail {
     padding-top: 4px;
     border-top: 1px solid var(--line);
@@ -580,12 +557,11 @@ trunk serve --port 8099 --no-autoreload
 
 `http://127.0.0.1:8099/` の「コード表」タブで:
 1. 12行 × 11列の格子が出る。先頭行が `(maj) m 7 m7 …` の見出し
-2. 押さえ方が無い組み合わせが薄い
-3. `A` 行の `m7` を押す → 見出しに `Am7`、指板に 5弦開放 / 4弦2 / 3弦0 / 2弦1、
+2. `A` 行の `m7` を押す → 見出しに `Am7`、指板に 5弦開放 / 4弦2 / 3弦0 / 2弦1、
    6弦と1弦が ×
-4. 指板のマスを押しても何も起きない (表示専用)
-5. 薄いボタンを押す → 「押さえ方データなし」
-6. 狭い幅 (430px) にすると格子が横スクロールする
+3. 指板のマスを押しても何も起きない (表示専用)
+4. `C` 行の `m` を押す → 見出しが `Cm (≒ ...)` と近似であることを示す
+5. 狭い幅 (430px) にすると格子が横スクロールする
 
 確認したら `Ctrl-C` で止める。
 
@@ -622,7 +598,8 @@ MSG
 
 - 12ルート × 11品質 (`(maj) m 7 m7 M7 m7b5 sus4 6 add9 dim aug`) の格子
 - ボタンを押すと下の指板にその押さえ方が出る
-- 押さえ方データに無い組み合わせはボタンが薄い。押すと「押さえ方データなし」
+- 原典にその名前の形が無いコードは近似の形が出る。そのときは見出しに
+  `(≒ 原典名)` が付く
 - この指板は表示専用。クリックからの逆引きはエディタタブの指板にある
 ```
 
