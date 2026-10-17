@@ -50,6 +50,9 @@ const SAMPLES: &[(&str, &str)] = &[
     ("root_string", "pow(A@6 | D@5 | E@5)\n"),
     ("comment", "# memo\nkey: C\nC | F |\n"),
     ("multiline", "C | Am |\nF | G |\n"),
+    // 押さえ方を直接書く記法。コード名を介さないので find を通らない
+    ("tab", "tab(0 2 2 1 0 0) | tab(x 3 2 0 1 x) |\n"),
+    ("tab_pat", "pat(\"oxox\", tab(0 2 2 1 0 0))\n"),
     // 入れ子の変換
     ("nested_arp_blk", "arp(blk(F))\n"),
     ("nested_blk_sub", "blk(sub(G7))\n"),
