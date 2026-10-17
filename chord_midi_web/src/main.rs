@@ -7,6 +7,7 @@ use chord_midi::{
     model::scale::Scale,
     presets,
 };
+use chord_table::ChordTable;
 use cursor::Edit;
 use defines::DefineChips;
 use diagram::ChordDiagram;
@@ -21,6 +22,7 @@ use web_sys::wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
+mod chord_table;
 mod cursor;
 mod defines;
 mod diagram;
@@ -106,6 +108,7 @@ fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>, 
 enum Tab {
     Editor,
     Preview,
+    ChordTable,
 }
 
 #[function_component(App)]
@@ -403,6 +406,10 @@ fn app() -> Html {
         let tab = tab.clone();
         Callback::from(move |_| tab.set(Tab::Preview))
     };
+    let on_chord_table_tab = {
+        let tab = tab.clone();
+        Callback::from(move |_| tab.set(Tab::ChordTable))
+    };
     let on_held_change = {
         let held = held.clone();
         Callback::from(move |next: [Option<u8>; 6]| held.set(next))
@@ -593,6 +600,8 @@ fn app() -> Html {
         html! { <div class="fingerings">{cards}</div> }
     };
 
+    let chord_table = html! { <ChordTable /> };
+
     html! {
         <>
             <header class="app-header">
@@ -618,6 +627,12 @@ fn app() -> Html {
                 >
                     {"プレビュー"}
                 </button>
+                <button
+                    class={classes!("tab", (*tab == Tab::ChordTable).then_some("is-active"))}
+                    onclick={on_chord_table_tab}
+                >
+                    {"コード表"}
+                </button>
             </nav>
 
             <main class="panel">
@@ -625,6 +640,7 @@ fn app() -> Html {
                     match *tab {
                         Tab::Editor => editor,
                         Tab::Preview => preview,
+                        Tab::ChordTable => chord_table,
                     }
                 }
             </main>

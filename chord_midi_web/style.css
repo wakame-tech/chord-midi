@@ -905,6 +905,12 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     height: 18px;
     border-radius: 50%;
     background: var(--accent);
+    /* 指が分かっている形では中に「人/中/薬/親」が入る。
+       自分で押した形は空のまま */
+    color: #fff;
+    font-size: 10px;
+    line-height: 18px;
+    text-align: center;
 }
 
 .fretboard-numbers {
@@ -1223,4 +1229,83 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 
 .syntax-example:hover {
     background: var(--accent-soft, #e8f0f7);
+}
+
+/* ---- コード表タブ ---- */
+
+.chord-table {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ルート名の列 + 品質の列。横に長いので狭い画面ではスクロールさせる */
+.chord-table-grid {
+    display: grid;
+    grid-template-columns: 44px repeat(11, minmax(56px, 1fr));
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.chord-table-head {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.chord-table-root {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.chord-table-cell {
+    padding: 6px 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.chord-table-cell.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.chord-table-detail {
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+}
+
+.chord-table-name {
+    margin-bottom: 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* 格子 / 簡単コードの切り替え。`.btn-icon` は幅 30px 固定で
+   ♭/♯ 専用なので、文字が入るこちらには使わない */
+.chord-table-modes {
+    display: flex;
+    gap: 4px;
+}
+
+.chord-table-mode.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* 簡単コードのボタンはグループごとに折り返して並べる */
+.chord-table-easy {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 }
