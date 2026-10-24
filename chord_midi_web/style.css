@@ -203,6 +203,13 @@ midi-visualizer.is-empty {
     height: calc(13px * 1.7);
 }
 
+/* パースが止まった行 */
+.gutter-line.is-error {
+    background: var(--danger);
+    color: #fff;
+    font-weight: 600;
+}
+
 .editor {
     flex: 1;
     min-width: 0;
@@ -239,6 +246,8 @@ midi-visualizer.is-empty {
     border-left: 3px solid var(--danger);
     border-radius: 0 4px 4px 0;
     color: var(--danger);
+    /* 本文の下に `^` を並べて列を指すので等幅にする */
+    font-family: var(--mono);
     font-size: 13px;
     white-space: pre-wrap;
 }

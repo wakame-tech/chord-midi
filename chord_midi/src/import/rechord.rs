@@ -1,6 +1,6 @@
 use super::parser_util::Span;
 use crate::import::chord::node_parser;
-use crate::import::RechordImporter;
+use crate::import::{ParseError, RechordImporter};
 use crate::model::ast::{Beat, Expr, Func, Pattern};
 use crate::model::pitch::Pitch;
 use crate::model::scale::Scale;
@@ -8,7 +8,7 @@ use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{digit1, line_ending, not_line_ending, space0};
-use nom::combinator::{eof, map, map_res, opt, peek, value};
+use nom::combinator::{eof, map, map_res, not, opt, peek, value};
 use nom::multi::{many0, many1};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
@@ -21,11 +21,37 @@ impl super::Importer for RechordImporter {
     fn import(&self, code: &str) -> Result<Expr> {
         let code = code.replace("♭", "b");
         let span = LocatedSpan::new_extra(code.as_str(), TracableInfo::new());
-        let (rest, ast) = ast_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
-        if !rest.is_empty() {
-            return Err(anyhow::anyhow!("parse error: {:?}", rest));
+        // 末尾を eof で縛ると「どこで止まったか」が nom の内部表現でしか
+        // 出せないので、seq_parser が止まった位置を自分で見る
+        let (rest, ast) = seq_parser(span).map_err(|e| anyhow::anyhow!("parse error: {:?}", e))?;
+        if !rest.fragment().is_empty() {
+            return Err(parse_error_at(rest).into());
+        }
+        // 旧実装は many1 だったので空入力を拒んでいた。その挙動を保つ
+        if matches!(&ast, Expr::Seq(items) if items.is_empty()) {
+            return Err(anyhow::anyhow!("empty input"));
         }
         Ok(ast)
+    }
+}
+
+/// seq_parser が読み進められなくなった位置を、行・列とその行の本文にする
+fn parse_error_at(rest: Span) -> ParseError {
+    // Span の先頭からではなく、その行の頭から切り出す。
+    // get_line_beginning は止まった位置を含む行の先頭を返す
+    let line_text = String::from_utf8_lossy(rest.get_line_beginning())
+        .trim_end_matches('\r')
+        .to_string();
+    let message = if rest.fragment().starts_with('|') {
+        "`|` の前に小節の中身がありません"
+    } else {
+        "ここから先を読めません"
+    };
+    ParseError {
+        line: rest.location_line() as usize,
+        column: rest.get_utf8_column(),
+        line_text,
+        message: message.to_string(),
     }
 }
 
@@ -80,6 +106,10 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
     let mut items: Vec<Expr> = Vec::new();
     let mut rest = s;
     loop {
+        // 行頭の `|` は飾りとして読み飛ばす。何も無ければそのまま
+        if let Ok((r, _)) = leading_bar(rest) {
+            rest = r;
+        }
         if let Ok((r, head)) = directive_head(rest) {
             let (r2, inner) = seq_parser(r)?;
             items.push(match head {
@@ -129,24 +159,28 @@ fn seq_parser(s: Span) -> IResult<Span, Expr> {
 }
 
 #[tracable_parser]
-fn ast_parser(s: Span) -> IResult<Span, Expr> {
-    // 旧実装は many1 だったので空入力を拒んでいた。その挙動を保つ
-    map_res(tuple((seq_parser, eof)), |(seq, _)| {
-        if matches!(&seq, Expr::Seq(items) if items.is_empty()) {
-            Err(anyhow::anyhow!("empty input"))
-        } else {
-            Ok(seq)
-        }
-    })(s)
-}
-
-#[tracable_parser]
 fn comment_parser(s: Span) -> IResult<Span, Expr> {
     map(
         tuple((tag("#"), not_line_ending, line_ending)),
         // `# ` の後ろの空白は落とす。Display 側が `# ` を付けて出すので、
         // 残したままだと書き戻すたびに空白が1つずつ増えていく
         |(_, comment, _): (Span, Span, Span)| Expr::Comment(comment.trim().to_string()),
+    )(s)
+}
+
+/// 行頭の `|`。`| C | F |` のように小節線から書き始める流儀を受け付ける。
+/// 行の途中の `| |` (中身の無い小節) まで許さないよう、行頭でだけ飲む。
+/// `|` の後ろが行末なら飲まない (`|` だけの行は中身の無い小節なので弾く)
+fn leading_bar(s: Span) -> IResult<Span, ()> {
+    if s.get_utf8_column() != 1 {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            s,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+    value(
+        (),
+        tuple((space0, tag("|"), space0, not(alt((line_ending, eof))))),
     )(s)
 }
 
@@ -435,7 +469,7 @@ fn measure_parser(s: Span) -> IResult<Span, Expr> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ast_parser, measure_parser};
+    use super::measure_parser;
     use anyhow::Result;
     use nom_locate::LocatedSpan;
     use nom_tracable::TracableInfo;
@@ -456,12 +490,86 @@ mod tests {
 
     #[test]
     fn test_ast_parser() -> Result<()> {
+        use crate::import::{Importer, RechordImporter};
         for score in ["# comment\nCCC", "CCC|", "CCC\n"] {
-            let span = span(score);
-            let (res, _ast) = ast_parser(span)?;
-            assert_eq!(res.into_fragment(), "");
+            RechordImporter.import(score)?;
         }
+        assert!(RechordImporter.import("").is_err());
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_error_points_at_where_reading_stopped() {
+        use crate::import::{Importer, ParseError, RechordImporter};
+        let err = RechordImporter
+            .import("key: A\nC | Am |\nF | H | G |\n")
+            .unwrap_err();
+        let err = err.downcast_ref::<ParseError>().expect("ParseError");
+        assert_eq!((err.line, err.column), (3, 5));
+        assert_eq!(err.line_text, "F | H | G |");
+        assert_eq!(
+            err.to_string(),
+            "3行目 5列目: ここから先を読めません\nF | H | G |\n    ^"
+        );
+    }
+
+    #[test]
+    fn test_parse_error_hints_at_empty_measure() {
+        use crate::import::{Importer, ParseError, RechordImporter};
+        let err = RechordImporter.import("key: A\nC | | Am |\n").unwrap_err();
+        let err = err.downcast_ref::<ParseError>().expect("ParseError");
+        assert_eq!((err.line, err.column), (2, 5));
+        assert!(
+            err.message.contains("小節の中身がありません"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn test_leading_bar_is_skipped() {
+        use crate::import::{Importer, RechordImporter};
+        // 行頭の `|` があってもなくても同じ木になる
+        for (with_bar, without) in [
+            (
+                "key: A\n| C | Am |\n| F | G |\n",
+                "key: A\nC | Am |\nF | G |\n",
+            ),
+            ("  | C | Am |\n", "C | Am |\n"),
+            ("# memo\n| $a = C |\n", "# memo\n$a = C |\n"),
+            (
+                "$a = C |\n| $a | (F | G) x2 |\n",
+                "$a = C |\n$a | (F | G) x2 |\n",
+            ),
+            ("| pow(C | F) |\n", "pow(C | F) |\n"),
+            ("| A |", "A |"),
+        ] {
+            assert_eq!(
+                RechordImporter.import(with_bar).unwrap(),
+                RechordImporter.import(without).unwrap(),
+                "{:?}",
+                with_bar
+            );
+        }
+    }
+
+    #[test]
+    fn test_leading_bar_only_at_line_start() {
+        use crate::import::{Importer, RechordImporter};
+        // 行の途中の `| |` は中身のない小節なので、これまでどおり弾く
+        assert!(RechordImporter.import("C | | Am |\n").is_err());
+        // `|` だけの行も弾く
+        assert!(RechordImporter.import("C |\n|\n").is_err());
+    }
+
+    #[test]
+    fn test_parse_error_column_counts_chars_not_bytes() {
+        use crate::import::{Importer, ParseError, RechordImporter};
+        let err = RechordImporter
+            .import("$Aメロ = C |\nC | $Aメロ | H |\n")
+            .unwrap_err();
+        let err = err.downcast_ref::<ParseError>().expect("ParseError");
+        assert_eq!((err.line, err.column), (2, 12));
     }
 
     #[test]
