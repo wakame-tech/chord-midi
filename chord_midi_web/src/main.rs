@@ -2,7 +2,7 @@ use chord_midi::{
     edit::{set_scale, shift_key},
     export::{Exporter, MidiExporter},
     fingering::{self, MeasureRef},
-    import::{Importer, RechordImporter},
+    import::{Importer, ParseError, RechordImporter},
     lint::lint,
     model::scale::Scale,
     presets,
@@ -71,10 +71,33 @@ fn append_line(cur: &str, line: &str) -> String {
     }
 }
 
-fn compile(input: &str, bpm: u8) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>, Warnings), String> {
+/// compile の失敗。パースで止まったときだけ、その行 (1 始まり) を持つ。
+/// ガターの行番号を赤くするのに使う
+struct CompileError {
+    message: String,
+    line: Option<usize>,
+}
+
+impl From<String> for CompileError {
+    fn from(message: String) -> Self {
+        CompileError {
+            message,
+            line: None,
+        }
+    }
+}
+
+fn compile(
+    input: &str,
+    bpm: u8,
+) -> Result<(AstViews, Vec<MeasureRef>, Vec<u8>, Warnings), CompileError> {
+    // 末尾に足す改行は最終行の後ろなので、行番号はずれない
     let ast = RechordImporter
         .import(&format!("{}\n", input))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| CompileError {
+            line: e.downcast_ref::<ParseError>().map(|p| p.line),
+            message: e.to_string(),
+        })?;
     // パース直後 (resolve/展開前) の木を見る。lint 自体は AST も MIDI も
     // 変えないので、ここで見ても resolve 後の結果には影響しない
     let warnings = lint(&ast);
@@ -125,6 +148,8 @@ fn app() -> Html {
     // select の表示値。入力テキストの scale: 指定ではなく「最後に適用したスケール」
     let scale_name = use_state(|| "major".to_string());
     let error = use_state(String::new);
+    // パースが止まった行。ガターの行番号に印を付ける
+    let error_line = use_state(|| None::<usize>);
     // lint の警告。エラーと違って再生は止めないので、MIDI 生成の成否とは別に持つ
     let warning = use_state(String::new);
     let url = use_state(String::new);
@@ -146,6 +171,7 @@ fn app() -> Html {
         let result = result.clone();
         let measures = measures.clone();
         let error = error.clone();
+        let error_line = error_line.clone();
         let warning = warning.clone();
         let url = url.clone();
         let playing = playing.clone();
@@ -154,6 +180,7 @@ fn app() -> Html {
         use_effect_with(((*input).clone(), *bpm), move |(input, bpm)| {
             if input.trim().is_empty() {
                 error.set(String::new());
+                error_line.set(None);
                 warning.set(String::new());
                 result.set(AstViews::default());
                 measures.set(Vec::new());
@@ -174,6 +201,7 @@ fn app() -> Html {
             match compile(input, *bpm) {
                 Ok((views, ms, bytes, warnings)) => {
                     error.set(String::new());
+                    error_line.set(None);
                     warning.set(warnings.join("\n"));
                     result.set(views);
                     measures.set(ms);
@@ -194,7 +222,8 @@ fn app() -> Html {
                     }
                 }
                 Err(e) => {
-                    error.set(e);
+                    error.set(e.message);
+                    error_line.set(e.line);
                     warning.set(String::new());
                     measures.set(Vec::new());
                 }
@@ -458,7 +487,8 @@ fn app() -> Html {
                 <div class="editor-wrap">
                     <div class="gutter" ref={gutter_ref}>
                         { for (1..=(*input).split('\n').count()).map(|n| html! {
-                            <div class="gutter-line">{n}</div>
+                            <div class={classes!("gutter-line",
+                                (*error_line == Some(n)).then_some("is-error"))}>{n}</div>
                         }) }
                     </div>
                     <textarea

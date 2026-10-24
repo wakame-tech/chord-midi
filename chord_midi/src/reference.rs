@@ -63,7 +63,7 @@ pub struct Function {
 pub const SYMBOLS: &[Symbol] = &[
     Symbol {
         symbol: "|",
-        summary: "小節の区切り",
+        summary: "小節の区切り。行頭に置いてもよい (`| C | Am |`)",
         example: "C | Am |",
     },
     Symbol {
